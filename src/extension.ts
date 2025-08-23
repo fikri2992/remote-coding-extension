@@ -39,7 +39,34 @@ export function activate(context: vscode.ExtensionContext) {
         }
     });
 
-    context.subscriptions.push(startServerCommand, stopServerCommand);
+    const openConfigurationCommand = vscode.commands.registerCommand('webAutomationTunnel.openConfiguration', () => {
+        vscode.commands.executeCommand('workbench.action.openSettings', 'webAutomationTunnel');
+    });
+
+    const resetConfigurationCommand = vscode.commands.registerCommand('webAutomationTunnel.resetConfiguration', async () => {
+        const action = await vscode.window.showWarningMessage(
+            'This will reset all Web Automation Tunnel settings to their default values. Are you sure?',
+            'Reset',
+            'Cancel'
+        );
+
+        if (action === 'Reset') {
+            try {
+                await webviewProvider.serverManager.resetConfigurationToDefaults();
+                vscode.window.showInformationMessage('Configuration reset to defaults successfully');
+            } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+                vscode.window.showErrorMessage(`Failed to reset configuration: ${errorMessage}`);
+            }
+        }
+    });
+
+    context.subscriptions.push(
+        startServerCommand, 
+        stopServerCommand, 
+        openConfigurationCommand, 
+        resetConfigurationCommand
+    );
 
     console.log('Basic VSCode Extension registration complete');
 }

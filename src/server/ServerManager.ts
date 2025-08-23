@@ -6,6 +6,7 @@ import * as vscode from 'vscode';
 import { ServerConfig, ServerStatus, ClientConnection, WebSocketMessage } from './interfaces';
 import { HttpServer } from './HttpServer';
 import { WebSocketServer } from './WebSocketServer';
+import { ConfigurationManager } from './ConfigurationManager';
 
 export class ServerManager {
     private _isRunning: boolean = false;
@@ -15,9 +16,13 @@ export class ServerManager {
     private _lastError: string | null = null;
     private _httpServer: HttpServer | null = null;
     private _webSocketServer: WebSocketServer | null = null;
+    private _configManager: ConfigurationManager;
+    private _configChangeListener: vscode.Disposable | null = null;
 
     constructor() {
-        // Initialize with default configuration
+        this._configManager = new ConfigurationManager();
+        this.setupConfigurationHandling();
+        // Load initial configuration
         this.loadConfiguration();
     }
 
@@ -31,14 +36,11 @@ export class ServerManager {
             }
 
             // Use provided config or load from settings
-            this._config = config || this.loadConfiguration();
+            this._config = config || await this.loadConfiguration();
             
             if (!this._config) {
                 throw new Error('Failed to load server configuration');
             }
-
-            // Validate configuration
-            this.validateConfiguration(this._config);
 
             // Initialize and start HTTP server
             this._httpServer = new HttpServer(this._config);
@@ -119,45 +121,115 @@ export class ServerManager {
     }
 
     /**
-     * Load server configuration from VS Code settings
+     * Load server configuration from VS Code settings using ConfigurationManager
      */
-    private loadConfiguration(): ServerConfig {
-        const config = vscode.workspace.getConfiguration('webAutomationTunnel');
-        
-        const serverConfig: ServerConfig = {
-            httpPort: config.get<number>('httpPort') || 8080,
-            allowedOrigins: config.get<string[]>('allowedOrigins') || ['*'],
-            maxConnections: config.get<number>('maxConnections') || 10,
-            enableCors: config.get<boolean>('enableCors') ?? true
-        };
-
-        const websocketPort = config.get<number>('websocketPort');
-        if (websocketPort !== undefined) {
-            serverConfig.websocketPort = websocketPort;
+    private async loadConfiguration(): Promise<ServerConfig> {
+        try {
+            return await this._configManager.loadConfiguration();
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown configuration error';
+            vscode.window.showErrorMessage(`Configuration error: ${errorMessage}`);
+            
+            // Return a basic default configuration as fallback
+            return {
+                httpPort: 8080,
+                allowedOrigins: ['*'],
+                maxConnections: 10,
+                enableCors: true
+            };
         }
-
-        return serverConfig;
     }
 
     /**
-     * Validate server configuration
+     * Setup configuration change handling
      */
-    private validateConfiguration(config: ServerConfig): void {
-        if (config.httpPort < 1024 || config.httpPort > 65535) {
-            throw new Error('HTTP port must be between 1024 and 65535');
+    private setupConfigurationHandling(): void {
+        this._configChangeListener = this._configManager.onConfigurationChanged(async (newConfig) => {
+            await this.handleConfigurationChange(newConfig);
+        });
+    }
+
+    /**
+     * Handle configuration changes with server restart prompts
+     */
+    private async handleConfigurationChange(newConfig: ServerConfig): Promise<void> {
+        if (!this._isRunning) {
+            // Server is not running, just update the config
+            this._config = newConfig;
+            return;
         }
 
-        if (config.websocketPort && (config.websocketPort < 1024 || config.websocketPort > 65535)) {
-            throw new Error('WebSocket port must be between 1024 and 65535');
+        // Check if the configuration change requires a server restart
+        const requiresRestart = this.configurationRequiresRestart(this._config!, newConfig);
+        
+        if (requiresRestart) {
+            const action = await vscode.window.showWarningMessage(
+                'Configuration changes require a server restart to take effect.',
+                'Restart Now',
+                'Restart Later',
+                'Cancel'
+            );
+
+            switch (action) {
+                case 'Restart Now':
+                    try {
+                        await this.restartServer(newConfig);
+                        vscode.window.showInformationMessage('Server restarted with new configuration');
+                    } catch (error) {
+                        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+                        vscode.window.showErrorMessage(`Failed to restart server: ${errorMessage}`);
+                    }
+                    break;
+                    
+                case 'Restart Later':
+                    vscode.window.showInformationMessage('Configuration saved. Restart the server manually to apply changes.');
+                    break;
+                    
+                case 'Cancel':
+                    // Configuration change was cancelled, but VS Code settings have already changed
+                    // We could potentially revert the settings here, but that might be confusing
+                    vscode.window.showInformationMessage('Configuration change noted. Current server continues with previous settings.');
+                    break;
+            }
+        } else {
+            // Configuration change doesn't require restart, apply immediately
+            this._config = newConfig;
+            vscode.window.showInformationMessage('Configuration updated successfully');
+        }
+    }
+
+    /**
+     * Check if configuration changes require a server restart
+     */
+    private configurationRequiresRestart(oldConfig: ServerConfig, newConfig: ServerConfig): boolean {
+        // Port changes require restart
+        if (oldConfig.httpPort !== newConfig.httpPort) {
+            return true;
+        }
+        
+        if (oldConfig.websocketPort !== newConfig.websocketPort) {
+            return true;
         }
 
-        if (config.maxConnections < 1 || config.maxConnections > 100) {
-            throw new Error('Max connections must be between 1 and 100');
+        // CORS and origin changes require restart
+        if (oldConfig.enableCors !== newConfig.enableCors) {
+            return true;
         }
 
-        if (!Array.isArray(config.allowedOrigins) || config.allowedOrigins.length === 0) {
-            throw new Error('At least one allowed origin must be specified');
+        if (JSON.stringify(oldConfig.allowedOrigins) !== JSON.stringify(newConfig.allowedOrigins)) {
+            return true;
         }
+
+        // Max connections can be changed without restart (handled by WebSocket server)
+        return false;
+    }
+
+    /**
+     * Restart the server with new configuration
+     */
+    private async restartServer(newConfig: ServerConfig): Promise<void> {
+        await this.stopServer();
+        await this.startServer(newConfig);
     }
 
     /**
@@ -245,5 +317,40 @@ export class ServerManager {
      */
     get config(): ServerConfig | null {
         return this._config;
+    }
+
+    /**
+     * Get configuration manager instance
+     */
+    get configurationManager(): ConfigurationManager {
+        return this._configManager;
+    }
+
+    /**
+     * Reset configuration to defaults
+     */
+    async resetConfigurationToDefaults(): Promise<void> {
+        await this._configManager.resetToDefaults();
+    }
+
+    /**
+     * Update a specific configuration value
+     */
+    async updateConfigurationValue(key: string, value: any): Promise<void> {
+        await this._configManager.updateConfiguration(key, value);
+    }
+
+    /**
+     * Dispose of resources
+     */
+    dispose(): void {
+        if (this._configChangeListener) {
+            this._configChangeListener.dispose();
+            this._configChangeListener = null;
+        }
+        
+        if (this._configManager) {
+            this._configManager.dispose();
+        }
     }
 }

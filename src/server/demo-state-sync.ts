@@ -154,12 +154,12 @@ export class StateSynchronizationDemo {
             if (!categories[category]) {
                 categories[category] = [];
             }
-            categories[category].push(command);
+            categories[category]!.push(command);
         });
 
         Object.keys(categories).sort().forEach(category => {
             console.log(`📁 ${category.toUpperCase()}:`);
-            categories[category].forEach(command => {
+            categories[category]!.forEach(command => {
                 console.log(`   • ${command}`);
             });
             console.log('');

@@ -51,6 +51,16 @@
         "command": "webAutomationTunnel.stopServer",
         "title": "Stop Web Automation Server",
         "category": "Web Automation Tunnel"
+      },
+      {
+        "command": "webAutomationTunnel.openConfiguration",
+        "title": "Open Configuration",
+        "category": "Web Automation Tunnel"
+      },
+      {
+        "command": "webAutomationTunnel.resetConfiguration",
+        "title": "Reset Configuration to Defaults",
+        "category": "Web Automation Tunnel"
       }
     ],
     "configuration": {

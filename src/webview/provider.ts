@@ -49,6 +49,18 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
                     case 'getServerStatus':
                         this._handleGetServerStatus();
                         break;
+                    case 'getConfiguration':
+                        this._handleGetConfiguration();
+                        break;
+                    case 'updateConfiguration':
+                        this._handleUpdateConfiguration(message.data);
+                        break;
+                    case 'resetConfiguration':
+                        this._handleResetConfiguration();
+                        break;
+                    case 'validatePort':
+                        this._handleValidatePort(message.data);
+                        break;
                     default:
                         console.log('Unknown message received from webview:', message);
                         break;
@@ -225,9 +237,116 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
     }
 
     /**
+     * Handle configuration request from webview
+     */
+    private async _handleGetConfiguration(): Promise<void> {
+        if (!this._view) return;
+
+        try {
+            const config = await this._serverManager.configurationManager.loadConfiguration();
+            const schema = this._serverManager.configurationManager.getConfigurationSchema();
+            
+            this._view.webview.postMessage({
+                command: 'configurationUpdate',
+                data: {
+                    config,
+                    schema
+                }
+            });
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            this._view.webview.postMessage({
+                command: 'configurationError',
+                data: { error: errorMessage }
+            });
+        }
+    }
+
+    /**
+     * Handle configuration update from webview
+     */
+    private async _handleUpdateConfiguration(data: { key: string; value: any }): Promise<void> {
+        if (!this._view) return;
+
+        try {
+            await this._serverManager.updateConfigurationValue(data.key, data.value);
+            
+            this._view.webview.postMessage({
+                command: 'configurationUpdateSuccess',
+                data: { key: data.key, value: data.value }
+            });
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            this._view.webview.postMessage({
+                command: 'configurationUpdateError',
+                data: { 
+                    key: data.key, 
+                    error: errorMessage 
+                }
+            });
+        }
+    }
+
+    /**
+     * Handle configuration reset from webview
+     */
+    private async _handleResetConfiguration(): Promise<void> {
+        if (!this._view) return;
+
+        try {
+            await this._serverManager.resetConfigurationToDefaults();
+            
+            // Send updated configuration
+            await this._handleGetConfiguration();
+            
+            this._view.webview.postMessage({
+                command: 'configurationResetSuccess',
+                data: {}
+            });
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            this._view.webview.postMessage({
+                command: 'configurationResetError',
+                data: { error: errorMessage }
+            });
+        }
+    }
+
+    /**
+     * Handle port validation from webview
+     */
+    private async _handleValidatePort(data: { port: number }): Promise<void> {
+        if (!this._view) return;
+
+        try {
+            // Use the configuration manager to validate the port
+            await this._serverManager.configurationManager.updateConfiguration('httpPort', data.port);
+            
+            this._view.webview.postMessage({
+                command: 'portValidationResult',
+                data: { 
+                    port: data.port, 
+                    valid: true 
+                }
+            });
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            this._view.webview.postMessage({
+                command: 'portValidationResult',
+                data: { 
+                    port: data.port, 
+                    valid: false, 
+                    error: errorMessage 
+                }
+            });
+        }
+    }
+
+    /**
      * Dispose resources
      */
     public dispose(): void {
         this._stopStatusUpdates();
+        this._serverManager.dispose();
     }
 }

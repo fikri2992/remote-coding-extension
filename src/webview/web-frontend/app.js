@@ -9,7 +9,7 @@ class WebAutomationClient {
         this.reconnectAttempts = 0;
         this.maxReconnectAttempts = 5;
         this.reconnectDelay = 1000;
-        
+
         this.initializeUI();
         this.connect();
     }
@@ -43,7 +43,7 @@ class WebAutomationClient {
         // Add event listeners
         this.elements.executeButton.addEventListener('click', () => this.executeCommand());
         this.elements.clearLogButton.addEventListener('click', () => this.clearLog());
-        
+
         // Allow Enter key to execute command
         this.elements.commandInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
@@ -65,13 +65,13 @@ class WebAutomationClient {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             const port = parseInt(window.location.port) + 1; // WebSocket port is HTTP port + 1
             const wsUrl = `${protocol}//${window.location.hostname}:${port}`;
-            
+
             this.elements.websocketPort.textContent = port;
             this.updateConnectionStatus('connecting', 'Connecting...');
             this.log('info', `Connecting to WebSocket: ${wsUrl}`);
 
             this.websocket = new WebSocket(wsUrl);
-            
+
             this.websocket.onopen = () => this.onWebSocketOpen();
             this.websocket.onmessage = (event) => this.onWebSocketMessage(event);
             this.websocket.onclose = (event) => this.onWebSocketClose(event);
@@ -92,7 +92,7 @@ class WebAutomationClient {
         this.updateConnectionStatus('connected', 'Connected');
         this.elements.executeButton.disabled = false;
         this.log('success', 'WebSocket connection established');
-        
+
         // Request initial server status
         this.sendMessage({
             type: 'status',
@@ -132,7 +132,7 @@ class WebAutomationClient {
     onWebSocketClose(event) {
         this.isConnected = false;
         this.elements.executeButton.disabled = true;
-        
+
         if (event.wasClean) {
             this.updateConnectionStatus('disconnected', 'Disconnected');
             this.log('info', 'WebSocket connection closed cleanly');
@@ -163,10 +163,10 @@ class WebAutomationClient {
 
         this.reconnectAttempts++;
         const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
-        
-        this.updateConnectionStatus('connecting', `Reconnecting in ${delay/1000}s...`);
+
+        this.updateConnectionStatus('connecting', `Reconnecting in ${delay / 1000}s...`);
         this.log('info', `Reconnection attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts} in ${delay}ms`);
-        
+
         setTimeout(() => this.connect(), delay);
     }
 
@@ -261,7 +261,7 @@ class WebAutomationClient {
         // Update active editor
         if (state.activeEditor) {
             const editor = state.activeEditor;
-            this.elements.activeEditor.textContent = 
+            this.elements.activeEditor.textContent =
                 `${editor.fileName} (${editor.language})\n` +
                 `Lines: ${editor.lineCount}\n` +
                 `Selection: ${editor.selection.start.line}:${editor.selection.start.character} - ${editor.selection.end.line}:${editor.selection.end.character}`;
@@ -319,18 +319,18 @@ class WebAutomationClient {
         const timestamp = new Date().toLocaleTimeString();
         const logEntry = document.createElement('div');
         logEntry.className = `log-entry ${level}`;
-        
+
         const timestampSpan = document.createElement('div');
         timestampSpan.className = 'log-timestamp';
         timestampSpan.textContent = timestamp;
-        
+
         const messageSpan = document.createElement('div');
         messageSpan.className = 'log-message';
         messageSpan.textContent = message;
-        
+
         logEntry.appendChild(timestampSpan);
         logEntry.appendChild(messageSpan);
-        
+
         if (data) {
             const dataSpan = document.createElement('div');
             dataSpan.className = 'log-message';
@@ -339,10 +339,10 @@ class WebAutomationClient {
             dataSpan.textContent = JSON.stringify(data, null, 2);
             logEntry.appendChild(dataSpan);
         }
-        
+
         this.elements.messageLog.appendChild(logEntry);
         this.elements.messageLog.scrollTop = this.elements.messageLog.scrollHeight;
-        
+
         // Keep only last 100 log entries
         while (this.elements.messageLog.children.length > 100) {
             this.elements.messageLog.removeChild(this.elements.messageLog.firstChild);

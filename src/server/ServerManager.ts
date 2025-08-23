@@ -3,8 +3,9 @@
  */
 
 import * as vscode from 'vscode';
-import { ServerConfig, ServerStatus, ClientConnection } from './interfaces';
+import { ServerConfig, ServerStatus, ClientConnection, WebSocketMessage } from './interfaces';
 import { HttpServer } from './HttpServer';
+import { WebSocketServer } from './WebSocketServer';
 
 export class ServerManager {
     private _isRunning: boolean = false;
@@ -13,6 +14,7 @@ export class ServerManager {
     private _connectedClients: Map<string, ClientConnection> = new Map();
     private _lastError: string | null = null;
     private _httpServer: HttpServer | null = null;
+    private _webSocketServer: WebSocketServer | null = null;
 
     constructor() {
         // Initialize with default configuration
@@ -42,13 +44,15 @@ export class ServerManager {
             this._httpServer = new HttpServer(this._config);
             await this._httpServer.start();
 
-            // TODO: Initialize WebSocket server
+            // Initialize and start WebSocket server
+            this._webSocketServer = new WebSocketServer(this._config);
+            await this._webSocketServer.start();
             
             this._isRunning = true;
             this._startTime = new Date();
             this._lastError = null;
 
-            console.log(`Web Automation Server started on port ${this._httpServer.port}`);
+            console.log(`Web Automation Server started - HTTP: ${this._httpServer.port}, WebSocket: ${this._webSocketServer.port}`);
             
         } catch (error) {
             this._lastError = error instanceof Error ? error.message : 'Unknown error occurred';
@@ -66,15 +70,17 @@ export class ServerManager {
                 return; // Already stopped
             }
 
-            // TODO: Close WebSocket connections gracefully
+            // Stop WebSocket server first (closes connections gracefully)
+            if (this._webSocketServer) {
+                await this._webSocketServer.stop();
+                this._webSocketServer = null;
+            }
             
             // Stop HTTP server
             if (this._httpServer) {
                 await this._httpServer.stop();
                 this._httpServer = null;
             }
-
-            // TODO: Stop WebSocket server
 
             this._isRunning = false;
             this._startTime = null;
@@ -95,16 +101,16 @@ export class ServerManager {
     getServerStatus(): ServerStatus {
         const status: ServerStatus = {
             isRunning: this._isRunning,
-            connectedClients: this._connectedClients.size
+            connectedClients: this._webSocketServer?.clientCount || 0
         };
 
         if (this._lastError) {
             status.lastError = this._lastError;
         }
 
-        if (this._isRunning && this._config && this._startTime && this._httpServer) {
+        if (this._isRunning && this._config && this._startTime && this._httpServer && this._webSocketServer) {
             status.httpPort = this._httpServer.port;
-            status.websocketPort = this._config.websocketPort || this._httpServer.port + 1;
+            status.websocketPort = this._webSocketServer.port;
             status.uptime = Date.now() - this._startTime.getTime();
             status.serverUrl = `http://localhost:${this._httpServer.port}`;
         }
@@ -157,21 +163,32 @@ export class ServerManager {
     /**
      * Broadcast message to all connected WebSocket clients
      */
-    broadcastToClients(message: any): void {
-        if (!this._isRunning) {
+    broadcastToClients(message: WebSocketMessage): number {
+        if (!this._isRunning || !this._webSocketServer) {
             console.warn('Cannot broadcast message: server is not running');
-            return;
+            return 0;
         }
 
-        // TODO: Implement WebSocket broadcasting
-        console.log('Broadcasting message to clients:', message);
+        return this._webSocketServer.broadcastMessage(message);
     }
 
     /**
      * Get list of connected clients
      */
     getConnectedClients(): ClientConnection[] {
-        return Array.from(this._connectedClients.values());
+        return this._webSocketServer?.getConnectedClients() || [];
+    }
+
+    /**
+     * Send message to specific WebSocket client
+     */
+    sendToClient(clientId: string, message: WebSocketMessage): boolean {
+        if (!this._isRunning || !this._webSocketServer) {
+            console.warn('Cannot send message: server is not running');
+            return false;
+        }
+
+        return this._webSocketServer.sendToClient(clientId, message);
     }
 
     /**

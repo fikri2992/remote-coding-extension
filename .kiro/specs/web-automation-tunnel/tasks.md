@@ -29,6 +29,7 @@
 
 
 
+
   - Create HTTP server using Node.js built-in http module
   - Implement static file serving for web frontend assets
   - Add CORS support and security headers
@@ -37,7 +38,10 @@
   - _Git: `feat: implement HTTP server with static file serving and CORS`_
   - _Description: Add HTTP server functionality to serve web frontend with proper CORS configuration, security headers, and error handling for port conflicts._
 
-- [ ] 3. Implement WebSocket server for real-time communication
+- [-] 3. Implement WebSocket server for real-time communication
+
+
+
   - Create WebSocket server using ws library or built-in WebSocket support
   - Implement connection handling and client management
   - Add message parsing and validation for incoming WebSocket messages

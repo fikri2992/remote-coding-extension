@@ -5,24 +5,43 @@
 import { WebSocket, WebSocketServer as WSServer } from 'ws';
 import { v4 as uuidv4 } from 'uuid';
 import { ServerConfig, WebSocketMessage, ClientConnection } from './interfaces';
-import { CommandHandler } from './CommandHandler';
+import { CommandHandler, StateChangeEvent } from './CommandHandler';
+
+/**
+ * Enhanced client connection with state tracking
+ */
+interface EnhancedClientConnection extends ClientConnection {
+    /** Whether client wants incremental updates */
+    incrementalUpdates: boolean;
+    /** Last state version sent to this client */
+    lastStateVersion?: number;
+    /** Client preferences for state updates */
+    statePreferences?: {
+        includeDocumentChanges: boolean;
+        includeSelectionChanges: boolean;
+        includeDiagnostics: boolean;
+        throttleMs: number;
+    };
+}
 
 export class WebSocketServer {
     private _server: WSServer | null = null;
     private _port: number;
     private _config: ServerConfig;
-    private _clients: Map<string, { ws: WebSocket; connection: ClientConnection }> = new Map();
+    private _clients: Map<string, { ws: WebSocket; connection: EnhancedClientConnection }> = new Map();
     private _isRunning: boolean = false;
     private _commandHandler: CommandHandler;
+    private _stateVersion: number = 0;
+    private _clientThrottles: Map<string, { [key: string]: NodeJS.Timeout }> = new Map();
 
     constructor(config: ServerConfig) {
         this._config = config;
         this._port = config.websocketPort || config.httpPort + 1;
         this._commandHandler = new CommandHandler();
         
-        // Set up state change callback for broadcasting
-        this._commandHandler.setStateChangeCallback((changeType: string, data: any) => {
-            this.broadcastStateChange(changeType, data);
+        // Set up enhanced state change callback for broadcasting
+        this._commandHandler.setStateChangeCallback((event: StateChangeEvent) => {
+            this.handleStateChangeEvent(event);
         });
     }
 
@@ -108,18 +127,26 @@ export class WebSocketServer {
             return;
         }
 
-        // Create client connection info
+        // Create enhanced client connection info
         const clientId = uuidv4();
-        const connection: ClientConnection = {
+        const connection: EnhancedClientConnection = {
             id: clientId,
             connectedAt: new Date(),
             lastActivity: new Date(),
             userAgent: request.headers['user-agent'],
-            ipAddress: request.socket.remoteAddress
+            ipAddress: request.socket.remoteAddress,
+            incrementalUpdates: true, // Default to incremental updates
+            statePreferences: {
+                includeDocumentChanges: true,
+                includeSelectionChanges: false, // Default to false to reduce noise
+                includeDiagnostics: true,
+                throttleMs: 500
+            }
         };
 
         // Store client connection
         this._clients.set(clientId, { ws, connection });
+        this._clientThrottles.set(clientId, {});
 
         console.log(`WebSocket client connected: ${clientId} (${this._clients.size} total)`);
 
@@ -130,25 +157,36 @@ export class WebSocketServer {
 
         // Handle client disconnect
         ws.on('close', (code, reason) => {
-            this._clients.delete(clientId);
+            this.cleanupClient(clientId);
             console.log(`WebSocket client disconnected: ${clientId} (${this._clients.size} remaining)`);
         });
 
         // Handle connection errors
         ws.on('error', (error) => {
             console.error(`WebSocket client error (${clientId}):`, error);
-            this._clients.delete(clientId);
+            this.cleanupClient(clientId);
         });
 
-        // Send welcome message
+        // Send welcome message with current state
         this.sendToClient(clientId, {
             type: 'status',
             data: {
                 connected: true,
                 clientId: clientId,
-                serverTime: new Date().toISOString()
+                serverTime: new Date().toISOString(),
+                stateVersion: this._stateVersion,
+                capabilities: {
+                    incrementalUpdates: true,
+                    statePreferences: true,
+                    realTimeSync: true
+                }
             }
         });
+
+        // Send initial full state to new client
+        setTimeout(() => {
+            this.sendFullStateToClient(clientId);
+        }, 100);
     }
 
     /**
@@ -232,7 +270,12 @@ export class WebSocketServer {
                 break;
 
             default:
-                this.sendError(clientId, `Unsupported message type: ${message.type}`, message.id);
+                // Check if it's a client configuration message
+                if (message.type === 'broadcast' && message.data?.type === 'clientConfig') {
+                    this.handleClientConfigMessage(clientId, message);
+                } else {
+                    this.sendError(clientId, `Unsupported message type: ${message.type}`, message.id);
+                }
         }
     }
 
@@ -302,19 +345,187 @@ export class WebSocketServer {
     }
 
     /**
-     * Broadcast VS Code state changes to all clients
+     * Handle enhanced state change events with incremental updates
      */
-    private broadcastStateChange(changeType: string, data: any): void {
+    private handleStateChangeEvent(event: StateChangeEvent): void {
+        this._stateVersion++;
+        
+        // Handle full state broadcasts (for new clients)
+        if (!event.incremental && event.data.fullState) {
+            // This is a full state broadcast, send to all clients
+            const message: WebSocketMessage = {
+                type: 'broadcast',
+                data: {
+                    changeType: 'fullState',
+                    timestamp: event.timestamp.toISOString(),
+                    stateVersion: this._stateVersion,
+                    data: event.data.workspaceState,
+                    incremental: false
+                }
+            };
+            this.broadcastMessage(message);
+            return;
+        }
+
+        // Handle incremental state changes
+        this._clients.forEach((client, clientId) => {
+            this.sendStateChangeToClient(clientId, event);
+        });
+    }
+
+    /**
+     * Send state change to specific client based on their preferences
+     */
+    private sendStateChangeToClient(clientId: string, event: StateChangeEvent): void {
+        const client = this._clients.get(clientId);
+        if (!client || client.ws.readyState !== WebSocket.OPEN) {
+            return;
+        }
+
+        const prefs = client.connection.statePreferences;
+        if (!prefs) {
+            return;
+        }
+
+        // Filter events based on client preferences
+        let shouldSend = true;
+        switch (event.type) {
+            case 'documentChange':
+                shouldSend = prefs.includeDocumentChanges;
+                break;
+            case 'selection':
+                shouldSend = prefs.includeSelectionChanges;
+                break;
+            case 'diagnostics':
+                shouldSend = prefs.includeDiagnostics;
+                break;
+            // Always send these critical state changes
+            case 'activeEditor':
+            case 'workspaceFolders':
+            case 'visibleEditors':
+                shouldSend = true;
+                break;
+        }
+
+        if (!shouldSend) {
+            return;
+        }
+
+        // Throttle messages per client based on their preferences
+        const throttleKey = `${event.type}_${clientId}`;
+        const clientThrottles = this._clientThrottles.get(clientId);
+        
+        if (clientThrottles && clientThrottles[event.type]) {
+            clearTimeout(clientThrottles[event.type]);
+        }
+
+        const sendMessage = () => {
+            const message: WebSocketMessage = {
+                type: 'broadcast',
+                data: {
+                    changeType: event.type,
+                    timestamp: event.timestamp.toISOString(),
+                    stateVersion: this._stateVersion,
+                    data: event.data,
+                    incremental: event.incremental
+                }
+            };
+
+            this.sendToClient(clientId, message);
+            
+            // Update client's last state version
+            client.connection.lastStateVersion = this._stateVersion;
+        };
+
+        if (clientThrottles) {
+            clientThrottles[event.type] = setTimeout(sendMessage, prefs.throttleMs);
+        }
+    }
+
+    /**
+     * Handle client configuration messages
+     */
+    private handleClientConfigMessage(clientId: string, message: WebSocketMessage): void {
+        const client = this._clients.get(clientId);
+        if (!client) {
+            return;
+        }
+
+        const config = message.data?.config;
+        if (config && config.statePreferences) {
+            // Update client preferences
+            client.connection.statePreferences = {
+                ...client.connection.statePreferences,
+                ...config.statePreferences
+            };
+
+            if (typeof config.incrementalUpdates === 'boolean') {
+                client.connection.incrementalUpdates = config.incrementalUpdates;
+            }
+
+            console.log(`Updated client ${clientId} preferences:`, client.connection.statePreferences);
+
+            // Send confirmation
+            const response: WebSocketMessage = {
+                type: 'response',
+                data: {
+                    success: true,
+                    message: 'Client preferences updated',
+                    preferences: client.connection.statePreferences
+                }
+            };
+            
+            if (message.id) {
+                response.id = message.id;
+            }
+            
+            this.sendToClient(clientId, response);
+        }
+    }
+
+    /**
+     * Send full workspace state to a specific client
+     */
+    private sendFullStateToClient(clientId: string): void {
+        const workspaceState = this._commandHandler.getWorkspaceState();
+        
         const message: WebSocketMessage = {
             type: 'broadcast',
             data: {
-                changeType,
+                changeType: 'fullState',
                 timestamp: new Date().toISOString(),
-                data
+                stateVersion: this._stateVersion,
+                data: workspaceState,
+                incremental: false
             }
         };
 
-        this.broadcastMessage(message);
+        this.sendToClient(clientId, message);
+        
+        // Update client's state version
+        const client = this._clients.get(clientId);
+        if (client) {
+            client.connection.lastStateVersion = this._stateVersion;
+        }
+    }
+
+    /**
+     * Clean up client resources
+     */
+    private cleanupClient(clientId: string): void {
+        // Clear any pending throttled messages
+        const clientThrottles = this._clientThrottles.get(clientId);
+        if (clientThrottles) {
+            Object.values(clientThrottles).forEach(timeout => {
+                if (timeout) {
+                    clearTimeout(timeout);
+                }
+            });
+            this._clientThrottles.delete(clientId);
+        }
+
+        // Remove client from connections
+        this._clients.delete(clientId);
     }
 
     /**
@@ -411,6 +622,40 @@ export class WebSocketServer {
      */
     getConnectedClients(): ClientConnection[] {
         return Array.from(this._clients.values()).map(client => client.connection);
+    }
+
+    /**
+     * Get enhanced client connection information
+     */
+    getEnhancedClientInfo(): EnhancedClientConnection[] {
+        return Array.from(this._clients.values()).map(client => client.connection);
+    }
+
+    /**
+     * Force state synchronization for all clients
+     */
+    forceStateSynchronization(): void {
+        this._commandHandler.broadcastFullState();
+    }
+
+    /**
+     * Force state synchronization for specific client
+     */
+    forceClientStateSynchronization(clientId: string): boolean {
+        const client = this._clients.get(clientId);
+        if (!client || client.ws.readyState !== WebSocket.OPEN) {
+            return false;
+        }
+
+        this.sendFullStateToClient(clientId);
+        return true;
+    }
+
+    /**
+     * Get current state version
+     */
+    get stateVersion(): number {
+        return this._stateVersion;
     }
 
     /**

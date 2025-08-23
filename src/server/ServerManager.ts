@@ -192,6 +192,48 @@ export class ServerManager {
     }
 
     /**
+     * Force state synchronization for all connected clients
+     */
+    forceStateSynchronization(): void {
+        if (this._isRunning && this._webSocketServer) {
+            this._webSocketServer.forceStateSynchronization();
+        }
+    }
+
+    /**
+     * Force state synchronization for specific client
+     */
+    forceClientStateSynchronization(clientId: string): boolean {
+        if (!this._isRunning || !this._webSocketServer) {
+            return false;
+        }
+
+        return this._webSocketServer.forceClientStateSynchronization(clientId);
+    }
+
+    /**
+     * Get enhanced client connection information
+     */
+    getEnhancedClientInfo(): any[] {
+        if (!this._isRunning || !this._webSocketServer) {
+            return [];
+        }
+
+        return this._webSocketServer.getEnhancedClientInfo();
+    }
+
+    /**
+     * Get current state version
+     */
+    getStateVersion(): number {
+        if (!this._isRunning || !this._webSocketServer) {
+            return 0;
+        }
+
+        return this._webSocketServer.stateVersion;
+    }
+
+    /**
      * Check if server is running
      */
     get isRunning(): boolean {

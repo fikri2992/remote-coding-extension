@@ -23,14 +23,37 @@ export interface CommandValidation {
 }
 
 /**
+ * State change event interface for incremental updates
+ */
+export interface StateChangeEvent {
+    type: 'activeEditor' | 'documentChange' | 'workspaceFolders' | 'visibleEditors' | 'selection' | 'diagnostics';
+    timestamp: Date;
+    data: any;
+    incremental?: boolean;
+}
+
+/**
+ * Cached state for incremental updates
+ */
+interface CachedState {
+    workspaceFolders: string[];
+    activeEditorFileName: string | undefined;
+    visibleEditors: string[];
+    lastSelectionChange: Date | undefined;
+}
+
+/**
  * CommandHandler manages secure execution of VS Code commands and state collection
  */
 export class CommandHandler {
     private _allowedCommands: Set<string>;
     private _stateChangeListeners: vscode.Disposable[] = [];
+    private _cachedState: CachedState;
+    private _stateChangeCallback?: (event: StateChangeEvent) => void;
 
     constructor() {
         this._allowedCommands = this.initializeAllowedCommands();
+        this._cachedState = this.initializeCachedState();
         this.setupStateChangeListeners();
     }
 
@@ -105,24 +128,67 @@ export class CommandHandler {
     }
 
     /**
-     * Set up listeners for VS Code state changes
+     * Initialize cached state for incremental updates
+     */
+    private initializeCachedState(): CachedState {
+        return {
+            workspaceFolders: vscode.workspace.workspaceFolders?.map(f => f.uri.fsPath) || [],
+            activeEditorFileName: vscode.window.activeTextEditor?.document.fileName || undefined,
+            visibleEditors: vscode.window.visibleTextEditors.map(e => e.document.fileName),
+            lastSelectionChange: new Date()
+        };
+    }
+
+    /**
+     * Set up comprehensive listeners for VS Code state changes
      */
     private setupStateChangeListeners(): void {
         // Listen for active editor changes
         this._stateChangeListeners.push(
             vscode.window.onDidChangeActiveTextEditor((editor) => {
-                this.onStateChange('activeEditor', this.getActiveEditorInfo(editor));
+                const newFileName = editor?.document.fileName;
+                const oldFileName = this._cachedState.activeEditorFileName;
+                
+                if (newFileName !== oldFileName) {
+                    this._cachedState.activeEditorFileName = newFileName;
+                    this.emitStateChange({
+                        type: 'activeEditor',
+                        timestamp: new Date(),
+                        data: {
+                            previous: oldFileName,
+                            current: newFileName,
+                            editorInfo: this.getActiveEditorInfo(editor)
+                        },
+                        incremental: true
+                    });
+                }
             })
         );
 
-        // Listen for text document changes
+        // Listen for text document changes (throttled to avoid spam)
+        let documentChangeTimeout: NodeJS.Timeout | undefined;
         this._stateChangeListeners.push(
             vscode.workspace.onDidChangeTextDocument((event) => {
                 if (event.document === vscode.window.activeTextEditor?.document) {
-                    this.onStateChange('documentChange', {
-                        fileName: event.document.fileName,
-                        changes: event.contentChanges.length
-                    });
+                    // Throttle document change events to every 500ms
+                    if (documentChangeTimeout) {
+                        clearTimeout(documentChangeTimeout);
+                    }
+                    
+                    documentChangeTimeout = setTimeout(() => {
+                        this.emitStateChange({
+                            type: 'documentChange',
+                            timestamp: new Date(),
+                            data: {
+                                fileName: event.document.fileName,
+                                languageId: event.document.languageId,
+                                lineCount: event.document.lineCount,
+                                isDirty: event.document.isDirty,
+                                changeCount: event.contentChanges.length
+                            },
+                            incremental: true
+                        });
+                    }, 500);
                 }
             })
         );
@@ -130,9 +196,21 @@ export class CommandHandler {
         // Listen for workspace folder changes
         this._stateChangeListeners.push(
             vscode.workspace.onDidChangeWorkspaceFolders((event) => {
-                this.onStateChange('workspaceFolders', {
-                    added: event.added.map(f => f.uri.fsPath),
-                    removed: event.removed.map(f => f.uri.fsPath)
+                const newFolders = vscode.workspace.workspaceFolders?.map(f => f.uri.fsPath) || [];
+                const oldFolders = this._cachedState.workspaceFolders;
+                
+                this._cachedState.workspaceFolders = newFolders;
+                
+                this.emitStateChange({
+                    type: 'workspaceFolders',
+                    timestamp: new Date(),
+                    data: {
+                        added: event.added.map(f => f.uri.fsPath),
+                        removed: event.removed.map(f => f.uri.fsPath),
+                        current: newFolders,
+                        previous: oldFolders
+                    },
+                    incremental: true
                 });
             })
         );
@@ -140,9 +218,96 @@ export class CommandHandler {
         // Listen for visible editors changes
         this._stateChangeListeners.push(
             vscode.window.onDidChangeVisibleTextEditors((editors) => {
-                this.onStateChange('visibleEditors', 
-                    editors.map(e => e.document.fileName)
+                const newEditors = editors.map(e => e.document.fileName);
+                const oldEditors = this._cachedState.visibleEditors;
+                
+                // Only emit if there's an actual change
+                if (JSON.stringify(newEditors.sort()) !== JSON.stringify(oldEditors.sort())) {
+                    this._cachedState.visibleEditors = newEditors;
+                    
+                    this.emitStateChange({
+                        type: 'visibleEditors',
+                        timestamp: new Date(),
+                        data: {
+                            current: newEditors,
+                            previous: oldEditors,
+                            opened: newEditors.filter(e => !oldEditors.includes(e)),
+                            closed: oldEditors.filter(e => !newEditors.includes(e))
+                        },
+                        incremental: true
+                    });
+                }
+            })
+        );
+
+        // Listen for text editor selection changes (throttled)
+        let selectionChangeTimeout: NodeJS.Timeout | undefined;
+        this._stateChangeListeners.push(
+            vscode.window.onDidChangeTextEditorSelection((event) => {
+                // Throttle selection changes to avoid excessive updates
+                if (selectionChangeTimeout) {
+                    clearTimeout(selectionChangeTimeout);
+                }
+                
+                selectionChangeTimeout = setTimeout(() => {
+                    const now = new Date();
+                    // Only emit if enough time has passed since last selection change
+                    if (!this._cachedState.lastSelectionChange || 
+                        now.getTime() - this._cachedState.lastSelectionChange.getTime() > 200) {
+                        
+                        this._cachedState.lastSelectionChange = now;
+                        
+                        this.emitStateChange({
+                            type: 'selection',
+                            timestamp: now,
+                            data: {
+                                fileName: event.textEditor.document.fileName,
+                                selections: event.selections.map(sel => ({
+                                    start: { line: sel.start.line, character: sel.start.character },
+                                    end: { line: sel.end.line, character: sel.end.character },
+                                    isEmpty: sel.isEmpty
+                                })),
+                                kind: event.kind
+                            },
+                            incremental: true
+                        });
+                    }
+                }, 200);
+            })
+        );
+
+        // Listen for diagnostic changes (errors, warnings, etc.)
+        this._stateChangeListeners.push(
+            vscode.languages.onDidChangeDiagnostics((event) => {
+                // Only report diagnostics for currently open files to reduce noise
+                const openFiles = vscode.window.visibleTextEditors.map(e => e.document.uri);
+                const relevantUris = event.uris.filter(uri => 
+                    openFiles.some(openUri => openUri.toString() === uri.toString())
                 );
+                
+                if (relevantUris.length > 0) {
+                    const diagnosticsData = relevantUris.map(uri => ({
+                        file: uri.fsPath,
+                        diagnostics: vscode.languages.getDiagnostics(uri).map(diag => ({
+                            severity: diag.severity,
+                            message: diag.message,
+                            range: {
+                                start: { line: diag.range.start.line, character: diag.range.start.character },
+                                end: { line: diag.range.end.line, character: diag.range.end.character }
+                            },
+                            source: diag.source
+                        }))
+                    }));
+                    
+                    this.emitStateChange({
+                        type: 'diagnostics',
+                        timestamp: new Date(),
+                        data: {
+                            files: diagnosticsData
+                        },
+                        incremental: true
+                    });
+                }
             })
         );
     }
@@ -269,13 +434,14 @@ export class CommandHandler {
     }
 
     /**
-     * Handle state change events (to be connected to WebSocket broadcasting)
+     * Emit state change events with improved data structure
      */
-    private onStateChange(changeType: string, data: any): void {
-        // This method will be called when VS Code state changes
-        // The ServerManager or WebSocketServer can subscribe to these events
-        // For now, we'll just log the changes
-        console.log(`VS Code state change - ${changeType}:`, data);
+    private emitStateChange(event: StateChangeEvent): void {
+        console.log(`VS Code state change - ${event.type}:`, event.data);
+        
+        if (this._stateChangeCallback) {
+            this._stateChangeCallback(event);
+        }
     }
 
     /**
@@ -300,22 +466,38 @@ export class CommandHandler {
     }
 
     /**
-     * Set up a callback for state changes (for WebSocket broadcasting)
+     * Set the state change callback for WebSocket broadcasting
      */
-    onStateChangeCallback?: (changeType: string, data: any) => void;
+    setStateChangeCallback(callback: (event: StateChangeEvent) => void): void {
+        this._stateChangeCallback = callback;
+    }
 
     /**
-     * Set the state change callback
+     * Get incremental state update since last check
      */
-    setStateChangeCallback(callback: (changeType: string, data: any) => void): void {
-        this.onStateChangeCallback = callback;
-        // Update the onStateChange method to use the callback
-        this.onStateChange = (changeType: string, data: any) => {
-            console.log(`VS Code state change - ${changeType}:`, data);
-            if (this.onStateChangeCallback) {
-                this.onStateChangeCallback(changeType, data);
-            }
-        };
+    getIncrementalStateUpdate(): Partial<WorkspaceState> | null {
+        // This method can be used to get only changed parts of the state
+        // For now, we rely on the event-driven approach, but this could be enhanced
+        // to provide periodic state diffs
+        return null;
+    }
+
+    /**
+     * Force a full state broadcast (useful for new client connections)
+     */
+    broadcastFullState(): void {
+        if (this._stateChangeCallback) {
+            const fullState = this.getWorkspaceState();
+            this._stateChangeCallback({
+                type: 'activeEditor', // Use a generic type for full state
+                timestamp: new Date(),
+                data: {
+                    fullState: true,
+                    workspaceState: fullState
+                },
+                incremental: false
+            });
+        }
     }
 
     /**

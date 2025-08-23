@@ -74,4 +74,8 @@ export function activate(context: vscode.ExtensionContext) {
 export function deactivate() {
     // Extension cleanup - subscriptions are automatically disposed by VSCode
     console.log('Basic VSCode Extension deactivated');
+    
+    // Ensure proper cleanup of server resources
+    // Note: webviewProvider is not accessible here, but the ServerManager
+    // will be disposed when the webviewProvider is disposed by VSCode
 }

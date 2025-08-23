@@ -60,8 +60,8 @@ interface ClientConnection {
     ws: WebSocket;
     state: ConnectionState;
     health: ConnectionHealth;
-    recoveryTimer?: NodeJS.Timeout;
-    healthCheckTimer?: NodeJS.Timeout;
+    recoveryTimer?: NodeJS.Timeout | null;
+    healthCheckTimer?: NodeJS.Timeout | null;
     lastPingTime?: Date;
     lastPongTime?: Date;
 }
@@ -74,7 +74,7 @@ export class ConnectionRecoveryManager {
     private config: RecoveryConfig;
     private callbacks: RecoveryCallbacks;
     private errorHandler: ErrorHandler;
-    private globalHealthCheckTimer?: NodeJS.Timeout;
+    private globalHealthCheckTimer?: NodeJS.Timeout | null;
 
     constructor(config?: Partial<RecoveryConfig>, callbacks?: RecoveryCallbacks) {
         this.config = {
@@ -185,7 +185,7 @@ export class ConnectionRecoveryManager {
         this.callbacks.onRecoveryAttempt?.(client.id, attempt, this.config.maxRetries);
 
         client.recoveryTimer = setTimeout(async () => {
-            client.recoveryTimer = undefined;
+            client.recoveryTimer = null;
             client.health.reconnectAttempts = attempt;
             
             const success = await this.attemptReconnection(client);
@@ -427,12 +427,12 @@ export class ConnectionRecoveryManager {
     private cleanupClient(client: ClientConnection): void {
         if (client.recoveryTimer) {
             clearTimeout(client.recoveryTimer);
-            client.recoveryTimer = undefined;
+            client.recoveryTimer = null;
         }
         
         if (client.healthCheckTimer) {
             clearInterval(client.healthCheckTimer);
-            client.healthCheckTimer = undefined;
+            client.healthCheckTimer = null;
         }
     }
 
@@ -463,7 +463,7 @@ export class ConnectionRecoveryManager {
         // Cancel existing recovery if in progress
         if (client.recoveryTimer) {
             clearTimeout(client.recoveryTimer);
-            client.recoveryTimer = undefined;
+            client.recoveryTimer = null;
         }
 
         // Reset attempts and try reconnection
@@ -492,7 +492,7 @@ export class ConnectionRecoveryManager {
         // Stop global health check
         if (this.globalHealthCheckTimer) {
             clearInterval(this.globalHealthCheckTimer);
-            this.globalHealthCheckTimer = undefined;
+            this.globalHealthCheckTimer = null;
         }
         
         console.log('Connection recovery manager disposed');

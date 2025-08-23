@@ -458,7 +458,7 @@ export class ServerManager {
             this._httpServer = new HttpServer(config);
             await this._httpServer.start();
         } catch (error) {
-            const { recovered } = await this._errorHandler.handleError(error, {
+            const { recovered } = await this._errorHandler.handleError(error as Error, {
                 tryAlternativePort: async () => {
                     return await this.tryAlternativeHttpPort(config);
                 },
@@ -516,7 +516,7 @@ export class ServerManager {
             this.setupWebSocketRecovery();
             
         } catch (error) {
-            const { recovered } = await this._errorHandler.handleError(error, {
+            const { recovered } = await this._errorHandler.handleError(error as Error, {
                 tryAlternativePort: async () => {
                     return await this.tryAlternativeWebSocketPort(config);
                 }

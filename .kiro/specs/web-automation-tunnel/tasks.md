@@ -71,6 +71,7 @@
 
 
 
+
   - Create HTML/CSS/JavaScript web interface for remote control
   - Implement WebSocket client connection with reconnection logic
   - Add command sending interface with real-time feedback
@@ -79,7 +80,10 @@
   - _Git: `feat: create web frontend with WebSocket client and command interface`_
   - _Description: Build responsive web interface for remote VS Code control with WebSocket connectivity, automatic reconnection, command execution UI, and real-time status display._
 
-- [ ] 6. Enhance VS Code extension UI with server controls
+- [-] 6. Enhance VS Code extension UI with server controls
+
+
+
   - Extend existing WebviewProvider with server management functionality
   - Add start/stop server buttons with loading states
   - Implement real-time server status indicators (running/stopped/error)

@@ -4,10 +4,125 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Basic Extension</title>
+    <style>
+        body {
+            font-family: var(--vscode-font-family);
+            font-size: var(--vscode-font-size);
+            font-weight: var(--vscode-font-weight);
+            color: var(--vscode-foreground);
+            background-color: var(--vscode-editor-background);
+            margin: 0;
+            padding: 16px;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .title {
+            font-size: 16px;
+            font-weight: 600;
+            margin: 0 0 8px 0;
+            color: var(--vscode-foreground);
+        }
+
+        .description {
+            font-size: 13px;
+            color: var(--vscode-descriptionForeground);
+            margin: 0 0 16px 0;
+            line-height: 1.4;
+        }
+
+        .action-button {
+            background-color: var(--vscode-button-background);
+            color: var(--vscode-button-foreground);
+            border: 1px solid var(--vscode-button-border, transparent);
+            border-radius: 2px;
+            padding: 8px 16px;
+            font-size: 13px;
+            font-family: var(--vscode-font-family);
+            cursor: pointer;
+            outline: none;
+            transition: background-color 0.1s ease;
+            min-height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .action-button:hover {
+            background-color: var(--vscode-button-hoverBackground);
+        }
+
+        .action-button:active {
+            background-color: var(--vscode-button-background);
+            transform: translateY(1px);
+        }
+
+        .action-button:focus {
+            outline: 1px solid var(--vscode-focusBorder);
+            outline-offset: 2px;
+        }
+
+        .action-button:disabled {
+            background-color: var(--vscode-button-secondaryBackground);
+            color: var(--vscode-button-secondaryForeground);
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+    </style>
 </head>
 <body>
-    <!-- HTML content will be implemented in task 6 -->
-    <h3>Basic Extension Panel</h3>
-    <p>Button functionality coming soon...</p>
+    <div class="container">
+        <h3 class="title">Basic Extension</h3>
+        <p class="description">Click the button below to execute the auxiliary bar focus action and expand line selection.</p>
+        
+        <button id="executeActionBtn" class="action-button">
+            Execute Action
+        </button>
+    </div>
+
+    <script>
+        // Get reference to VSCode API
+        const vscode = acquireVsCodeApi();
+        
+        // Get button element
+        const executeButton = document.getElementById('executeActionBtn');
+        
+        // Add click handler for button
+        executeButton.addEventListener('click', function() {
+            // Disable button temporarily to prevent multiple clicks
+            executeButton.disabled = true;
+            executeButton.textContent = 'Executing...';
+            
+            // Post message to extension
+            vscode.postMessage({
+                command: 'executeAction',
+                data: {
+                    timestamp: new Date().toISOString(),
+                    source: 'webview-button'
+                }
+            });
+            
+            // Re-enable button after short delay
+            setTimeout(() => {
+                executeButton.disabled = false;
+                executeButton.textContent = 'Execute Action';
+            }, 1000);
+        });
+        
+        // Handle keyboard events for accessibility
+        executeButton.addEventListener('keydown', function(event) {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                executeButton.click();
+            }
+        });
+        
+        // Log that webview is ready
+        console.log('Basic Extension webview loaded and ready');
+    </script>
 </body>
 </html>

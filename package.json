@@ -3,15 +3,14 @@
   "displayName": "Basic VSCode Extension",
   "description": "A basic VSCode extension with activity bar and button functionality",
   "version": "0.0.1",
+  "publisher": "basic-extension-publisher",
   "engines": {
-    "vscode": "^1.74.0"
+    "vscode": "^1.75.0"
   },
   "categories": [
     "Other"
   ],
-  "activationEvents": [
-    "onView:basicExtensionView"
-  ],
+  "activationEvents": [],
   "main": "./out/extension.js",
   "contributes": {
     "viewsContainers": {
@@ -19,7 +18,7 @@
         {
           "id": "basicExtension",
           "title": "Basic Extension",
-          "icon": "$(symbol-misc)"
+          "icon": "./src/assets/icon.svg"
         }
       ]
     },
@@ -35,7 +34,13 @@
     "commands": [
       {
         "command": "basicExtension.executeAction",
-        "title": "Execute Action"
+        "title": "Execute Action",
+        "category": "Basic Extension"
+      },
+      {
+        "command": "basicExtension.focusAuxiliaryBar",
+        "title": "Focus Auxiliary Bar",
+        "category": "Basic Extension"
       }
     ]
   },

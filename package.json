@@ -42,7 +42,45 @@
         "title": "Focus Auxiliary Bar",
         "category": "Basic Extension"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "Web Automation Tunnel",
+      "properties": {
+        "webAutomationTunnel.httpPort": {
+          "type": "number",
+          "default": 8080,
+          "minimum": 1024,
+          "maximum": 65535,
+          "description": "Port number for the HTTP server"
+        },
+        "webAutomationTunnel.websocketPort": {
+          "type": "number",
+          "minimum": 1024,
+          "maximum": 65535,
+          "description": "Port number for the WebSocket server (defaults to HTTP port + 1)"
+        },
+        "webAutomationTunnel.allowedOrigins": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": ["*"],
+          "description": "List of allowed origins for CORS and WebSocket connections"
+        },
+        "webAutomationTunnel.maxConnections": {
+          "type": "number",
+          "default": 10,
+          "minimum": 1,
+          "maximum": 100,
+          "description": "Maximum number of concurrent WebSocket connections"
+        },
+        "webAutomationTunnel.enableCors": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable Cross-Origin Resource Sharing (CORS) support"
+        }
+      }
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",

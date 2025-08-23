@@ -1,0 +1,66 @@
+{
+  "name": "vscode-extension-basic",
+  "displayName": "Basic VSCode Extension",
+  "description": "A basic VSCode extension with activity bar and button functionality",
+  "version": "0.0.1",
+  "publisher": "basic-extension-publisher",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "basicExtension",
+          "title": "Basic Extension",
+          "icon": "./src/assets/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "basicExtension": [
+        {
+          "id": "basicExtensionView",
+          "name": "Basic Extension",
+          "type": "webview"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "basicExtension.executeAction",
+        "title": "Execute Action",
+        "category": "Basic Extension"
+      },
+      {
+        "command": "basicExtension.focusAuxiliaryBar",
+        "title": "Focus Auxiliary Bar",
+        "category": "Basic Extension"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "compile:watch": "tsc -watch -p ./",
+    "pretest": "npm run compile",
+    "lint": "eslint src --ext ts",
+    "clean": "rimraf out",
+    "build": "npm run clean && npm run compile",
+    "package": "npm run build && vsce package"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.74.0",
+    "@types/node": "16.x",
+    "typescript": "^4.9.4",
+    "@typescript-eslint/eslint-plugin": "^5.45.0",
+    "@typescript-eslint/parser": "^5.45.0",
+    "eslint": "^8.28.0",
+    "rimraf": "^3.0.2"
+  }
+}

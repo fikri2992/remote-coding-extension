@@ -7,14 +7,19 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as url from 'url';
 import { ServerConfig } from './interfaces';
+import { ErrorHandler, ErrorCategory, ErrorSeverity } from './ErrorHandler';
 
 export class HttpServer {
     private server: http.Server | null = null;
     private config: ServerConfig;
     private webAssetsPath: string;
+    private errorHandler: ErrorHandler;
+    private requestCount: number = 0;
+    private errorCount: number = 0;
 
     constructor(config: ServerConfig) {
         this.config = config;
+        this.errorHandler = ErrorHandler.getInstance();
         // Web assets will be served from the extension's web assets directory
         this.webAssetsPath = path.join(__dirname, '..', 'webview', 'web-frontend');
     }
@@ -71,10 +76,16 @@ export class HttpServer {
     }
 
     /**
-     * Handle incoming HTTP requests
+     * Handle incoming HTTP requests with comprehensive error handling
      */
     private handleRequest(req: http.IncomingMessage, res: http.ServerResponse): void {
+        this.requestCount++;
+        const startTime = Date.now();
+        
         try {
+            // Log request for debugging
+            console.log(`HTTP ${req.method} ${req.url} from ${req.socket.remoteAddress}`);
+
             // Add CORS headers if enabled
             if (this.config.enableCors) {
                 this.addCorsHeaders(res, req);
@@ -90,8 +101,21 @@ export class HttpServer {
                 return;
             }
 
-            // Parse the URL
-            const parsedUrl = url.parse(req.url || '/', true);
+            // Validate request method
+            if (!['GET', 'HEAD'].includes(req.method || '')) {
+                this.sendErrorResponse(res, 405, 'Method Not Allowed');
+                return;
+            }
+
+            // Parse the URL with error handling
+            let parsedUrl;
+            try {
+                parsedUrl = url.parse(req.url || '/', true);
+            } catch (urlError) {
+                this.sendErrorResponse(res, 400, 'Bad Request - Invalid URL');
+                return;
+            }
+
             let pathname = parsedUrl.pathname || '/';
 
             // Default to index.html for root requests
@@ -99,19 +123,63 @@ export class HttpServer {
                 pathname = '/index.html';
             }
 
-            // Serve static files
-            this.serveStaticFile(pathname, res);
+            // Serve static files with enhanced error handling
+            this.serveStaticFileWithErrorHandling(pathname, res, req);
 
         } catch (error) {
+            this.errorCount++;
             console.error('Error handling HTTP request:', error);
+            
+            const errorInfo = this.errorHandler.createError(
+                'HTTP_REQUEST_ERROR',
+                `HTTP request handling failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+                ErrorCategory.NETWORK,
+                ErrorSeverity.MEDIUM,
+                { 
+                    method: req.method, 
+                    url: req.url, 
+                    userAgent: req.headers['user-agent'],
+                    remoteAddress: req.socket.remoteAddress
+                }
+            );
+
+            this.errorHandler.handleError(errorInfo, null, false);
             this.sendErrorResponse(res, 500, 'Internal Server Error');
+        } finally {
+            // Log request completion time
+            const duration = Date.now() - startTime;
+            if (duration > 1000) { // Log slow requests
+                console.warn(`Slow HTTP request: ${req.method} ${req.url} took ${duration}ms`);
+            }
+        }
+    }
+
+    /**
+     * Serve static files with enhanced error handling
+     */
+    private serveStaticFileWithErrorHandling(pathname: string, res: http.ServerResponse, req: http.IncomingMessage): void {
+        try {
+            this.serveStaticFile(pathname, res, req);
+        } catch (error) {
+            console.error(`Error serving static file ${pathname}:`, error);
+            
+            const errorInfo = this.errorHandler.createError(
+                'STATIC_FILE_ERROR',
+                `Failed to serve static file ${pathname}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+                ErrorCategory.INTERNAL,
+                ErrorSeverity.LOW,
+                { pathname, error: error instanceof Error ? error.message : 'Unknown error' }
+            );
+
+            this.errorHandler.handleError(errorInfo, null, false);
+            this.sendErrorResponse(res, 500, 'Error serving file');
         }
     }
 
     /**
      * Serve static files from the web assets directory
      */
-    private serveStaticFile(pathname: string, res: http.ServerResponse): void {
+    private serveStaticFile(pathname: string, res: http.ServerResponse, req: http.IncomingMessage): void {
         // Security: prevent directory traversal
         const safePath = path.normalize(pathname).replace(/^(\.\.[\/\\])+/, '');
         const filePath = path.join(this.webAssetsPath, safePath);
@@ -122,38 +190,128 @@ export class HttpServer {
             return;
         }
 
-        // Check if file exists
+        // Check if file exists with timeout
+        const accessTimeout = setTimeout(() => {
+            if (!res.headersSent) {
+                this.sendErrorResponse(res, 504, 'File access timeout');
+            }
+        }, 5000);
+
         fs.access(filePath, fs.constants.F_OK, (err) => {
+            clearTimeout(accessTimeout);
+            
             if (err) {
-                this.sendErrorResponse(res, 404, 'File Not Found');
+                if (err.code === 'ENOENT') {
+                    this.sendErrorResponse(res, 404, 'File Not Found');
+                } else if (err.code === 'EACCES') {
+                    this.sendErrorResponse(res, 403, 'Access Denied');
+                } else {
+                    console.error(`File access error for ${filePath}:`, err);
+                    this.sendErrorResponse(res, 500, 'File Access Error');
+                }
                 return;
             }
 
-            // Get file stats
+            // Get file stats with timeout
+            const statTimeout = setTimeout(() => {
+                if (!res.headersSent) {
+                    this.sendErrorResponse(res, 504, 'File stat timeout');
+                }
+            }, 3000);
+
             fs.stat(filePath, (statErr, stats) => {
-                if (statErr || !stats.isFile()) {
-                    this.sendErrorResponse(res, 404, 'File Not Found');
+                clearTimeout(statTimeout);
+                
+                if (statErr) {
+                    console.error(`File stat error for ${filePath}:`, statErr);
+                    this.sendErrorResponse(res, 500, 'File Stat Error');
+                    return;
+                }
+
+                if (!stats.isFile()) {
+                    this.sendErrorResponse(res, 404, 'Not a File');
+                    return;
+                }
+
+                // Check file size limits (prevent serving huge files)
+                const maxFileSize = 50 * 1024 * 1024; // 50MB limit
+                if (stats.size > maxFileSize) {
+                    this.sendErrorResponse(res, 413, 'File Too Large');
+                    return;
+                }
+
+                // Handle HEAD requests
+                if (req.method === 'HEAD') {
+                    res.setHeader('Content-Type', this.getContentType(filePath));
+                    res.setHeader('Content-Length', stats.size);
+                    res.writeHead(200);
+                    res.end();
                     return;
                 }
 
                 // Determine content type
                 const contentType = this.getContentType(filePath);
                 
-                // Set headers
+                // Set headers with enhanced caching strategy
                 res.setHeader('Content-Type', contentType);
                 res.setHeader('Content-Length', stats.size);
-                res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+                res.setHeader('Last-Modified', stats.mtime.toUTCString());
+                res.setHeader('ETag', `"${stats.mtime.getTime()}-${stats.size}"`);
+                
+                // Set cache headers based on file type
+                if (contentType.startsWith('text/html')) {
+                    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+                } else {
+                    res.setHeader('Cache-Control', 'public, max-age=3600'); // 1 hour for assets
+                }
 
-                // Stream the file
+                // Handle conditional requests
+                const ifModifiedSince = req.headers['if-modified-since'];
+                const ifNoneMatch = req.headers['if-none-match'];
+                
+                if (ifModifiedSince && new Date(ifModifiedSince) >= stats.mtime) {
+                    res.writeHead(304);
+                    res.end();
+                    return;
+                }
+                
+                if (ifNoneMatch && ifNoneMatch === `"${stats.mtime.getTime()}-${stats.size}"`) {
+                    res.writeHead(304);
+                    res.end();
+                    return;
+                }
+
+                // Stream the file with error handling
                 const fileStream = fs.createReadStream(filePath);
                 
                 fileStream.on('error', (streamErr) => {
                     console.error('Error streaming file:', streamErr);
+                    
+                    const errorInfo = this.errorHandler.createError(
+                        'FILE_STREAM_ERROR',
+                        `Error streaming file ${pathname}: ${streamErr.message}`,
+                        ErrorCategory.INTERNAL,
+                        ErrorSeverity.MEDIUM,
+                        { pathname, error: streamErr.message }
+                    );
+
+                    this.errorHandler.handleError(errorInfo, null, false);
+                    
                     if (!res.headersSent) {
                         this.sendErrorResponse(res, 500, 'Error reading file');
+                    } else {
+                        res.destroy();
                     }
                 });
 
+                // Handle client disconnect
+                req.on('close', () => {
+                    if (!fileStream.destroyed) {
+                        fileStream.destroy();
+                    }
+                });
+
+                res.writeHead(200);
                 fileStream.pipe(res);
             });
         });
@@ -295,6 +453,32 @@ export class HttpServer {
      */
     get port(): number {
         return this.config.httpPort;
+    }
+
+    /**
+     * Get server diagnostics
+     */
+    getDiagnostics(): any {
+        return {
+            isRunning: this.isRunning,
+            port: this.config.httpPort,
+            requestCount: this.requestCount,
+            errorCount: this.errorCount,
+            errorRate: this.requestCount > 0 ? (this.errorCount / this.requestCount) * 100 : 0,
+            webAssetsPath: this.webAssetsPath,
+            config: {
+                enableCors: this.config.enableCors,
+                allowedOrigins: this.config.allowedOrigins
+            }
+        };
+    }
+
+    /**
+     * Reset diagnostics counters
+     */
+    resetDiagnostics(): void {
+        this.requestCount = 0;
+        this.errorCount = 0;
     }
 
     /**

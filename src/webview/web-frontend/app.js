@@ -7,11 +7,22 @@ class WebAutomationClient {
         this.websocket = null;
         this.isConnected = false;
         this.reconnectAttempts = 0;
-        this.maxReconnectAttempts = 5;
+        this.maxReconnectAttempts = 10;
         this.reconnectDelay = 1000;
+        this.maxReconnectDelay = 30000;
+        this.backoffMultiplier = 1.5;
+        this.connectionTime = null;
+        this.lastPingTime = null;
+        this.pingInterval = null;
+        this.healthCheckInterval = 15000;
+        this.messageQueue = [];
+        this.connectionId = null;
+        this.networkErrorCount = 0;
+        this.maxNetworkErrors = 3;
 
         this.initializeUI();
         this.connect();
+        this.startHealthMonitoring();
     }
 
     /**
@@ -67,29 +78,58 @@ class WebAutomationClient {
     }
 
     /**
-     * Connect to WebSocket server
+     * Connect to WebSocket server with enhanced error handling
      */
     connect() {
         try {
+            // Clear any existing connection
+            if (this.websocket) {
+                this.websocket.onopen = null;
+                this.websocket.onmessage = null;
+                this.websocket.onclose = null;
+                this.websocket.onerror = null;
+                if (this.websocket.readyState === WebSocket.OPEN) {
+                    this.websocket.close();
+                }
+            }
+
             // Determine WebSocket URL
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             const port = parseInt(window.location.port) + 1; // WebSocket port is HTTP port + 1
             const wsUrl = `${protocol}//${window.location.hostname}:${port}`;
 
             this.elements.websocketPort.textContent = port;
-            this.updateConnectionStatus('connecting', 'Connecting...');
-            this.log('info', `Connecting to WebSocket: ${wsUrl}`);
+            this.updateConnectionStatus('connecting', `Connecting... (attempt ${this.reconnectAttempts + 1})`);
+            this.log('info', `Connecting to WebSocket: ${wsUrl} (attempt ${this.reconnectAttempts + 1}/${this.maxReconnectAttempts})`);
+
+            // Set connection timeout
+            const connectionTimeout = setTimeout(() => {
+                if (this.websocket && this.websocket.readyState === WebSocket.CONNECTING) {
+                    this.websocket.close();
+                    this.log('error', 'Connection timeout');
+                    this.handleConnectionError(new Error('Connection timeout'));
+                }
+            }, 10000); // 10 second timeout
 
             this.websocket = new WebSocket(wsUrl);
 
-            this.websocket.onopen = () => this.onWebSocketOpen();
+            this.websocket.onopen = () => {
+                clearTimeout(connectionTimeout);
+                this.onWebSocketOpen();
+            };
             this.websocket.onmessage = (event) => this.onWebSocketMessage(event);
-            this.websocket.onclose = (event) => this.onWebSocketClose(event);
-            this.websocket.onerror = (error) => this.onWebSocketError(error);
+            this.websocket.onclose = (event) => {
+                clearTimeout(connectionTimeout);
+                this.onWebSocketClose(event);
+            };
+            this.websocket.onerror = (error) => {
+                clearTimeout(connectionTimeout);
+                this.onWebSocketError(error);
+            };
 
         } catch (error) {
             this.log('error', `Failed to create WebSocket connection: ${error.message}`);
-            this.scheduleReconnect();
+            this.handleConnectionError(error);
         }
     }
 
@@ -99,16 +139,26 @@ class WebAutomationClient {
     onWebSocketOpen() {
         this.isConnected = true;
         this.reconnectAttempts = 0;
+        this.networkErrorCount = 0;
         this.connectionTime = new Date();
         this.updateConnectionStatus('connected', 'Connected');
         this.elements.executeButton.disabled = false;
         this.log('success', 'WebSocket connection established');
+
+        // Start ping/pong for connection health monitoring
+        this.startPingPong();
+
+        // Process any queued messages
+        this.processMessageQueue();
 
         // Request initial server status
         this.sendMessage({
             type: 'status',
             id: this.generateId()
         });
+
+        // Configure client preferences for optimal performance
+        this.configureClientPreferences();
     }
 
     /**
@@ -143,14 +193,25 @@ class WebAutomationClient {
     onWebSocketClose(event) {
         this.isConnected = false;
         this.elements.executeButton.disabled = true;
+        this.stopPingPong();
 
+        // Analyze close code for better error handling
+        const closeReason = this.getCloseReason(event.code);
+        
         if (event.wasClean) {
             this.updateConnectionStatus('disconnected', 'Disconnected');
-            this.log('info', 'WebSocket connection closed cleanly');
+            this.log('info', `WebSocket connection closed cleanly: ${closeReason}`);
         } else {
             this.updateConnectionStatus('disconnected', 'Connection lost');
-            this.log('warning', `WebSocket connection lost (code: ${event.code})`);
-            this.scheduleReconnect();
+            this.log('warning', `WebSocket connection lost (code: ${event.code}): ${closeReason}`);
+            
+            // Determine if we should attempt reconnection
+            if (this.shouldAttemptReconnection(event.code)) {
+                this.scheduleReconnect();
+            } else {
+                this.log('error', 'Connection closed permanently, reconnection not attempted');
+                this.updateConnectionStatus('disconnected', 'Connection failed');
+            }
         }
     }
 
@@ -158,47 +219,49 @@ class WebAutomationClient {
      * Handle WebSocket error
      */
     onWebSocketError(error) {
-        this.log('error', 'WebSocket error occurred');
+        this.networkErrorCount++;
+        this.log('error', `WebSocket error occurred (${this.networkErrorCount}/${this.maxNetworkErrors})`);
         this.updateConnectionStatus('disconnected', 'Connection error');
+        this.handleConnectionError(error);
     }
 
     /**
-     * Schedule reconnection attempt
+     * Schedule reconnection attempt with exponential backoff and jitter
      */
     scheduleReconnect() {
         if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-            this.updateConnectionStatus('disconnected', 'Connection failed');
-            this.log('error', 'Max reconnection attempts reached');
+            this.updateConnectionStatus('disconnected', 'Connection failed - max attempts reached');
+            this.log('error', `Max reconnection attempts reached (${this.maxReconnectAttempts}). Manual refresh required.`);
+            this.showReconnectionOptions();
             return;
         }
 
         this.reconnectAttempts++;
-        const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
+        
+        // Calculate delay with exponential backoff and jitter
+        let delay = Math.min(
+            this.reconnectDelay * Math.pow(this.backoffMultiplier, this.reconnectAttempts - 1),
+            this.maxReconnectDelay
+        );
+        
+        // Add jitter (±25%) to prevent thundering herd
+        const jitter = delay * 0.25 * (Math.random() * 2 - 1);
+        delay = Math.max(1000, delay + jitter);
 
-        this.updateConnectionStatus('connecting', `Reconnecting in ${delay / 1000}s...`);
-        this.log('info', `Reconnection attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts} in ${delay}ms`);
+        this.updateConnectionStatus('connecting', `Reconnecting in ${Math.ceil(delay / 1000)}s... (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+        this.log('info', `Reconnection attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts} in ${Math.ceil(delay)}ms`);
 
-        setTimeout(() => this.connect(), delay);
+        // Show countdown
+        this.showReconnectionCountdown(delay);
+
+        setTimeout(() => {
+            if (!this.isConnected) { // Only reconnect if still disconnected
+                this.connect();
+            }
+        }, delay);
     }
 
-    /**
-     * Send message via WebSocket
-     */
-    sendMessage(message) {
-        if (!this.isConnected || !this.websocket) {
-            this.log('error', 'Cannot send message: WebSocket not connected');
-            return false;
-        }
 
-        try {
-            this.websocket.send(JSON.stringify(message));
-            this.log('info', `Sent: ${message.type}`, message);
-            return true;
-        } catch (error) {
-            this.log('error', `Failed to send message: ${error.message}`);
-            return false;
-        }
-    }
 
     /**
      * Execute VS Code command
@@ -428,6 +491,315 @@ class WebAutomationClient {
     clearLog() {
         this.elements.messageLog.innerHTML = '';
         this.log('info', 'Log cleared');
+    }
+
+    /**
+     * Handle connection errors with detailed analysis
+     */
+    handleConnectionError(error) {
+        console.error('Connection error details:', error);
+        
+        // Analyze error type and provide specific guidance
+        let errorMessage = 'Connection error occurred';
+        let suggestedAction = 'Retrying automatically...';
+        
+        if (error && error.message) {
+            if (error.message.includes('timeout')) {
+                errorMessage = 'Connection timeout - server may be overloaded';
+                suggestedAction = 'Will retry with longer timeout';
+            } else if (error.message.includes('refused')) {
+                errorMessage = 'Connection refused - server may be down';
+                suggestedAction = 'Check if server is running';
+            } else if (error.message.includes('network')) {
+                errorMessage = 'Network error - check internet connection';
+                suggestedAction = 'Verify network connectivity';
+            }
+        }
+        
+        this.log('error', `${errorMessage}. ${suggestedAction}`);
+        
+        // If too many network errors, suggest manual intervention
+        if (this.networkErrorCount >= this.maxNetworkErrors) {
+            this.log('error', 'Multiple network errors detected. Consider refreshing the page or checking server status.');
+        }
+    }
+
+    /**
+     * Get human-readable close reason
+     */
+    getCloseReason(code) {
+        const closeReasons = {
+            1000: 'Normal closure',
+            1001: 'Going away',
+            1002: 'Protocol error',
+            1003: 'Unsupported data',
+            1005: 'No status received',
+            1006: 'Abnormal closure',
+            1007: 'Invalid frame payload data',
+            1008: 'Policy violation',
+            1009: 'Message too big',
+            1010: 'Mandatory extension',
+            1011: 'Internal server error',
+            1015: 'TLS handshake failure'
+        };
+        
+        return closeReasons[code] || `Unknown close code: ${code}`;
+    }
+
+    /**
+     * Determine if reconnection should be attempted based on close code
+     */
+    shouldAttemptReconnection(code) {
+        // Don't reconnect for these codes
+        const noReconnectCodes = [1002, 1003, 1007, 1008, 1010]; // Protocol/policy errors
+        return !noReconnectCodes.includes(code);
+    }
+
+    /**
+     * Start ping/pong for connection health monitoring
+     */
+    startPingPong() {
+        this.stopPingPong(); // Clear any existing interval
+        
+        this.pingInterval = setInterval(() => {
+            if (this.isConnected && this.websocket && this.websocket.readyState === WebSocket.OPEN) {
+                this.lastPingTime = Date.now();
+                
+                // Send ping message
+                this.sendMessage({
+                    type: 'ping',
+                    timestamp: this.lastPingTime
+                });
+            }
+        }, this.healthCheckInterval);
+    }
+
+    /**
+     * Stop ping/pong monitoring
+     */
+    stopPingPong() {
+        if (this.pingInterval) {
+            clearInterval(this.pingInterval);
+            this.pingInterval = null;
+        }
+    }
+
+    /**
+     * Start health monitoring
+     */
+    startHealthMonitoring() {
+        setInterval(() => {
+            this.performHealthCheck();
+        }, this.healthCheckInterval);
+    }
+
+    /**
+     * Perform connection health check
+     */
+    performHealthCheck() {
+        if (!this.isConnected) {
+            return;
+        }
+
+        const now = Date.now();
+        
+        // Check if ping response is overdue
+        if (this.lastPingTime && (now - this.lastPingTime) > this.healthCheckInterval * 2) {
+            this.log('warning', 'Connection health check failed - no ping response');
+            
+            // Force reconnection if connection seems dead
+            if (this.websocket) {
+                this.websocket.close(1006, 'Health check failed');
+            }
+        }
+    }
+
+    /**
+     * Process queued messages after reconnection
+     */
+    processMessageQueue() {
+        if (this.messageQueue.length > 0) {
+            this.log('info', `Processing ${this.messageQueue.length} queued messages`);
+            
+            const queue = [...this.messageQueue];
+            this.messageQueue = [];
+            
+            queue.forEach(message => {
+                this.sendMessage(message);
+            });
+        }
+    }
+
+    /**
+     * Configure client preferences for optimal performance
+     */
+    configureClientPreferences() {
+        const preferences = {
+            type: 'broadcast',
+            data: {
+                type: 'clientConfig',
+                config: {
+                    incrementalUpdates: true,
+                    statePreferences: {
+                        includeDocumentChanges: true,
+                        includeSelectionChanges: false, // Reduce noise
+                        includeDiagnostics: true,
+                        throttleMs: 1000 // Throttle updates to 1 second
+                    }
+                }
+            }
+        };
+        
+        this.sendMessage(preferences);
+    }
+
+    /**
+     * Show reconnection countdown
+     */
+    showReconnectionCountdown(totalDelay) {
+        let remaining = Math.ceil(totalDelay / 1000);
+        
+        const countdownInterval = setInterval(() => {
+            remaining--;
+            if (remaining > 0 && !this.isConnected) {
+                this.updateConnectionStatus('connecting', `Reconnecting in ${remaining}s... (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+            } else {
+                clearInterval(countdownInterval);
+            }
+        }, 1000);
+    }
+
+    /**
+     * Show reconnection options when max attempts reached
+     */
+    showReconnectionOptions() {
+        // Create a retry button in the UI
+        const retryButton = document.createElement('button');
+        retryButton.textContent = 'Retry Connection';
+        retryButton.className = 'retry-btn';
+        retryButton.onclick = () => {
+            this.reconnectAttempts = 0;
+            this.networkErrorCount = 0;
+            retryButton.remove();
+            this.connect();
+        };
+        
+        // Add button to connection status area
+        const statusArea = document.querySelector('.connection-status');
+        if (statusArea && !statusArea.querySelector('.retry-btn')) {
+            statusArea.appendChild(retryButton);
+        }
+    }
+
+    /**
+     * Enhanced send message with queuing for offline scenarios
+     */
+    sendMessage(message) {
+        if (!this.isConnected || !this.websocket || this.websocket.readyState !== WebSocket.OPEN) {
+            // Queue non-critical messages for later
+            if (message.type !== 'ping' && message.type !== 'status') {
+                this.messageQueue.push(message);
+                this.log('info', 'Message queued for when connection is restored');
+            }
+            return false;
+        }
+
+        try {
+            this.websocket.send(JSON.stringify(message));
+            this.log('info', `Sent: ${message.type}`, message);
+            return true;
+        } catch (error) {
+            this.log('error', `Failed to send message: ${error.message}`);
+            
+            // Queue the message for retry
+            if (message.type !== 'ping') {
+                this.messageQueue.push(message);
+            }
+            
+            return false;
+        }
+    }
+
+    /**
+     * Enhanced message handling with error recovery
+     */
+    onWebSocketMessage(event) {
+        try {
+            const message = JSON.parse(event.data);
+            
+            // Handle pong responses
+            if (message.type === 'pong') {
+                const latency = Date.now() - (message.timestamp || this.lastPingTime || 0);
+                this.log('info', `Ping latency: ${latency}ms`);
+                return;
+            }
+            
+            this.log('info', `Received: ${message.type}`, message);
+
+            switch (message.type) {
+                case 'response':
+                    this.handleCommandResponse(message);
+                    break;
+                case 'broadcast':
+                    this.handleBroadcast(message);
+                    break;
+                case 'status':
+                    this.handleStatusUpdate(message);
+                    break;
+                case 'error':
+                    this.handleServerError(message);
+                    break;
+                default:
+                    this.log('warning', `Unknown message type: ${message.type}`);
+            }
+        } catch (error) {
+            this.log('error', `Failed to parse WebSocket message: ${error.message}`);
+            // Don't disconnect for parse errors, just log them
+        }
+    }
+
+    /**
+     * Handle server error messages
+     */
+    handleServerError(message) {
+        const errorMsg = message.error || message.data?.error || 'Unknown server error';
+        this.log('error', `Server error: ${errorMsg}`);
+        
+        // Show user-friendly error notification
+        if (message.data?.userMessage) {
+            this.showErrorNotification(message.data.userMessage, message.data.suggestedActions);
+        }
+    }
+
+    /**
+     * Show error notification to user
+     */
+    showErrorNotification(message, suggestedActions = []) {
+        // Create error notification element
+        const notification = document.createElement('div');
+        notification.className = 'error-notification';
+        notification.innerHTML = `
+            <div class="error-message">${message}</div>
+            ${suggestedActions.length > 0 ? `
+                <div class="error-actions">
+                    ${suggestedActions.map(action => `<button class="error-action-btn">${action}</button>`).join('')}
+                </div>
+            ` : ''}
+            <button class="error-close-btn">×</button>
+        `;
+        
+        // Add to page
+        document.body.appendChild(notification);
+        
+        // Auto-remove after 10 seconds
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.remove();
+            }
+        }, 10000);
+        
+        // Handle close button
+        notification.querySelector('.error-close-btn').onclick = () => notification.remove();
     }
 
     /**

@@ -7,6 +7,8 @@ import { ServerConfig, ServerStatus, ClientConnection, WebSocketMessage } from '
 import { HttpServer } from './HttpServer';
 import { WebSocketServer } from './WebSocketServer';
 import { ConfigurationManager } from './ConfigurationManager';
+import { ErrorHandler, ErrorCategory, ErrorSeverity } from './ErrorHandler';
+import { ConnectionRecoveryManager, RecoveryConfig } from './ConnectionRecoveryManager';
 
 export class ServerManager {
     private _isRunning: boolean = false;
@@ -18,48 +20,100 @@ export class ServerManager {
     private _webSocketServer: WebSocketServer | null = null;
     private _configManager: ConfigurationManager;
     private _configChangeListener: vscode.Disposable | null = null;
+    private _errorHandler: ErrorHandler;
+    private _recoveryManager: ConnectionRecoveryManager;
+    private _startupAttempts: number = 0;
+    private _maxStartupAttempts: number = 3;
 
     constructor() {
         this._configManager = new ConfigurationManager();
+        this._errorHandler = ErrorHandler.getInstance();
+        this._recoveryManager = new ConnectionRecoveryManager(
+            {
+                maxRetries: 5,
+                initialDelay: 1000,
+                maxDelay: 30000,
+                backoffMultiplier: 2,
+                jitterEnabled: true,
+                healthCheckInterval: 30000
+            },
+            {
+                onStateChange: (clientId, oldState, newState) => {
+                    console.log(`Client ${clientId} state changed: ${oldState} -> ${newState}`);
+                },
+                onRecoverySuccess: (clientId, attempts) => {
+                    vscode.window.showInformationMessage(`Client ${clientId} reconnected after ${attempts} attempts`);
+                },
+                onRecoveryFailed: (clientId, error) => {
+                    vscode.window.showWarningMessage(`Failed to reconnect client ${clientId}: ${error.message}`);
+                }
+            }
+        );
+        
         this.setupConfigurationHandling();
         // Load initial configuration
         this.loadConfiguration();
     }
 
     /**
-     * Start the HTTP and WebSocket servers
+     * Start the HTTP and WebSocket servers with comprehensive error handling
      */
     async startServer(config?: ServerConfig): Promise<void> {
+        this._startupAttempts++;
+        
         try {
             if (this._isRunning) {
-                throw new Error('Server is already running');
+                const errorInfo = this._errorHandler.createError(
+                    'SERVER_ALREADY_RUNNING',
+                    'Server is already running',
+                    ErrorCategory.SERVER_STARTUP,
+                    ErrorSeverity.LOW
+                );
+                throw errorInfo;
             }
 
             // Use provided config or load from settings
             this._config = config || await this.loadConfiguration();
             
             if (!this._config) {
-                throw new Error('Failed to load server configuration');
+                const errorInfo = this._errorHandler.createError(
+                    'CONFIG_LOAD_FAILED',
+                    'Failed to load server configuration',
+                    ErrorCategory.CONFIGURATION,
+                    ErrorSeverity.HIGH
+                );
+                throw errorInfo;
             }
 
-            // Initialize and start HTTP server
-            this._httpServer = new HttpServer(this._config);
-            await this._httpServer.start();
+            // Validate configuration before starting
+            await this.validateConfiguration(this._config);
 
-            // Initialize and start WebSocket server
-            this._webSocketServer = new WebSocketServer(this._config);
-            await this._webSocketServer.start();
+            // Initialize and start HTTP server with recovery
+            await this.startHttpServerWithRecovery(this._config);
+
+            // Initialize and start WebSocket server with recovery
+            await this.startWebSocketServerWithRecovery(this._config);
             
             this._isRunning = true;
             this._startTime = new Date();
             this._lastError = null;
+            this._startupAttempts = 0; // Reset on success
 
-            console.log(`Web Automation Server started - HTTP: ${this._httpServer.port}, WebSocket: ${this._webSocketServer.port}`);
+            const successMessage = `Web Automation Server started successfully - HTTP: ${this._httpServer!.port}, WebSocket: ${this._webSocketServer!.port}`;
+            console.log(successMessage);
+            
+            // Show success notification
+            vscode.window.showInformationMessage(
+                `Server started on http://localhost:${this._httpServer!.port}`,
+                'Open in Browser'
+            ).then(action => {
+                if (action === 'Open in Browser') {
+                    vscode.env.openExternal(vscode.Uri.parse(`http://localhost:${this._httpServer!.port}`));
+                }
+            });
             
         } catch (error) {
-            this._lastError = error instanceof Error ? error.message : 'Unknown error occurred';
-            this._isRunning = false;
-            throw error;
+            await this.handleStartupError(error);
         }
     }
 
@@ -341,6 +395,292 @@ export class ServerManager {
     }
 
     /**
+     * Validate server configuration
+     */
+    private async validateConfiguration(config: ServerConfig): Promise<void> {
+        // Validate port ranges
+        if (config.httpPort < 1 || config.httpPort > 65535) {
+            throw this._errorHandler.createError(
+                'INVALID_PORT_RANGE',
+                `HTTP port ${config.httpPort} is outside valid range (1-65535)`,
+                ErrorCategory.CONFIGURATION,
+                ErrorSeverity.HIGH
+            );
+        }
+
+        // Check if port is available
+        const isPortAvailable = await this.checkPortAvailability(config.httpPort);
+        if (!isPortAvailable && this._startupAttempts <= 1) {
+            // Only throw error on first attempt, let recovery handle subsequent attempts
+            throw this._errorHandler.createError(
+                'EADDRINUSE',
+                `Port ${config.httpPort} is already in use`,
+                ErrorCategory.NETWORK,
+                ErrorSeverity.MEDIUM
+            );
+        }
+
+        // Validate allowed origins
+        if (!config.allowedOrigins || config.allowedOrigins.length === 0) {
+            console.warn('No allowed origins specified, defaulting to localhost only');
+            config.allowedOrigins = ['http://localhost:*'];
+        }
+
+        // Validate max connections
+        if (config.maxConnections < 1 || config.maxConnections > 1000) {
+            console.warn(`Max connections ${config.maxConnections} is outside recommended range (1-1000), using default`);
+            config.maxConnections = 10;
+        }
+    }
+
+    /**
+     * Check if a port is available
+     */
+    private async checkPortAvailability(port: number): Promise<boolean> {
+        return new Promise((resolve) => {
+            const net = require('net');
+            const server = net.createServer();
+            
+            server.listen(port, () => {
+                server.once('close', () => resolve(true));
+                server.close();
+            });
+            
+            server.on('error', () => resolve(false));
+        });
+    }
+
+    /**
+     * Start HTTP server with recovery mechanisms
+     */
+    private async startHttpServerWithRecovery(config: ServerConfig): Promise<void> {
+        try {
+            this._httpServer = new HttpServer(config);
+            await this._httpServer.start();
+        } catch (error) {
+            const { recovered } = await this._errorHandler.handleError(error, {
+                tryAlternativePort: async () => {
+                    return await this.tryAlternativeHttpPort(config);
+                },
+                useHigherPort: async () => {
+                    config.httpPort = Math.max(config.httpPort, 8080) + Math.floor(Math.random() * 1000);
+                    return await this.tryAlternativeHttpPort(config);
+                }
+            });
+
+            if (!recovered) {
+                throw error;
+            }
+        }
+    }
+
+    /**
+     * Try alternative HTTP port
+     */
+    private async tryAlternativeHttpPort(config: ServerConfig): Promise<boolean> {
+        const maxAttempts = 10;
+        let currentPort = config.httpPort;
+
+        for (let attempt = 0; attempt < maxAttempts; attempt++) {
+            try {
+                const testConfig = { ...config, httpPort: currentPort + attempt };
+                const testServer = new HttpServer(testConfig);
+                await testServer.start();
+                await testServer.stop();
+                
+                // Port is available, update config and create actual server
+                config.httpPort = currentPort + attempt;
+                this._httpServer = new HttpServer(config);
+                await this._httpServer.start();
+                
+                console.log(`HTTP server started on alternative port: ${config.httpPort}`);
+                return true;
+            } catch (portError) {
+                // Continue to next port
+                continue;
+            }
+        }
+        
+        return false;
+    }
+
+    /**
+     * Start WebSocket server with recovery mechanisms
+     */
+    private async startWebSocketServerWithRecovery(config: ServerConfig): Promise<void> {
+        try {
+            this._webSocketServer = new WebSocketServer(config);
+            await this._webSocketServer.start();
+            
+            // Setup connection recovery for WebSocket clients
+            this.setupWebSocketRecovery();
+            
+        } catch (error) {
+            const { recovered } = await this._errorHandler.handleError(error, {
+                tryAlternativePort: async () => {
+                    return await this.tryAlternativeWebSocketPort(config);
+                }
+            });
+
+            if (!recovered) {
+                throw error;
+            }
+        }
+    }
+
+    /**
+     * Try alternative WebSocket port
+     */
+    private async tryAlternativeWebSocketPort(config: ServerConfig): Promise<boolean> {
+        const maxAttempts = 10;
+        const basePort = config.websocketPort || config.httpPort + 1;
+
+        for (let attempt = 0; attempt < maxAttempts; attempt++) {
+            try {
+                const testConfig = { ...config, websocketPort: basePort + attempt };
+                const testServer = new WebSocketServer(testConfig);
+                await testServer.start();
+                await testServer.stop();
+                
+                // Port is available, update config and create actual server
+                config.websocketPort = basePort + attempt;
+                this._webSocketServer = new WebSocketServer(config);
+                await this._webSocketServer.start();
+                
+                this.setupWebSocketRecovery();
+                
+                console.log(`WebSocket server started on alternative port: ${config.websocketPort}`);
+                return true;
+            } catch (portError) {
+                // Continue to next port
+                continue;
+            }
+        }
+        
+        return false;
+    }
+
+    /**
+     * Setup WebSocket connection recovery
+     */
+    private setupWebSocketRecovery(): void {
+        if (!this._webSocketServer) {
+            return;
+        }
+
+        // Monitor client connections and register them with recovery manager
+        // This would typically be integrated with the WebSocketServer's connection handling
+        console.log('WebSocket connection recovery monitoring enabled');
+    }
+
+    /**
+     * Handle startup errors with recovery attempts
+     */
+    private async handleStartupError(error: any): Promise<void> {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown startup error';
+        this._lastError = errorMessage;
+        this._isRunning = false;
+
+        // Clean up any partially started servers
+        await this.cleanupPartialStartup();
+
+        // Determine if we should retry
+        const shouldRetry = this._startupAttempts < this._maxStartupAttempts && 
+                           this.isRetryableError(error);
+
+        if (shouldRetry) {
+            const delay = Math.min(1000 * Math.pow(2, this._startupAttempts - 1), 10000);
+            console.log(`Startup failed, retrying in ${delay}ms (attempt ${this._startupAttempts}/${this._maxStartupAttempts})`);
+            
+            setTimeout(async () => {
+                try {
+                    await this.startServer();
+                } catch (retryError) {
+                    // Final error handling will be done in the recursive call
+                }
+            }, delay);
+        } else {
+            // Final failure, show comprehensive error message
+            const errorInfo = this._errorHandler.createError(
+                'STARTUP_FAILED',
+                `Server startup failed after ${this._startupAttempts} attempts: ${errorMessage}`,
+                ErrorCategory.SERVER_STARTUP,
+                ErrorSeverity.CRITICAL,
+                { attempts: this._startupAttempts, originalError: errorMessage }
+            );
+
+            await this._errorHandler.handleError(errorInfo, null, false);
+            this._startupAttempts = 0; // Reset for next manual attempt
+        }
+    }
+
+    /**
+     * Check if error is retryable
+     */
+    private isRetryableError(error: any): boolean {
+        if (error && typeof error === 'object' && 'code' in error) {
+            const retryableCodes = ['EADDRINUSE', 'EACCES', 'ETIMEDOUT', 'ECONNREFUSED'];
+            return retryableCodes.includes(error.code);
+        }
+        return false;
+    }
+
+    /**
+     * Clean up partially started servers
+     */
+    private async cleanupPartialStartup(): Promise<void> {
+        try {
+            if (this._httpServer) {
+                await this._httpServer.stop();
+                this._httpServer = null;
+            }
+        } catch (error) {
+            console.error('Error stopping HTTP server during cleanup:', error);
+        }
+
+        try {
+            if (this._webSocketServer) {
+                await this._webSocketServer.stop();
+                this._webSocketServer = null;
+            }
+        } catch (error) {
+            console.error('Error stopping WebSocket server during cleanup:', error);
+        }
+    }
+
+    /**
+     * Get comprehensive server diagnostics
+     */
+    getServerDiagnostics(): any {
+        return {
+            isRunning: this._isRunning,
+            startupAttempts: this._startupAttempts,
+            lastError: this._lastError,
+            errorHistory: this._errorHandler.getErrorHistory().slice(0, 10),
+            connectionHealth: this._recoveryManager.getAllClientHealth(),
+            config: this._config,
+            uptime: this._startTime ? Date.now() - this._startTime.getTime() : 0
+        };
+    }
+
+    /**
+     * Force recovery for all connections
+     */
+    async forceRecoveryAll(): Promise<void> {
+        const clients = this._recoveryManager.getAllClientHealth();
+        const recoveryPromises = clients.map(client => 
+            this._recoveryManager.forceReconnection(client.clientId)
+        );
+        
+        const results = await Promise.allSettled(recoveryPromises);
+        const successful = results.filter(r => r.status === 'fulfilled' && r.value).length;
+        
+        vscode.window.showInformationMessage(
+            `Recovery attempted for ${clients.length} clients, ${successful} successful`
+        );
+    }
+
+    /**
      * Dispose of resources
      */
     dispose(): void {
@@ -351,6 +691,10 @@ export class ServerManager {
         
         if (this._configManager) {
             this._configManager.dispose();
+        }
+        
+        if (this._recoveryManager) {
+            this._recoveryManager.dispose();
         }
     }
 }

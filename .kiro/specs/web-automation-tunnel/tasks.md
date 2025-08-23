@@ -80,7 +80,8 @@
   - _Git: `feat: create web frontend with WebSocket client and command interface`_
   - _Description: Build responsive web interface for remote VS Code control with WebSocket connectivity, automatic reconnection, command execution UI, and real-time status display._
 
-- [-] 6. Enhance VS Code extension UI with server controls
+- [x] 6. Enhance VS Code extension UI with server controls
+
 
 
 

@@ -1,0 +1,16 @@
+{
+  "enabled": true,
+  "name": "Git Commit Workflow",
+  "description": "Automatically executes a complete git commit workflow using conventional commit format when files are modified. Analyzes changes, determines commit type, generates appropriate commit message, and commits changes.",
+  "version": "1",
+  "when": {
+    "type": "userTriggered",
+    "patterns": [
+      "**/*"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Execute the following git commit workflow using ONLY non-interactive commands that never require manual input:\n\n1. Check repository state: `git --no-pager status --porcelain`\n2. Analyze unstaged changes: `git --no-pager diff --name-status` and `git --no-pager diff --stat`\n3. Analyze staged changes: `git --no-pager diff --staged --name-status` and `git --no-pager diff --staged --stat`\n4. For file content preview (max 50 lines): `git --no-pager diff --unified=0 | head -20`\n\nIMPORTANT: Always use `git --no-pager` prefix for ALL git commands to prevent interactive paging!\n\n5. Determine conventional commit type from file patterns:\n   - feat: src/components/, src/hooks/, new features\n   - fix: bug fixes, error handling\n   - docs: *.md, README, comments\n   - style: *.css, formatting, linting\n   - refactor: file moves, code restructuring\n   - test: *.test.*, *.spec.*, test files\n   - chore: package.json, config files, .env\n   - perf: performance optimizations\n\n6. Generate commit message: `type(scope): description`\n   - Use file path for scope (e.g., 'components', 'hooks', 'utils')\n   - Keep under 72 characters for commit message\n   - use longer character for commit descriptions\n   - Imperative mood\n\n7. Execute staging and commit:\n   - If unstaged changes: `git add .`\n   - Commit: `git commit -m \"your message\"`\n   - Verify: `git --no-pager log --oneline -1`\n\nCRITICAL: Every git command MUST include `--no-pager` flag to prevent hanging!\n\nEdge cases:\n- No changes: Use `git --no-pager status --porcelain` to check, inform if empty\n- Conflicts: Check for 'UU' in status output\n- Failures: Provide specific troubleshooting"
+  }
+}

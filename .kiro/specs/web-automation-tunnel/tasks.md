@@ -1,6 +1,9 @@
 # Implementation Plan
 
-- [ ] 0. Create feature branch and setup development environment
+- [-] 0. Create feature branch and setup development environment
+
+
+
   - Create new feature branch: `git checkout -b feature/web-automation-tunnel`
   - Verify current branch is clean and up to date with dev
   - Set up development environment for the new feature

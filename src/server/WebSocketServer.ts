@@ -5,6 +5,7 @@
 import { WebSocket, WebSocketServer as WSServer } from 'ws';
 import { v4 as uuidv4 } from 'uuid';
 import { ServerConfig, WebSocketMessage, ClientConnection } from './interfaces';
+import { CommandHandler } from './CommandHandler';
 
 export class WebSocketServer {
     private _server: WSServer | null = null;
@@ -12,10 +13,17 @@ export class WebSocketServer {
     private _config: ServerConfig;
     private _clients: Map<string, { ws: WebSocket; connection: ClientConnection }> = new Map();
     private _isRunning: boolean = false;
+    private _commandHandler: CommandHandler;
 
     constructor(config: ServerConfig) {
         this._config = config;
         this._port = config.websocketPort || config.httpPort + 1;
+        this._commandHandler = new CommandHandler();
+        
+        // Set up state change callback for broadcasting
+        this._commandHandler.setStateChangeCallback((changeType: string, data: any) => {
+            this.broadcastStateChange(changeType, data);
+        });
     }
 
     /**
@@ -72,6 +80,10 @@ export class WebSocketServer {
             this._server.close(() => {
                 this._isRunning = false;
                 this._clients.clear();
+                
+                // Dispose of CommandHandler resources
+                this._commandHandler.dispose();
+                
                 console.log('WebSocket server stopped');
                 resolve();
             });
@@ -142,7 +154,7 @@ export class WebSocketServer {
     /**
      * Handle incoming WebSocket message
      */
-    private handleMessage(ws: WebSocket, clientId: string, data: Buffer | ArrayBuffer | Buffer[]): void {
+    private async handleMessage(ws: WebSocket, clientId: string, data: Buffer | ArrayBuffer | Buffer[]): Promise<void> {
         try {
             // Update client activity
             const client = this._clients.get(clientId);
@@ -166,7 +178,7 @@ export class WebSocketServer {
             console.log(`Received message from ${clientId}:`, message.type, message.command || '');
 
             // Route message based on type
-            this.routeMessage(clientId, message);
+            await this.routeMessage(clientId, message);
 
         } catch (error) {
             console.error(`Error handling message from ${clientId}:`, error);
@@ -209,23 +221,14 @@ export class WebSocketServer {
     /**
      * Route message to appropriate handler
      */
-    private routeMessage(clientId: string, message: WebSocketMessage): void {
+    private async routeMessage(clientId: string, message: WebSocketMessage): Promise<void> {
         switch (message.type) {
             case 'command':
-                // Command messages will be handled by CommandHandler in the next task
-                // For now, just acknowledge receipt
-                if (message.id) {
-                    this.sendToClient(clientId, {
-                        type: 'response',
-                        id: message.id,
-                        data: { status: 'received', command: message.command }
-                    });
-                }
+                await this.handleCommandMessage(clientId, message);
                 break;
 
             case 'status':
-                // Handle status requests
-                this.sendServerStatus(clientId, message.id);
+                this.handleStatusMessage(clientId, message.id);
                 break;
 
             default:
@@ -234,13 +237,56 @@ export class WebSocketServer {
     }
 
     /**
-     * Send server status to client
+     * Handle command execution messages
      */
-    private sendServerStatus(clientId: string, messageId?: string): void {
+    private async handleCommandMessage(clientId: string, message: WebSocketMessage): Promise<void> {
+        if (!message.command) {
+            this.sendError(clientId, 'Command is required for command messages', message.id);
+            return;
+        }
+
+        try {
+            // Execute command through CommandHandler
+            const result = await this._commandHandler.executeCommand(message.command, message.args);
+            
+            // Send response back to client
+            const response: WebSocketMessage = {
+                type: 'response',
+                data: {
+                    command: message.command,
+                    success: result.success,
+                    result: result.data,
+                    error: result.error
+                }
+            };
+
+            if (message.id) {
+                response.id = message.id;
+            }
+
+            this.sendToClient(clientId, response);
+
+            // If command was successful and might have changed state, broadcast current state
+            if (result.success) {
+                this.broadcastWorkspaceState();
+            }
+
+        } catch (error) {
+            console.error(`Error handling command message from ${clientId}:`, error);
+            this.sendError(clientId, 'Internal error executing command', message.id);
+        }
+    }
+
+    /**
+     * Handle status request messages
+     */
+    private handleStatusMessage(clientId: string, messageId?: string): void {
         const status = {
             connectedClients: this._clients.size,
             serverTime: new Date().toISOString(),
-            clientId: clientId
+            clientId: clientId,
+            workspaceState: this._commandHandler.getWorkspaceState(),
+            allowedCommands: this._commandHandler.getAllowedCommands()
         };
 
         const response: WebSocketMessage = {
@@ -253,6 +299,40 @@ export class WebSocketServer {
         }
         
         this.sendToClient(clientId, response);
+    }
+
+    /**
+     * Broadcast VS Code state changes to all clients
+     */
+    private broadcastStateChange(changeType: string, data: any): void {
+        const message: WebSocketMessage = {
+            type: 'broadcast',
+            data: {
+                changeType,
+                timestamp: new Date().toISOString(),
+                data
+            }
+        };
+
+        this.broadcastMessage(message);
+    }
+
+    /**
+     * Broadcast current workspace state to all clients
+     */
+    private broadcastWorkspaceState(): void {
+        const workspaceState = this._commandHandler.getWorkspaceState();
+        
+        const message: WebSocketMessage = {
+            type: 'broadcast',
+            data: {
+                changeType: 'workspaceState',
+                timestamp: new Date().toISOString(),
+                data: workspaceState
+            }
+        };
+
+        this.broadcastMessage(message);
     }
 
     /**
@@ -352,5 +432,12 @@ export class WebSocketServer {
      */
     get clientCount(): number {
         return this._clients.size;
+    }
+
+    /**
+     * Get the CommandHandler instance
+     */
+    get commandHandler(): CommandHandler {
+        return this._commandHandler;
     }
 }

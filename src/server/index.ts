@@ -5,4 +5,5 @@
  */
 
 export { ServerManager } from './ServerManager';
+export { CommandHandler } from './CommandHandler';
 export * from './interfaces';

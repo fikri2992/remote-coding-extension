@@ -290,7 +290,7 @@ export class WebSocketServer {
         };
 
         const response: WebSocketMessage = {
-            type: 'response',
+            type: 'status',
             data: status
         };
         

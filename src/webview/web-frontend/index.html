@@ -41,7 +41,23 @@
 
             <section class="command-interface">
                 <h2>Command Interface</h2>
+                
+                <div class="quick-commands">
+                    <h3>Quick Commands</h3>
+                    <div class="command-buttons">
+                        <button class="quick-cmd-btn" data-command="workbench.action.files.newUntitledFile">New File</button>
+                        <button class="quick-cmd-btn" data-command="workbench.action.files.save">Save File</button>
+                        <button class="quick-cmd-btn" data-command="workbench.action.showCommands">Command Palette</button>
+                        <button class="quick-cmd-btn" data-command="workbench.action.quickOpen">Quick Open</button>
+                        <button class="quick-cmd-btn" data-command="workbench.action.toggleSidebarVisibility">Toggle Sidebar</button>
+                        <button class="quick-cmd-btn" data-command="workbench.action.terminal.toggleTerminal">Toggle Terminal</button>
+                        <button class="quick-cmd-btn" data-command="editor.action.formatDocument">Format Document</button>
+                        <button class="quick-cmd-btn" data-command="workbench.action.reloadWindow">Reload Window</button>
+                    </div>
+                </div>
+
                 <div class="command-form">
+                    <h3>Custom Command</h3>
                     <div class="input-group">
                         <label for="commandInput">VS Code Command:</label>
                         <input type="text" id="commandInput" placeholder="e.g., workbench.action.files.newUntitledFile">

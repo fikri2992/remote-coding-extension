@@ -113,6 +113,40 @@ h3 {
     color: #9cdcfe;
 }
 
+.quick-commands {
+    margin-bottom: 24px;
+}
+
+.command-buttons {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.quick-cmd-btn {
+    padding: 8px 12px;
+    background-color: #2d2d30;
+    color: #cccccc;
+    border: 1px solid #3c3c3c;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 400;
+    transition: all 0.2s;
+}
+
+.quick-cmd-btn:hover:not(:disabled) {
+    background-color: #37373d;
+    border-color: #007acc;
+}
+
+.quick-cmd-btn:disabled {
+    background-color: #1e1e1e;
+    color: #666666;
+    cursor: not-allowed;
+}
+
 .command-form {
     display: flex;
     flex-direction: column;

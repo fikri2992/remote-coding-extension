@@ -43,6 +43,16 @@ class WebAutomationClient {
         // Add event listeners
         this.elements.executeButton.addEventListener('click', () => this.executeCommand());
         this.elements.clearLogButton.addEventListener('click', () => this.clearLog());
+        
+        // Add quick command button listeners
+        document.querySelectorAll('.quick-cmd-btn').forEach(button => {
+            button.addEventListener('click', () => {
+                const command = button.getAttribute('data-command');
+                if (command) {
+                    this.executeQuickCommand(command);
+                }
+            });
+        });
 
         // Allow Enter key to execute command
         this.elements.commandInput.addEventListener('keypress', (e) => {
@@ -89,6 +99,7 @@ class WebAutomationClient {
     onWebSocketOpen() {
         this.isConnected = true;
         this.reconnectAttempts = 0;
+        this.connectionTime = new Date();
         this.updateConnectionStatus('connected', 'Connected');
         this.elements.executeButton.disabled = false;
         this.log('success', 'WebSocket connection established');
@@ -213,6 +224,20 @@ class WebAutomationClient {
             }
         }
 
+        this.sendCommandMessage(command, args);
+    }
+
+    /**
+     * Execute a quick command
+     */
+    executeQuickCommand(command) {
+        this.sendCommandMessage(command, []);
+    }
+
+    /**
+     * Send command message via WebSocket
+     */
+    sendCommandMessage(command, args) {
         const message = {
             type: 'command',
             id: this.generateId(),
@@ -231,8 +256,17 @@ class WebAutomationClient {
     handleCommandResponse(message) {
         if (message.error) {
             this.log('error', `Command failed: ${message.error}`);
+        } else if (message.data) {
+            // Handle different response formats
+            if (message.data.success === false) {
+                this.log('error', `Command failed: ${message.data.error || 'Unknown error'}`);
+            } else if (message.data.success === true) {
+                this.log('success', `Command executed successfully: ${message.data.command || 'unknown'}`, message.data.result);
+            } else {
+                this.log('success', 'Command executed successfully', message.data);
+            }
         } else {
-            this.log('success', 'Command executed successfully', message.data);
+            this.log('success', 'Command executed successfully');
         }
     }
 
@@ -240,8 +274,17 @@ class WebAutomationClient {
      * Handle broadcast message
      */
     handleBroadcast(message) {
-        if (message.data && message.data.workspaceState) {
-            this.updateWorkspaceState(message.data.workspaceState);
+        if (message.data) {
+            // Handle different types of broadcast messages
+            if (message.data.changeType === 'workspaceState' && message.data.data) {
+                this.updateWorkspaceState(message.data.data);
+            } else if (message.data.workspaceState) {
+                // Fallback for direct workspace state
+                this.updateWorkspaceState(message.data.workspaceState);
+            }
+            
+            // Log the broadcast for debugging
+            this.log('info', `Broadcast received: ${message.data.changeType || 'unknown'}`, message.data);
         }
     }
 
@@ -251,6 +294,11 @@ class WebAutomationClient {
     handleStatusUpdate(message) {
         if (message.data) {
             this.updateServerInfo(message.data);
+            
+            // Update workspace state if included
+            if (message.data.workspaceState) {
+                this.updateWorkspaceState(message.data.workspaceState);
+            }
         }
     }
 
@@ -291,6 +339,11 @@ class WebAutomationClient {
         if (serverStatus.connectedClients !== undefined) {
             this.elements.connectedClients.textContent = serverStatus.connectedClients;
         }
+        
+        // Update server time if available
+        if (serverStatus.serverTime) {
+            this.serverStartTime = new Date(serverStatus.serverTime);
+        }
     }
 
     /**
@@ -299,16 +352,36 @@ class WebAutomationClient {
     updateConnectionStatus(status, text) {
         this.elements.statusIndicator.className = `status-indicator ${status}`;
         this.elements.statusText.textContent = text;
+        
+        // Enable/disable quick command buttons based on connection status
+        const isConnected = status === 'connected';
+        document.querySelectorAll('.quick-cmd-btn').forEach(button => {
+            button.disabled = !isConnected;
+        });
     }
 
     /**
      * Update uptime display
      */
     updateUptime() {
-        // This would be updated from server status messages
-        // For now, just show a placeholder
-        if (!this.elements.uptime.textContent || this.elements.uptime.textContent === '-') {
-            this.elements.uptime.textContent = 'Waiting for server...';
+        if (this.isConnected && this.connectionTime) {
+            const now = new Date();
+            const uptimeMs = now.getTime() - this.connectionTime.getTime();
+            const uptimeSeconds = Math.floor(uptimeMs / 1000);
+            
+            const hours = Math.floor(uptimeSeconds / 3600);
+            const minutes = Math.floor((uptimeSeconds % 3600) / 60);
+            const seconds = uptimeSeconds % 60;
+            
+            if (hours > 0) {
+                this.elements.uptime.textContent = `${hours}h ${minutes}m ${seconds}s`;
+            } else if (minutes > 0) {
+                this.elements.uptime.textContent = `${minutes}m ${seconds}s`;
+            } else {
+                this.elements.uptime.textContent = `${seconds}s`;
+            }
+        } else {
+            this.elements.uptime.textContent = this.isConnected ? 'Connected' : 'Disconnected';
         }
     }
 

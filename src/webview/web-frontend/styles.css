@@ -1,0 +1,268 @@
+/* VS Code Web Automation Tunnel Styles */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: #1e1e1e;
+    color: #cccccc;
+    line-height: 1.6;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid #3c3c3c;
+}
+
+h1 {
+    color: #ffffff;
+    font-size: 2rem;
+    font-weight: 300;
+}
+
+.connection-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background-color: #2d2d30;
+    border-radius: 4px;
+    border: 1px solid #3c3c3c;
+}
+
+.status-indicator {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background-color: #ffa500;
+    animation: pulse 2s infinite;
+}
+
+.status-indicator.connected {
+    background-color: #4caf50;
+    animation: none;
+}
+
+.status-indicator.disconnected {
+    background-color: #f44336;
+    animation: none;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+main {
+    display: grid;
+    gap: 30px;
+}
+
+section {
+    background-color: #252526;
+    border: 1px solid #3c3c3c;
+    border-radius: 6px;
+    padding: 20px;
+}
+
+h2 {
+    color: #ffffff;
+    font-size: 1.4rem;
+    font-weight: 400;
+    margin-bottom: 16px;
+}
+
+h3 {
+    color: #ffffff;
+    font-size: 1.1rem;
+    font-weight: 400;
+    margin-bottom: 8px;
+}
+
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 16px;
+}
+
+.info-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background-color: #2d2d30;
+    border-radius: 4px;
+    border: 1px solid #3c3c3c;
+}
+
+.info-item label {
+    font-weight: 500;
+    color: #9cdcfe;
+}
+
+.command-form {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.input-group label {
+    font-weight: 500;
+    color: #9cdcfe;
+}
+
+input[type="text"], textarea {
+    padding: 10px 12px;
+    background-color: #2d2d30;
+    border: 1px solid #3c3c3c;
+    border-radius: 4px;
+    color: #cccccc;
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 14px;
+}
+
+input[type="text"]:focus, textarea:focus {
+    outline: none;
+    border-color: #007acc;
+    box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.2);
+}
+
+textarea {
+    min-height: 80px;
+    resize: vertical;
+}
+
+button {
+    padding: 10px 20px;
+    background-color: #0e639c;
+    color: #ffffff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: background-color 0.2s;
+}
+
+button:hover:not(:disabled) {
+    background-color: #1177bb;
+}
+
+button:disabled {
+    background-color: #3c3c3c;
+    color: #666666;
+    cursor: not-allowed;
+}
+
+.state-display {
+    display: grid;
+    gap: 20px;
+}
+
+.state-section {
+    padding: 16px;
+    background-color: #2d2d30;
+    border-radius: 4px;
+    border: 1px solid #3c3c3c;
+}
+
+.state-section div {
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 13px;
+    color: #d4d4d4;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+.log-controls {
+    margin-bottom: 16px;
+}
+
+.log-container {
+    max-height: 300px;
+    overflow-y: auto;
+    background-color: #1e1e1e;
+    border: 1px solid #3c3c3c;
+    border-radius: 4px;
+    padding: 12px;
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 13px;
+}
+
+.log-entry {
+    margin-bottom: 8px;
+    padding: 6px 8px;
+    border-radius: 3px;
+    border-left: 3px solid transparent;
+}
+
+.log-entry.info {
+    border-left-color: #007acc;
+    background-color: rgba(0, 122, 204, 0.1);
+}
+
+.log-entry.success {
+    border-left-color: #4caf50;
+    background-color: rgba(76, 175, 80, 0.1);
+}
+
+.log-entry.error {
+    border-left-color: #f44336;
+    background-color: rgba(244, 67, 54, 0.1);
+}
+
+.log-entry.warning {
+    border-left-color: #ff9800;
+    background-color: rgba(255, 152, 0, 0.1);
+}
+
+.log-timestamp {
+    color: #666666;
+    font-size: 11px;
+}
+
+.log-message {
+    color: #d4d4d4;
+    margin-top: 2px;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .container {
+        padding: 10px;
+    }
+    
+    header {
+        flex-direction: column;
+        gap: 16px;
+        text-align: center;
+    }
+    
+    .info-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .info-item {
+        flex-direction: column;
+        gap: 4px;
+    }
+}

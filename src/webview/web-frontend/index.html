@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VS Code Web Automation Tunnel</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>VS Code Web Automation Tunnel</h1>
+            <div class="connection-status" id="connectionStatus">
+                <span class="status-indicator" id="statusIndicator"></span>
+                <span id="statusText">Connecting...</span>
+            </div>
+        </header>
+
+        <main>
+            <section class="server-info">
+                <h2>Server Information</h2>
+                <div class="info-grid">
+                    <div class="info-item">
+                        <label>Server URL:</label>
+                        <span id="serverUrl">-</span>
+                    </div>
+                    <div class="info-item">
+                        <label>WebSocket Port:</label>
+                        <span id="websocketPort">-</span>
+                    </div>
+                    <div class="info-item">
+                        <label>Connected Clients:</label>
+                        <span id="connectedClients">-</span>
+                    </div>
+                    <div class="info-item">
+                        <label>Uptime:</label>
+                        <span id="uptime">-</span>
+                    </div>
+                </div>
+            </section>
+
+            <section class="command-interface">
+                <h2>Command Interface</h2>
+                <div class="command-form">
+                    <div class="input-group">
+                        <label for="commandInput">VS Code Command:</label>
+                        <input type="text" id="commandInput" placeholder="e.g., workbench.action.files.newUntitledFile">
+                    </div>
+                    <div class="input-group">
+                        <label for="argsInput">Arguments (JSON):</label>
+                        <textarea id="argsInput" placeholder='["arg1", "arg2"] or leave empty'></textarea>
+                    </div>
+                    <button id="executeButton" disabled>Execute Command</button>
+                </div>
+            </section>
+
+            <section class="workspace-state">
+                <h2>VS Code State</h2>
+                <div class="state-display">
+                    <div class="state-section">
+                        <h3>Active Editor</h3>
+                        <div id="activeEditor">No active editor</div>
+                    </div>
+                    <div class="state-section">
+                        <h3>Workspace Folders</h3>
+                        <div id="workspaceFolders">No workspace folders</div>
+                    </div>
+                    <div class="state-section">
+                        <h3>Open Editors</h3>
+                        <div id="openEditors">No open editors</div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="message-log">
+                <h2>Message Log</h2>
+                <div class="log-controls">
+                    <button id="clearLogButton">Clear Log</button>
+                </div>
+                <div class="log-container" id="messageLog"></div>
+            </section>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

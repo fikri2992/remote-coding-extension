@@ -4,6 +4,7 @@
 
 import * as vscode from 'vscode';
 import { ServerConfig, ServerStatus, ClientConnection } from './interfaces';
+import { HttpServer } from './HttpServer';
 
 export class ServerManager {
     private _isRunning: boolean = false;
@@ -11,6 +12,7 @@ export class ServerManager {
     private _startTime: Date | null = null;
     private _connectedClients: Map<string, ClientConnection> = new Map();
     private _lastError: string | null = null;
+    private _httpServer: HttpServer | null = null;
 
     constructor() {
         // Initialize with default configuration
@@ -36,14 +38,17 @@ export class ServerManager {
             // Validate configuration
             this.validateConfiguration(this._config);
 
-            // TODO: Initialize HTTP server
+            // Initialize and start HTTP server
+            this._httpServer = new HttpServer(this._config);
+            await this._httpServer.start();
+
             // TODO: Initialize WebSocket server
             
             this._isRunning = true;
             this._startTime = new Date();
             this._lastError = null;
 
-            console.log(`Web Automation Server started on port ${this._config.httpPort}`);
+            console.log(`Web Automation Server started on port ${this._httpServer.port}`);
             
         } catch (error) {
             this._lastError = error instanceof Error ? error.message : 'Unknown error occurred';
@@ -62,7 +67,13 @@ export class ServerManager {
             }
 
             // TODO: Close WebSocket connections gracefully
-            // TODO: Stop HTTP server
+            
+            // Stop HTTP server
+            if (this._httpServer) {
+                await this._httpServer.stop();
+                this._httpServer = null;
+            }
+
             // TODO: Stop WebSocket server
 
             this._isRunning = false;
@@ -91,11 +102,11 @@ export class ServerManager {
             status.lastError = this._lastError;
         }
 
-        if (this._isRunning && this._config && this._startTime) {
-            status.httpPort = this._config.httpPort;
-            status.websocketPort = this._config.websocketPort || this._config.httpPort + 1;
+        if (this._isRunning && this._config && this._startTime && this._httpServer) {
+            status.httpPort = this._httpServer.port;
+            status.websocketPort = this._config.websocketPort || this._httpServer.port + 1;
             status.uptime = Date.now() - this._startTime.getTime();
-            status.serverUrl = `http://localhost:${this._config.httpPort}`;
+            status.serverUrl = `http://localhost:${this._httpServer.port}`;
         }
 
         return status;

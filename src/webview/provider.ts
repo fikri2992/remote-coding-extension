@@ -2,12 +2,18 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
+import { ServerManager } from '../server/ServerManager';
+import { ServerStatus } from '../server/interfaces';
 
 export class WebviewProvider implements vscode.WebviewViewProvider {
     public static readonly viewType = 'basicExtensionView';
     private _view?: vscode.WebviewView;
+    private _serverManager: ServerManager;
+    private _statusUpdateInterval?: NodeJS.Timeout;
 
-    constructor(private readonly _extensionUri: vscode.Uri) {}
+    constructor(private readonly _extensionUri: vscode.Uri) {
+        this._serverManager = new ServerManager();
+    }
 
     public resolveWebviewView(
         webviewView: vscode.WebviewView,
@@ -34,6 +40,15 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
                     case 'executeAction':
                         this._handleExecuteAction(message.data);
                         break;
+                    case 'startServer':
+                        this._handleStartServer();
+                        break;
+                    case 'stopServer':
+                        this._handleStopServer();
+                        break;
+                    case 'getServerStatus':
+                        this._handleGetServerStatus();
+                        break;
                     default:
                         console.log('Unknown message received from webview:', message);
                         break;
@@ -42,6 +57,9 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
             undefined,
             []
         );
+
+        // Start periodic status updates
+        this._startStatusUpdates();
     }
 
     private _getHtmlForWebview(webview: vscode.Webview): string {
@@ -86,5 +104,130 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
         if (this._view) {
             this._view.webview.html = this._getHtmlForWebview(this._view.webview);
         }
+    }
+
+    /**
+     * Handle server start request from webview
+     */
+    private async _handleStartServer(): Promise<void> {
+        try {
+            this._sendStatusUpdate({ type: 'serverStarting' });
+            await this._serverManager.startServer();
+            this._sendServerStatus();
+            vscode.window.showInformationMessage('Web Automation Server started successfully');
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+            this._sendStatusUpdate({ type: 'serverError', error: errorMessage });
+            vscode.window.showErrorMessage(`Failed to start server: ${errorMessage}`);
+        }
+    }
+
+    /**
+     * Handle server stop request from webview
+     */
+    private async _handleStopServer(): Promise<void> {
+        try {
+            this._sendStatusUpdate({ type: 'serverStopping' });
+            await this._serverManager.stopServer();
+            this._sendServerStatus();
+            vscode.window.showInformationMessage('Web Automation Server stopped');
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+            this._sendStatusUpdate({ type: 'serverError', error: errorMessage });
+            vscode.window.showErrorMessage(`Failed to stop server: ${errorMessage}`);
+        }
+    }
+
+    /**
+     * Handle server status request from webview
+     */
+    private _handleGetServerStatus(): void {
+        this._sendServerStatus();
+    }
+
+    /**
+     * Send current server status to webview
+     */
+    private _sendServerStatus(): void {
+        if (!this._view) return;
+
+        const status = this._serverManager.getServerStatus();
+        const connectedClients = this._serverManager.getConnectedClients();
+        
+        this._view.webview.postMessage({
+            command: 'serverStatusUpdate',
+            data: {
+                status,
+                clients: connectedClients
+            }
+        });
+    }
+
+    /**
+     * Send status update to webview
+     */
+    private _sendStatusUpdate(update: any): void {
+        if (!this._view) return;
+
+        this._view.webview.postMessage({
+            command: 'statusUpdate',
+            data: update
+        });
+    }
+
+    /**
+     * Start periodic status updates
+     */
+    private _startStatusUpdates(): void {
+        // Clear existing interval if any
+        if (this._statusUpdateInterval) {
+            clearInterval(this._statusUpdateInterval);
+        }
+
+        // Send initial status
+        this._sendServerStatus();
+
+        // Set up periodic updates every 2 seconds
+        this._statusUpdateInterval = setInterval(() => {
+            this._sendServerStatus();
+        }, 2000);
+    }
+
+    /**
+     * Stop periodic status updates
+     */
+    private _stopStatusUpdates(): void {
+        if (this._statusUpdateInterval) {
+            clearInterval(this._statusUpdateInterval);
+            delete this._statusUpdateInterval;
+        }
+    }
+
+    /**
+     * Start server (public method for command palette)
+     */
+    public async startServer(): Promise<void> {
+        return this._handleStartServer();
+    }
+
+    /**
+     * Stop server (public method for command palette)
+     */
+    public async stopServer(): Promise<void> {
+        return this._handleStopServer();
+    }
+
+    /**
+     * Get server manager instance
+     */
+    public get serverManager(): ServerManager {
+        return this._serverManager;
+    }
+
+    /**
+     * Dispose resources
+     */
+    public dispose(): void {
+        this._stopStatusUpdates();
     }
 }

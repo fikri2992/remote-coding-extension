@@ -26,7 +26,7 @@
       "basicExtension": [
         {
           "id": "basicExtensionView",
-          "name": "Basic Extension",
+          "name": "Web Automation Tunnel",
           "type": "webview"
         }
       ]
@@ -41,6 +41,16 @@
         "command": "basicExtension.focusAuxiliaryBar",
         "title": "Focus Auxiliary Bar",
         "category": "Basic Extension"
+      },
+      {
+        "command": "webAutomationTunnel.startServer",
+        "title": "Start Web Automation Server",
+        "category": "Web Automation Tunnel"
+      },
+      {
+        "command": "webAutomationTunnel.stopServer",
+        "title": "Stop Web Automation Server",
+        "category": "Web Automation Tunnel"
       }
     ],
     "configuration": {

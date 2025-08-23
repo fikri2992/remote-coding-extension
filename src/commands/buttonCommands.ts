@@ -8,16 +8,16 @@ export function registerButtonCommands(context: vscode.ExtensionContext) {
         async (data?: any) => {
             try {
                 console.log('Execute action command triggered with data:', data);
-                
+
                 // Execute workbench.action.focusAuxiliaryBar command
                 await executeAuxiliaryBarFocus();
-                
+
                 // Execute expandLineSelection if text input has focus
                 await executeExpandLineSelectionIfTextFocus();
-                
+
                 // Show success notification to user
                 vscode.window.showInformationMessage('Action executed successfully!');
-                
+
             } catch (error) {
                 // Handle command execution errors and provide user feedback
                 console.error('Error executing action command:', error);
@@ -52,7 +52,7 @@ async function executeExpandLineSelectionIfTextFocus(): Promise<void> {
     try {
         // Check if there's an active text editor (indicates text input has focus)
         const activeEditor = vscode.window.activeTextEditor;
-        
+
         if (activeEditor) {
             console.log('Text editor has focus, executing expandLineSelection command');
             await vscode.commands.executeCommand('expandLineSelection');

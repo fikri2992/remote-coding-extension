@@ -13,6 +13,10 @@ export class AppShell extends Component {
         this.stateManager = options.stateManager;
         this.webSocketClient = options.webSocketClient;
         this.notificationService = options.notificationService;
+        this.animationService = options.animationService;
+        this.keyboardShortcutService = options.keyboardShortcutService;
+        this.contextMenuService = options.contextMenuService;
+        this.dragDropService = options.dragDropService;
         
         // Child components
         this.sidebar = null;
@@ -81,7 +85,11 @@ export class AppShell extends Component {
             container: this.mainContentContainer,
             stateManager: this.stateManager,
             webSocketClient: this.webSocketClient,
-            notificationService: this.notificationService
+            notificationService: this.notificationService,
+            animationService: this.animationService,
+            keyboardShortcutService: this.keyboardShortcutService,
+            contextMenuService: this.contextMenuService,
+            dragDropService: this.dragDropService
         });
         
         await this.mainContent.initialize();
@@ -163,9 +171,15 @@ export class AppShell extends Component {
             this.sidebar.setActiveSection(navigationState.activeSection);
         }
         
-        // Update main content
+        // Update main content with animation
         if (this.mainContent) {
-            this.mainContent.showSection(navigationState.activeSection);
+            const direction = navigationState.previousSection ? 'forward' : 'none';
+            this.mainContent.showSection(navigationState.activeSection, direction);
+        }
+        
+        // Update keyboard shortcut context
+        if (this.keyboardShortcutService) {
+            this.keyboardShortcutService.setContext(navigationState.activeSection);
         }
         
         // On mobile, hide sidebar after navigation
@@ -208,11 +222,17 @@ export class AppShell extends Component {
                 sidebarCollapsed: this.sidebarCollapsed
             });
             
-            // Update sidebar
+            // Update sidebar with animation
             if (this.sidebarCollapsed) {
                 this.sidebar.collapse();
+                if (this.animationService) {
+                    this.animationService.animateSidebarToggle(this.sidebar.element, true);
+                }
             } else {
                 this.sidebar.expand();
+                if (this.animationService) {
+                    this.animationService.animateSidebarToggle(this.sidebar.element, false);
+                }
             }
         }
     }

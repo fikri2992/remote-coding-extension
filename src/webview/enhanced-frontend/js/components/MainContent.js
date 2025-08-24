@@ -11,6 +11,10 @@ export class MainContent extends Component {
         this.stateManager = options.stateManager;
         this.webSocketClient = options.webSocketClient;
         this.notificationService = options.notificationService;
+        this.animationService = options.animationService;
+        this.keyboardShortcutService = options.keyboardShortcutService;
+        this.contextMenuService = options.contextMenuService;
+        this.dragDropService = options.dragDropService;
 
         this.currentSection = 'prompt';
         this.sections = new Map();
@@ -92,17 +96,27 @@ export class MainContent extends Component {
         this.emit('mobile-menu-toggle');
     }
 
-    async showSection(sectionId) {
+    async showSection(sectionId, direction = 'forward') {
         const section = this.sections.get(sectionId);
         if (!section) {
             console.warn(`Unknown section: ${sectionId}`);
             return;
         }
 
+        const previousSection = this.currentSection;
         this.currentSection = sectionId;
 
-        // Update title
-        this.titleElement.textContent = section.title;
+        // Update title with animation
+        if (this.animationService && previousSection !== sectionId) {
+            await this.animationService.animate(this.titleElement, 'fadeOut', { duration: 150 });
+            this.titleElement.textContent = section.title;
+            await this.animationService.animate(this.titleElement, 'fadeIn', { duration: 150 });
+        } else {
+            this.titleElement.textContent = section.title;
+        }
+
+        // Store current content for animation
+        const currentContent = this.bodyElement.firstElementChild;
 
         // Clear existing child components
         if (this.chatInterface) {
@@ -129,9 +143,37 @@ export class MainContent extends Component {
             this.infoPanel = null;
         }
 
-        // Clear and render content
+        // Create new content container
+        const newContent = this.createElement('div', {}, ['section-content']);
+        
+        // Render new section content
+        const oldBodyContent = this.bodyElement.innerHTML;
         this.bodyElement.innerHTML = '';
-        await section.render();
+        this.bodyElement.appendChild(newContent);
+        
+        // Set up the section render context
+        const originalBodyElement = this.bodyElement;
+        this.bodyElement = newContent;
+        
+        try {
+            await section.render();
+        } finally {
+            this.bodyElement = originalBodyElement;
+        }
+
+        // Animate section transition if animation service is available
+        if (this.animationService && previousSection !== sectionId && currentContent) {
+            await this.animationService.animateSectionTransition(
+                currentContent,
+                newContent,
+                direction
+            );
+        }
+
+        // Add hover animations to new content
+        if (this.animationService) {
+            this.animationService.addHoverAnimations(newContent);
+        }
     }
 
     async renderPromptSection() {
@@ -150,7 +192,11 @@ export class MainContent extends Component {
             container: chatContainer,
             stateManager: this.stateManager,
             webSocketClient: this.webSocketClient,
-            notificationService: this.notificationService
+            notificationService: this.notificationService,
+            animationService: this.animationService,
+            keyboardShortcutService: this.keyboardShortcutService,
+            contextMenuService: this.contextMenuService,
+            dragDropService: this.dragDropService
         });
 
         await this.chatInterface.initialize();
@@ -183,7 +229,11 @@ export class MainContent extends Component {
             container: gitContainer,
             stateManager: this.stateManager,
             webSocketClient: this.webSocketClient,
-            notificationService: this.notificationService
+            notificationService: this.notificationService,
+            animationService: this.animationService,
+            keyboardShortcutService: this.keyboardShortcutService,
+            contextMenuService: this.contextMenuService,
+            dragDropService: this.dragDropService
         });
 
         await this.gitDashboard.initialize();
@@ -222,7 +272,11 @@ export class MainContent extends Component {
             container: fileManagerContainer,
             stateManager: this.stateManager,
             webSocketClient: this.webSocketClient,
-            notificationService: this.notificationService
+            notificationService: this.notificationService,
+            animationService: this.animationService,
+            keyboardShortcutService: this.keyboardShortcutService,
+            contextMenuService: this.contextMenuService,
+            dragDropService: this.dragDropService
         });
 
         await this.fileManager.initialize();
@@ -256,7 +310,11 @@ export class MainContent extends Component {
             container: infoPanelContainer,
             stateManager: this.stateManager,
             webSocketClient: this.webSocketClient,
-            notificationService: this.notificationService
+            notificationService: this.notificationService,
+            animationService: this.animationService,
+            keyboardShortcutService: this.keyboardShortcutService,
+            contextMenuService: this.contextMenuService,
+            dragDropService: this.dragDropService
         });
 
         await this.infoPanel.initialize();

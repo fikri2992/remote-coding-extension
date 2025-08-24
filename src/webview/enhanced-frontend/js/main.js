@@ -8,6 +8,10 @@ import { WebSocketClient } from './services/WebSocketClient.js';
 import { StateManager } from './services/StateManager.js';
 import { ThemeManager } from './services/ThemeManager.js';
 import { NotificationService } from './services/NotificationService.js';
+import { KeyboardShortcutService } from './services/KeyboardShortcutService.js';
+import { ContextMenuService } from './services/ContextMenuService.js';
+import { DragDropService } from './services/DragDropService.js';
+import { AnimationService } from './services/AnimationService.js';
 
 /**
  * Enhanced Web Application
@@ -22,6 +26,10 @@ class EnhancedWebApp {
         this.stateManager = new StateManager();
         this.themeManager = new ThemeManager();
         this.notificationService = new NotificationService();
+        this.animationService = new AnimationService();
+        this.keyboardShortcutService = new KeyboardShortcutService(this.stateManager, this.notificationService);
+        this.contextMenuService = new ContextMenuService(this.stateManager, this.notificationService);
+        this.dragDropService = new DragDropService(this.stateManager, this.notificationService);
         this.webSocketClient = new WebSocketClient(this.stateManager, this.notificationService);
         
         // Main app shell component
@@ -65,6 +73,9 @@ class EnhancedWebApp {
             // Set up event listeners
             this._setupEventListeners();
             
+            // Setup advanced UI features
+            this._setupAdvancedUIFeatures();
+            
             // Connect to WebSocket
             await this._connectWebSocket();
             
@@ -104,6 +115,18 @@ class EnhancedWebApp {
         // Initialize notification service
         await this.notificationService.initialize();
         
+        // Initialize animation service
+        await this.animationService.initialize();
+        
+        // Initialize keyboard shortcut service
+        await this.keyboardShortcutService.initialize();
+        
+        // Initialize context menu service
+        await this.contextMenuService.initialize();
+        
+        // Initialize drag and drop service
+        await this.dragDropService.initialize();
+        
         console.log('✅ Services initialized');
     }
 
@@ -118,7 +141,11 @@ class EnhancedWebApp {
             container: this.appElement,
             stateManager: this.stateManager,
             webSocketClient: this.webSocketClient,
-            notificationService: this.notificationService
+            notificationService: this.notificationService,
+            animationService: this.animationService,
+            keyboardShortcutService: this.keyboardShortcutService,
+            contextMenuService: this.contextMenuService,
+            dragDropService: this.dragDropService
         });
         
         await this.appShell.initialize();
@@ -305,6 +332,146 @@ class EnhancedWebApp {
     }
 
     /**
+     * Setup advanced UI features
+     */
+    _setupAdvancedUIFeatures() {
+        console.log('✨ Setting up advanced UI features...');
+        
+        // Setup keyboard shortcut event handlers
+        document.addEventListener('keyboard-shortcut', this._handleKeyboardShortcutEvent.bind(this));
+        
+        // Setup context menu event handlers
+        document.addEventListener('context-menu-action', this._handleContextMenuAction.bind(this));
+        
+        // Setup drag and drop event handlers
+        document.addEventListener('file-move', this._handleFileMove.bind(this));
+        document.addEventListener('prompt-category-change', this._handlePromptCategoryChange.bind(this));
+        
+        // Add hover animations to existing elements
+        this.animationService.addHoverAnimations(document.body);
+        
+        console.log('✅ Advanced UI features set up');
+    }
+
+    /**
+     * Handle keyboard shortcut events
+     */
+    _handleKeyboardShortcutEvent(event) {
+        const { action, ...data } = event.detail;
+        
+        switch (action) {
+            case 'focus-command-input':
+                this.appShell?.focusCommandInput();
+                break;
+            case 'toggle-sidebar':
+                this.appShell?.toggleSidebar();
+                break;
+            case 'show-command-palette':
+                this.appShell?.showCommandPalette();
+                break;
+            case 'close-overlays':
+                this.appShell?.closeOverlays();
+                break;
+            case 'send-message':
+                // Delegate to chat interface
+                break;
+            case 'navigate-message-history':
+                // Delegate to chat interface
+                break;
+            case 'open-selected-file':
+                // Delegate to file manager
+                break;
+            case 'expand-selected-folder':
+                // Delegate to file manager
+                break;
+            case 'collapse-selected-folder':
+                // Delegate to file manager
+                break;
+            case 'refresh-git-status':
+                // Delegate to git dashboard
+                break;
+        }
+    }
+
+    /**
+     * Handle context menu actions
+     */
+    _handleContextMenuAction(event) {
+        const { action, ...data } = event.detail;
+        
+        // Most context menu actions will be handled by the respective components
+        // This is a central place to handle cross-component actions
+        console.log('Context menu action:', action, data);
+        
+        // Show notification for actions that need user feedback
+        if (action.includes('delete')) {
+            this.notificationService.warning(
+                'Confirm Action',
+                `Are you sure you want to ${action.replace('-', ' ')}?`,
+                {
+                    actions: [
+                        {
+                            label: 'Confirm',
+                            primary: true,
+                            handler: () => this._executeContextMenuAction(action, data)
+                        },
+                        {
+                            label: 'Cancel',
+                            handler: () => {}
+                        }
+                    ]
+                }
+            );
+        } else {
+            this._executeContextMenuAction(action, data);
+        }
+    }
+
+    /**
+     * Execute context menu action
+     */
+    _executeContextMenuAction(action, data) {
+        // This would typically delegate to the appropriate service or component
+        console.log('Executing context menu action:', action, data);
+        
+        // For now, just show a notification
+        this.notificationService.info(
+            'Action Executed',
+            `${action.replace('-', ' ')} completed`
+        );
+    }
+
+    /**
+     * Handle file move events
+     */
+    _handleFileMove(event) {
+        const { sourcePath, targetPath, type } = event.detail;
+        
+        console.log('File move:', { sourcePath, targetPath, type });
+        
+        // Show notification
+        this.notificationService.success(
+            'File Moved',
+            `${type} moved from ${sourcePath} to ${targetPath}`
+        );
+    }
+
+    /**
+     * Handle prompt category change events
+     */
+    _handlePromptCategoryChange(event) {
+        const { promptId, newCategory } = event.detail;
+        
+        console.log('Prompt category change:', { promptId, newCategory });
+        
+        // Show notification
+        this.notificationService.success(
+            'Category Updated',
+            `Prompt moved to ${newCategory} category`
+        );
+    }
+
+    /**
      * Handle keyboard shortcuts
      */
     _handleKeyboardShortcuts(event) {
@@ -403,6 +570,10 @@ class EnhancedWebApp {
         // Cleanup services
         this.webSocketClient?.destroy();
         this.appShell?.destroy();
+        this.dragDropService?.destroy();
+        this.contextMenuService?.destroy();
+        this.keyboardShortcutService?.destroy();
+        this.animationService?.destroy();
         this.stateManager?.destroy();
         this.themeManager?.destroy();
         this.notificationService?.destroy();

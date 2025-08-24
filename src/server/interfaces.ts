@@ -43,7 +43,7 @@ export interface ServerStatus {
  */
 export interface WebSocketMessage {
     /** Message type for routing */
-    type: 'command' | 'response' | 'broadcast' | 'status';
+    type: 'command' | 'response' | 'broadcast' | 'status' | 'fileSystem';
     /** Unique identifier for request/response correlation */
     id?: string;
     /** VS Code command name to execute */

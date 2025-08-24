@@ -1938,3 +1938,373 @@ it Dashboard Styles */
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
 }
+/* 
+File Manager Styles */
+.file-manager {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background: var(--vscode-editor-background);
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 6px;
+}
+
+.file-manager-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--vscode-panel-border);
+    background: var(--vscode-editorGroupHeader-tabsBackground);
+}
+
+.manager-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.manager-title .icon {
+    font-size: 16px;
+}
+
+.manager-title h3 {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--vscode-foreground);
+}
+
+.header-actions {
+    display: flex;
+    gap: 4px;
+}
+
+.search-container {
+    padding: 8px 16px;
+    border-bottom: 1px solid var(--vscode-panel-border);
+    background: var(--vscode-editorGroupHeader-tabsBackground);
+}
+
+.search-input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.search-input {
+    flex: 1;
+    padding-right: 32px;
+}
+
+.search-clear {
+    position: absolute;
+    right: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--vscode-icon-foreground);
+    cursor: pointer;
+    border-radius: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.search-clear:hover {
+    background: var(--vscode-toolbar-hoverBackground);
+}
+
+.file-manager-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.file-tree-container {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+}
+
+.file-tree {
+    width: 100%;
+}
+
+.tree {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.tree-item {
+    position: relative;
+    user-select: none;
+}
+
+.tree-item-content {
+    display: flex;
+    align-items: center;
+    padding: 4px 8px;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: background-color 0.1s ease-out;
+    min-height: 24px;
+    gap: 4px;
+}
+
+.tree-item-content:hover {
+    background: var(--vscode-list-hoverBackground);
+}
+
+.tree-item-content:focus {
+    outline: 1px solid var(--vscode-focusBorder);
+    outline-offset: -1px;
+}
+
+.tree-item-content.selected {
+    background: var(--vscode-list-activeSelectionBackground);
+    color: var(--vscode-list-activeSelectionForeground);
+}
+
+.tree-item-expand {
+    width: 16px;
+    height: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    border: none;
+    background: none;
+    color: var(--vscode-icon-foreground);
+    border-radius: 2px;
+    transition: transform 0.1s ease-out;
+    font-size: 10px;
+    flex-shrink: 0;
+}
+
+.tree-item-expand:hover {
+    background: var(--vscode-toolbar-hoverBackground);
+}
+
+.tree-item-expand.expanded {
+    transform: rotate(0deg);
+}
+
+.tree-item-expand.empty {
+    visibility: hidden;
+}
+
+.tree-item-icon {
+    width: 16px;
+    height: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 14px;
+}
+
+.tree-item-label {
+    flex: 1;
+    font-size: 13px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+}
+
+.tree-item-metadata {
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground);
+    margin-left: auto;
+    flex-shrink: 0;
+    padding-left: 8px;
+}
+
+.tree-item-children {
+    margin-left: 16px;
+    border-left: 1px solid var(--vscode-tree-indentGuidesStroke);
+    padding-left: 4px;
+}
+
+.tree-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    color: var(--vscode-descriptionForeground);
+    font-size: 13px;
+}
+
+.tree-empty p {
+    margin: 0;
+}
+
+/* File Manager Loading and Empty States */
+.file-manager .loading-indicator {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    gap: 12px;
+    color: var(--vscode-descriptionForeground);
+    font-size: 13px;
+}
+
+.file-manager .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    text-align: center;
+    color: var(--vscode-descriptionForeground);
+}
+
+.file-manager .empty-state p {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+/* File Manager Responsive Design */
+@media (max-width: 768px) {
+    .file-manager-header {
+        padding: 8px 12px;
+    }
+    
+    .search-container {
+        padding: 6px 12px;
+    }
+    
+    .file-tree-container {
+        padding: 4px;
+    }
+    
+    .tree-item-content {
+        padding: 6px 8px;
+        min-height: 32px;
+    }
+    
+    .tree-item-metadata {
+        display: none; /* Hide metadata on mobile */
+    }
+}
+
+/* File Manager Button States */
+.file-manager .btn-icon.active {
+    background: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+}
+
+/* File Manager Search Highlighting */
+.tree-item-label.search-match {
+    background: var(--vscode-editor-findMatchHighlightBackground);
+    border-radius: 2px;
+    padding: 1px 2px;
+}
+
+/* File Manager Context Menu (for future implementation) */
+.file-context-menu {
+    position: absolute;
+    background: var(--vscode-menu-background);
+    border: 1px solid var(--vscode-menu-border);
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 1000;
+    min-width: 180px;
+    padding: 4px 0;
+}
+
+.context-menu-item {
+    display: flex;
+    align-items: center;
+    padding: 6px 12px;
+    font-size: 13px;
+    color: var(--vscode-menu-foreground);
+    cursor: pointer;
+    gap: 8px;
+}
+
+.context-menu-item:hover {
+    background: var(--vscode-menu-selectionBackground);
+    color: var(--vscode-menu-selectionForeground);
+}
+
+.context-menu-item.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.context-menu-item.disabled:hover {
+    background: none;
+    color: var(--vscode-menu-foreground);
+}
+
+.context-menu-separator {
+    height: 1px;
+    background: var(--vscode-menu-separatorBackground);
+    margin: 4px 0;
+}
+
+/* File Manager Drag and Drop (for future implementation) */
+.tree-item-content.drag-over {
+    background: var(--vscode-list-dropBackground);
+    border: 1px dashed var(--vscode-focusBorder);
+}
+
+.tree-item-content.dragging {
+    opacity: 0.5;
+}
+
+/* File Manager Accessibility */
+.tree-item-content[aria-selected="true"] {
+    background: var(--vscode-list-activeSelectionBackground);
+    color: var(--vscode-list-activeSelectionForeground);
+}
+
+.tree-item-content:focus-visible {
+    outline: 2px solid var(--vscode-focusBorder);
+    outline-offset: -2px;
+}
+
+/* File Manager Animation */
+.tree-item-children {
+    animation: expandFolder 0.2s ease-out;
+}
+
+@keyframes expandFolder {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* File Manager Scrollbar */
+.file-tree-container::-webkit-scrollbar {
+    width: 8px;
+}
+
+.file-tree-container::-webkit-scrollbar-track {
+    background: var(--vscode-scrollbarSlider-background);
+}
+
+.file-tree-container::-webkit-scrollbar-thumb {
+    background: var(--vscode-scrollbarSlider-background);
+    border-radius: 4px;
+}
+
+.file-tree-container::-webkit-scrollbar-thumb:hover {
+    background: var(--vscode-scrollbarSlider-hoverBackground);
+}

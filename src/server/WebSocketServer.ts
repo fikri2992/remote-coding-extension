@@ -350,7 +350,7 @@ export class WebSocketServer {
      */
     private validateMessage(message: WebSocketMessage): boolean {
         // Check required type field
-        if (!message.type || !['command', 'response', 'broadcast', 'status'].includes(message.type)) {
+        if (!message.type || !['command', 'response', 'broadcast', 'status', 'fileSystem'].includes(message.type)) {
             return false;
         }
 
@@ -375,6 +375,10 @@ export class WebSocketServer {
 
             case 'status':
                 this.handleStatusMessage(clientId, message.id);
+                break;
+
+            case 'fileSystem':
+                await this.handleFileSystemMessage(clientId, message);
                 break;
 
             default:
@@ -450,6 +454,247 @@ export class WebSocketServer {
         }
         
         this.sendToClient(clientId, response);
+    }
+
+    /**
+     * Handle file system operation messages
+     */
+    private async handleFileSystemMessage(clientId: string, message: WebSocketMessage): Promise<void> {
+        try {
+            const { operation, path, ...options } = message.data || {};
+            
+            if (!operation) {
+                this.sendError(clientId, 'File system operation is required', message.id);
+                return;
+            }
+
+            let result: any;
+
+            switch (operation) {
+                case 'tree':
+                    result = await this.getFileTree(path || '.');
+                    break;
+                
+                case 'open':
+                    result = await this.openFileInVSCode(path);
+                    break;
+                
+                case 'search':
+                    result = await this.searchFiles(options.query || '', path || '.');
+                    break;
+                
+                default:
+                    this.sendError(clientId, `Unsupported file system operation: ${operation}`, message.id);
+                    return;
+            }
+
+            // Send response
+            const response: WebSocketMessage = {
+                type: 'fileSystem',
+                data: {
+                    operation,
+                    path,
+                    content: result
+                }
+            };
+
+            if (message.id) {
+                response.id = message.id;
+            }
+
+            this.sendToClient(clientId, response);
+
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown file system error';
+            console.error(`File system operation failed for client ${clientId}:`, error);
+            this.sendError(clientId, `File system operation failed: ${errorMessage}`, message.id);
+        }
+    }
+
+    /**
+     * Get file tree structure
+     */
+    private async getFileTree(rootPath: string): Promise<any[]> {
+        const vscode = await import('vscode');
+        const path = await import('path');
+        const fs = await import('fs').then(m => m.promises);
+
+        try {
+            // Get workspace folders
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+            if (!workspaceFolders || workspaceFolders.length === 0) {
+                return [];
+            }
+
+            const workspaceRoot = workspaceFolders[0]!.uri.fsPath;
+            const targetPath = path.resolve(workspaceRoot, rootPath);
+
+            // Build file tree recursively
+            const buildTree = async (dirPath: string, relativePath: string = ''): Promise<any[]> => {
+                const items: any[] = [];
+                
+                try {
+                    const entries = await fs.readdir(dirPath, { withFileTypes: true });
+                    
+                    for (const entry of entries) {
+                        // Skip hidden files and common ignore patterns
+                        if (entry.name.startsWith('.') && !entry.name.match(/^\.(git|vscode|env)$/)) {
+                            continue;
+                        }
+                        if (entry.name === 'node_modules' || entry.name === 'dist' || entry.name === 'build') {
+                            continue;
+                        }
+
+                        const fullPath = path.join(dirPath, entry.name);
+                        const itemRelativePath = path.join(relativePath, entry.name).replace(/\\/g, '/');
+                        
+                        if (entry.isDirectory()) {
+                            const children = await buildTree(fullPath, itemRelativePath);
+                            items.push({
+                                name: entry.name,
+                                path: itemRelativePath,
+                                type: 'directory',
+                                children: children
+                            });
+                        } else {
+                            const stats = await fs.stat(fullPath);
+                            items.push({
+                                name: entry.name,
+                                path: itemRelativePath,
+                                type: 'file',
+                                size: stats.size,
+                                modified: stats.mtime
+                            });
+                        }
+                    }
+                } catch (error) {
+                    console.warn(`Failed to read directory ${dirPath}:`, error);
+                }
+
+                return items.sort((a, b) => {
+                    // Directories first, then files, both alphabetically
+                    if (a.type !== b.type) {
+                        return a.type === 'directory' ? -1 : 1;
+                    }
+                    return a.name.localeCompare(b.name);
+                });
+            };
+
+            return await buildTree(targetPath);
+
+        } catch (error) {
+            console.error('Failed to get file tree:', error);
+            return [];
+        }
+    }
+
+    /**
+     * Open file in VS Code
+     */
+    private async openFileInVSCode(filePath: string): Promise<boolean> {
+        try {
+            const vscode = await import('vscode');
+            const path = await import('path');
+
+            // Get workspace folders
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+            if (!workspaceFolders || workspaceFolders.length === 0) {
+                throw new Error('No workspace folder available');
+            }
+
+            const workspaceRoot = workspaceFolders[0]!.uri.fsPath;
+            const fullPath = path.resolve(workspaceRoot, filePath);
+            const fileUri = vscode.Uri.file(fullPath);
+
+            // Open the file
+            await vscode.window.showTextDocument(fileUri);
+            
+            return true;
+
+        } catch (error) {
+            console.error('Failed to open file:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Search files in workspace
+     */
+    private async searchFiles(query: string, rootPath: string): Promise<any[]> {
+        const vscode = await import('vscode');
+        const path = await import('path');
+        const fs = await import('fs').then(m => m.promises);
+
+        try {
+            if (!query || query.length < 2) {
+                return [];
+            }
+
+            // Get workspace folders
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+            if (!workspaceFolders || workspaceFolders.length === 0) {
+                return [];
+            }
+
+            const workspaceRoot = workspaceFolders[0]!.uri.fsPath;
+            const searchRegex = new RegExp(query, 'i');
+            const results: any[] = [];
+
+            // Recursive search function
+            const searchInDirectory = async (dirPath: string, relativePath: string = ''): Promise<void> => {
+                try {
+                    const entries = await fs.readdir(dirPath, { withFileTypes: true });
+                    
+                    for (const entry of entries) {
+                        // Skip hidden files and common ignore patterns
+                        if (entry.name.startsWith('.') && !entry.name.match(/^\.(git|vscode|env)$/)) {
+                            continue;
+                        }
+                        if (entry.name === 'node_modules' || entry.name === 'dist' || entry.name === 'build') {
+                            continue;
+                        }
+
+                        const fullPath = path.join(dirPath, entry.name);
+                        const itemRelativePath = path.join(relativePath, entry.name).replace(/\\/g, '/');
+                        
+                        // Check if name matches search query
+                        if (searchRegex.test(entry.name)) {
+                            if (entry.isDirectory()) {
+                                results.push({
+                                    name: entry.name,
+                                    path: itemRelativePath,
+                                    type: 'directory'
+                                });
+                            } else {
+                                const stats = await fs.stat(fullPath);
+                                results.push({
+                                    name: entry.name,
+                                    path: itemRelativePath,
+                                    type: 'file',
+                                    size: stats.size,
+                                    modified: stats.mtime
+                                });
+                            }
+                        }
+
+                        // Recursively search subdirectories
+                        if (entry.isDirectory() && results.length < 100) { // Limit results
+                            await searchInDirectory(fullPath, itemRelativePath);
+                        }
+                    }
+                } catch (error) {
+                    console.warn(`Failed to search in directory ${dirPath}:`, error);
+                }
+            };
+
+            await searchInDirectory(workspaceRoot);
+            
+            return results.slice(0, 50); // Limit to 50 results
+
+        } catch (error) {
+            console.error('Failed to search files:', error);
+            return [];
+        }
     }
 
     /**

@@ -1218,26 +1218,7 @@ export class WebSocketClient {
         return closeReasons[code] || `Unknown close code: ${code}`;
     }
 
-    /**
-     * Send file system command for .remoterc operations
-     */
-    sendFileSystemCommand(operation, data, callback) {
-        const message = {
-            type: 'fileSystem',
-            id: this.generateMessageId(),
-            data: {
-                operation: operation,
-                ...data
-            }
-        };
 
-        // Register callback if provided
-        if (callback) {
-            this.messageCallbacks.set(message.id, callback);
-        }
-
-        return this.sendMessage(message);
-    }
 
     /**
      * Send prompt command for enhanced prompt handling

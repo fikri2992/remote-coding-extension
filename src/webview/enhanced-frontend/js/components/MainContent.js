@@ -117,6 +117,12 @@ export class MainContent extends Component {
             this.gitDashboard = null;
         }
 
+        if (this.fileManager) {
+            this.removeChildComponent(this.fileManager);
+            this.fileManager.destroy();
+            this.fileManager = null;
+        }
+
         // Clear and render content
         this.bodyElement.innerHTML = '';
         await section.render();
@@ -194,29 +200,38 @@ export class MainContent extends Component {
         });
     }
 
-    renderFilesSection() {
-        this.bodyElement.innerHTML = `
-            <div class="files-section">
-                <div class="files-placeholder">
-                    <h3>File Manager</h3>
-                    <p>Interactive file tree with VS Code integration will be implemented here.</p>
-                    <div class="placeholder-tree">
-                        <div class="tree-item">
-                            <span class="tree-item-icon">📁</span>
-                            <span class="tree-item-label">src/</span>
-                        </div>
-                        <div class="tree-item" style="margin-left: 20px;">
-                            <span class="tree-item-icon">📄</span>
-                            <span class="tree-item-label">main.js</span>
-                        </div>
-                        <div class="tree-item" style="margin-left: 20px;">
-                            <span class="tree-item-icon">📄</span>
-                            <span class="tree-item-label">styles.css</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
+    async renderFilesSection() {
+        // Clear existing content
+        this.bodyElement.innerHTML = '';
+
+        // Import and initialize FileManager component
+        const { FileManager } = await import('./FileManager.js');
+        
+        // Create file manager container
+        const fileManagerContainer = this.createElement('div', {}, ['files-section']);
+        this.bodyElement.appendChild(fileManagerContainer);
+
+        // Initialize FileManager component
+        this.fileManager = new FileManager({
+            container: fileManagerContainer,
+            stateManager: this.stateManager,
+            webSocketClient: this.webSocketClient,
+            notificationService: this.notificationService
+        });
+
+        await this.fileManager.initialize();
+        this.addChildComponent(this.fileManager);
+
+        // Listen for file manager events
+        this.addEventListener(fileManagerContainer, 'file-selected', (event) => {
+            const { file } = event.detail;
+            console.log('File selected:', file);
+        });
+
+        this.addEventListener(fileManagerContainer, 'file-opened', (event) => {
+            const { file } = event.detail;
+            console.log('File opened:', file);
+        });
     }
 
     renderInfoSection() {

@@ -48,7 +48,9 @@
   - _Git: `feat: build core chat interface with message history and input`_
   - _Description: Implement foundational chat interface components including message display with virtual scrolling, rich text input, message type styling, and auto-scroll functionality for conversational UI._
 
-- [-] 4. Implement WebSocket integration for enhanced messaging
+- [x] 4. Implement WebSocket integration for enhanced messaging
+
+
 
 
 
@@ -61,7 +63,10 @@
   - _Git: `feat: extend WebSocket client for enhanced messaging protocol`_
   - _Description: Enhance WebSocket communication with new message types for prompt, git, and file system operations. Add offline support, message queuing, and real-time status indicators._
 
-- [ ] 5. Create prompt management and persistence system
+- [-] 5. Create prompt management and persistence system
+
+
+
   - Build PromptManager component for history and categorization
   - Implement .remoterc folder creation and file structure management
   - Create prompt file saving with timestamp-based naming convention

@@ -1,9 +1,12 @@
 # Implementation Plan
 
-- [-] 1. Set up enhanced web frontend project structure
+### GIT MANAGEMENT
 
+- Create a branch for this feature: `git checkout -b feature/web-frontend-enhanced-ui`
+- Commit every task with proper message and description on what we're doing
+- Setup every task with proper commit message and description
 
-
+- [ ] 1. Set up enhanced web frontend project structure
   - Create new directory structure for enhanced UI components
   - Set up build system for modern JavaScript/TypeScript compilation
   - Configure module bundling and asset management

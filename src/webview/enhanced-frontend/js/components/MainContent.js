@@ -111,6 +111,12 @@ export class MainContent extends Component {
             this.chatInterface = null;
         }
 
+        if (this.gitDashboard) {
+            this.removeChildComponent(this.gitDashboard);
+            this.gitDashboard.destroy();
+            this.gitDashboard = null;
+        }
+
         // Clear and render content
         this.bodyElement.innerHTML = '';
         await section.render();
@@ -149,33 +155,43 @@ export class MainContent extends Component {
         });
     }
 
-    renderGitSection() {
-        this.bodyElement.innerHTML = `
-            <div class="git-section">
-                <div class="git-placeholder">
-                    <h3>Git Integration</h3>
-                    <p>Git dashboard with branch info, commits, and diff viewer will be implemented here.</p>
-                    <div class="placeholder-cards">
-                        <div class="card">
-                            <div class="card-header">
-                                <div class="card-title">Current Branch</div>
-                            </div>
-                            <div class="card-body">
-                                <p>Branch information will be displayed here</p>
-                            </div>
-                        </div>
-                        <div class="card">
-                            <div class="card-header">
-                                <div class="card-title">Recent Commits</div>
-                            </div>
-                            <div class="card-body">
-                                <p>Commit history will be displayed here</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
+    async renderGitSection() {
+        // Clear existing content
+        this.bodyElement.innerHTML = '';
+
+        // Import and initialize GitDashboard component
+        const { GitDashboard } = await import('./GitDashboard.js');
+        
+        // Create git dashboard container
+        const gitContainer = this.createElement('div', {}, ['git-section']);
+        this.bodyElement.appendChild(gitContainer);
+
+        // Initialize GitDashboard component
+        this.gitDashboard = new GitDashboard({
+            container: gitContainer,
+            stateManager: this.stateManager,
+            webSocketClient: this.webSocketClient,
+            notificationService: this.notificationService
+        });
+
+        await this.gitDashboard.initialize();
+        this.addChildComponent(this.gitDashboard);
+
+        // Listen for git events
+        this.addEventListener(gitContainer, 'git-branch-changed', (event) => {
+            const { branch } = event.detail;
+            console.log('Branch changed:', branch);
+        });
+
+        this.addEventListener(gitContainer, 'git-commit-selected', (event) => {
+            const { commit } = event.detail;
+            console.log('Commit selected:', commit);
+        });
+
+        this.addEventListener(gitContainer, 'git-file-selected', (event) => {
+            const { file } = event.detail;
+            console.log('File selected:', file);
+        });
     }
 
     renderFilesSection() {

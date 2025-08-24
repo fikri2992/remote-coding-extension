@@ -75,6 +75,7 @@
         },
         "webAutomationTunnel.websocketPort": {
           "type": "number",
+          "default": 8081,
           "minimum": 1024,
           "maximum": 65535,
           "description": "Port number for the WebSocket server (defaults to HTTP port + 1)"
@@ -105,13 +106,14 @@
     }
   },
   "scripts": {
-    "vscode:prepublish": "npm run compile",
+    "vscode:prepublish": "npm run build",
     "compile": "tsc -p ./",
     "compile:watch": "tsc -watch -p ./",
-    "pretest": "npm run compile",
+    "copy-assets": "xcopy /E /I /Y \"src\\webview\\web-frontend\" \"out\\webview\\web-frontend\"",
+    "pretest": "npm run build",
     "lint": "eslint src --ext ts",
     "clean": "rimraf out",
-    "build": "npm run clean && npm run compile",
+    "build": "npm run clean && npm run compile && npm run copy-assets",
     "package": "npm run build && vsce package"
   },
   "devDependencies": {
@@ -126,6 +128,7 @@
   "dependencies": {
     "@types/uuid": "^10.0.0",
     "@types/ws": "^8.18.1",
+    "is-electron": "^2.2.2",
     "uuid": "^11.1.0",
     "ws": "^8.18.3"
   }

@@ -55,6 +55,8 @@ export class ConfigurationManager {
         // Set WebSocket port default (HTTP port + 1)
         if (rawConfig.websocketPort !== undefined) {
             config.websocketPort = rawConfig.websocketPort;
+        } else {
+            config.websocketPort = config.httpPort + 1;
         }
 
         // Validate configuration

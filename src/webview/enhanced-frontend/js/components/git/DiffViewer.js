@@ -103,7 +103,7 @@ export class DiffViewer extends Component {
         // View mode controls
         this.addEventListener(this.unifiedViewBtn, 'click', () => this.setViewMode('unified'));
         this.addEventListener(this.splitViewBtn, 'click', () => this.setViewMode('split'));
-        
+
         // Options
         this.addEventListener(this.whitespaceBtn, 'click', this.toggleWhitespace);
         this.addEventListener(this.contextSelect, 'change', this.handleContextChange);
@@ -112,7 +112,7 @@ export class DiffViewer extends Component {
     updateDiff(diffData, gitStatus) {
         this.currentDiff = diffData || [];
         this.gitStatus = gitStatus || this.gitStatus;
-        
+
         this.renderFileList();
         this.renderDiffStats();
         this.renderDiffContent();
@@ -132,7 +132,7 @@ export class DiffViewer extends Component {
         // Remove duplicates, preferring staged over unstaged
         const uniqueFiles = [];
         const seenFiles = new Set();
-        
+
         for (const file of allFiles) {
             if (!seenFiles.has(file.path)) {
                 uniqueFiles.push(file);
@@ -261,7 +261,7 @@ export class DiffViewer extends Component {
         }
 
         let content = '';
-        
+
         if (this.selectedFile) {
             // Show diff for selected file
             const fileDiff = this.currentDiff.find(diff => diff.file === this.selectedFile.path);
@@ -279,7 +279,7 @@ export class DiffViewer extends Component {
     renderFileDiff(fileDiff) {
         const fileName = this.getFileName(fileDiff.file);
         const fileExtension = this.getFileExtension(fileDiff.file);
-        
+
         return `
             <div class="file-diff" data-file="${fileDiff.file}">
                 <div class="file-diff-header">
@@ -313,12 +313,12 @@ export class DiffViewer extends Component {
 
         if (this.viewMode === 'unified') {
             html += '<div class="diff-unified">';
-            
+
             lines.forEach(line => {
                 const lineType = this.getDiffLineType(line);
                 const lineContent = this.escapeHtml(line.substring(1)); // Remove +/- prefix
                 const highlightedContent = this.highlightSyntax(lineContent, fileExtension);
-                
+
                 html += `
                     <div class="diff-line ${lineType}" data-line="${lineNumber}">
                         <div class="line-numbers">
@@ -331,12 +331,12 @@ export class DiffViewer extends Component {
                         </div>
                     </div>
                 `;
-                
+
                 if (lineType !== 'added') oldLineNumber++;
                 if (lineType !== 'removed') newLineNumber++;
                 lineNumber++;
             });
-            
+
             html += '</div>';
         } else {
             // Split view implementation
@@ -350,13 +350,13 @@ export class DiffViewer extends Component {
         let html = '<div class="diff-split">';
         html += '<div class="diff-split-old"><div class="split-header">Before</div>';
         html += '<div class="diff-split-new"><div class="split-header">After</div>';
-        
+
         // Split view is more complex - simplified implementation
         lines.forEach(line => {
             const lineType = this.getDiffLineType(line);
             const lineContent = this.escapeHtml(line.substring(1));
             const highlightedContent = this.highlightSyntax(lineContent, fileExtension);
-            
+
             if (lineType === 'removed') {
                 html += `<div class="diff-line removed">${highlightedContent}</div>`;
             } else if (lineType === 'added') {
@@ -365,7 +365,7 @@ export class DiffViewer extends Component {
                 html += `<div class="diff-line context">${highlightedContent}</div>`;
             }
         });
-        
+
         html += '</div></div>';
         return html;
     }
@@ -391,7 +391,7 @@ export class DiffViewer extends Component {
         };
 
         let highlighted = this.escapeHtml(content);
-        
+
         if (keywords[fileExtension]) {
             keywords[fileExtension].forEach(keyword => {
                 const regex = new RegExp(`\\b${keyword}\\b`, 'g');
@@ -401,7 +401,7 @@ export class DiffViewer extends Component {
 
         // Highlight strings
         highlighted = highlighted.replace(/(["'])((?:\\.|(?!\1)[^\\])*?)\1/g, '<span class="syntax-string">$1$2$1</span>');
-        
+
         // Highlight comments
         if (['js', 'ts', 'java', 'css'].includes(fileExtension)) {
             highlighted = highlighted.replace(/\/\*[\s\S]*?\*\//g, '<span class="syntax-comment">$&</span>');
@@ -416,11 +416,11 @@ export class DiffViewer extends Component {
     // Event Handlers
     setViewMode(mode) {
         this.viewMode = mode;
-        
+
         // Update button states
         this.unifiedViewBtn.classList.toggle('active', mode === 'unified');
         this.splitViewBtn.classList.toggle('active', mode === 'split');
-        
+
         // Re-render diff content
         this.renderDiffContent();
     }
@@ -428,14 +428,14 @@ export class DiffViewer extends Component {
     toggleWhitespace() {
         this.showWhitespace = !this.showWhitespace;
         this.whitespaceBtn.classList.toggle('active', this.showWhitespace);
-        
+
         // Re-render diff content with whitespace visibility
         this.renderDiffContent();
     }
 
     handleContextChange() {
         this.contextLines = parseInt(this.contextSelect.value);
-        
+
         // Request new diff with updated context
         if (this.selectedFile) {
             this.loadFileDiff(this.selectedFile.path);
@@ -463,7 +463,7 @@ export class DiffViewer extends Component {
 
     getFileIcon(filePath) {
         const extension = this.getFileExtension(filePath);
-        
+
         const iconMap = {
             'js': '📜', 'ts': '📘', 'jsx': '⚛️', 'tsx': '⚛️',
             'html': '🌐', 'css': '🎨', 'scss': '🎨', 'sass': '🎨',

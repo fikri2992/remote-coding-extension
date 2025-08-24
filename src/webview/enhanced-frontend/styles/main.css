@@ -70,6 +70,11 @@ html, body {
     display: flex;
     width: 100%;
     height: 100%;
+    position: relative;
+}
+
+.app-shell.mobile {
+    /* Mobile-specific adjustments */
 }
 
 /* Sidebar */
@@ -179,6 +184,35 @@ html, body {
     display: none;
 }
 
+.nav-item-shortcut {
+    font-size: 10px;
+    color: var(--vscode-descriptionForeground);
+    margin-left: auto;
+    opacity: 0.7;
+}
+
+.sidebar.collapsed .nav-item-shortcut {
+    display: none;
+}
+
+.sidebar-footer {
+    padding: 12px 16px;
+    border-top: 1px solid var(--vscode-sideBar-border);
+    margin-top: auto;
+}
+
+.connection-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--vscode-descriptionForeground);
+}
+
+.sidebar.collapsed .connection-status .status-text {
+    display: none;
+}
+
 /* Main Content Area */
 .main-content {
     flex: 1;
@@ -225,6 +259,7 @@ html, body {
         z-index: 100;
         transform: translateX(-100%);
         transition: transform 0.2s ease-out;
+        box-shadow: 2px 0 8px rgba(0, 0, 0, 0.15);
     }
     
     .sidebar.open {
@@ -249,10 +284,58 @@ html, body {
         background: rgba(0, 0, 0, 0.5);
         z-index: 99;
         display: none;
+        backdrop-filter: blur(2px);
     }
     
     .mobile-overlay.visible {
         display: block;
+    }
+    
+    /* Mobile navigation enhancements */
+    .content-header {
+        padding-left: 48px; /* Space for mobile menu button */
+    }
+    
+    .mobile-menu-button {
+        position: absolute;
+        left: 12px;
+        top: 50%;
+        transform: translateY(-50%);
+        background: none;
+        border: none;
+        color: var(--vscode-icon-foreground);
+        cursor: pointer;
+        padding: 8px;
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+    }
+    
+    .mobile-menu-button:hover {
+        background: var(--vscode-toolbar-hoverBackground);
+    }
+}
+
+@media (max-width: 480px) {
+    .sidebar {
+        width: 280px;
+        min-width: 280px;
+    }
+    
+    .sidebar.collapsed {
+        width: 280px;
+        min-width: 280px;
+    }
+    
+    .content-header {
+        padding: 8px 12px 8px 48px;
+    }
+    
+    .content-title {
+        font-size: 14px;
     }
 }
 

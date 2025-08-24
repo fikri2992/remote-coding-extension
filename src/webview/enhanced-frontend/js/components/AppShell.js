@@ -47,7 +47,7 @@ export class AppShell extends Component {
 
     render() {
         this.container.innerHTML = `
-            <div class="app-shell">
+            <div class="app-shell" id="appShell">
                 <div class="sidebar-container" id="sidebarContainer">
                     <!-- Sidebar will be rendered here -->
                 </div>
@@ -59,6 +59,7 @@ export class AppShell extends Component {
         `;
         
         // Get references to containers
+        this.appShellElement = this.container.querySelector('#appShell');
         this.sidebarContainer = this.container.querySelector('#sidebarContainer');
         this.mainContentContainer = this.container.querySelector('#mainContentContainer');
         this.mobileOverlay = this.container.querySelector('#mobileOverlay');
@@ -84,6 +85,11 @@ export class AppShell extends Component {
         });
         
         await this.mainContent.initialize();
+        
+        // Listen for mobile menu toggle events
+        this.mainContentContainer.addEventListener('mobile-menu-toggle', () => {
+            this.handleSidebarToggle();
+        });
     }
 
     setupResponsive() {
@@ -112,10 +118,8 @@ export class AppShell extends Component {
     }
 
     updateResponsiveState() {
-        const appShell = this.container.querySelector('.app-shell');
-        
         if (this.isMobile) {
-            appShell.classList.add('mobile');
+            this.appShellElement.classList.add('mobile');
             // On mobile, sidebar is hidden by default
             if (this.sidebarOpen) {
                 this.showMobileSidebar();
@@ -123,7 +127,7 @@ export class AppShell extends Component {
                 this.hideMobileSidebar();
             }
         } else {
-            appShell.classList.remove('mobile');
+            this.appShellElement.classList.remove('mobile');
             this.hideMobileSidebar();
             
             // Restore desktop sidebar state
@@ -133,6 +137,12 @@ export class AppShell extends Component {
                 this.sidebar.expand();
             }
         }
+        
+        // Update state manager with responsive state
+        this.stateManager.updateNavigation({
+            isMobile: this.isMobile,
+            sidebarOpen: this.sidebarOpen
+        });
     }
 
     subscribeToStateChanges() {

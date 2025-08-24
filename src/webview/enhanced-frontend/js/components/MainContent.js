@@ -27,6 +27,9 @@ export class MainContent extends Component {
         
         this.element.innerHTML = `
             <div class="content-header">
+                <button class="mobile-menu-button" id="mobileMenuButton" title="Toggle Menu">
+                    <span class="icon">☰</span>
+                </button>
                 <div class="content-title" id="contentTitle">Prompt</div>
                 <div class="content-actions" id="contentActions">
                     <!-- Section-specific actions will be added here -->
@@ -40,9 +43,13 @@ export class MainContent extends Component {
         this.container.appendChild(this.element);
         
         // Get references
+        this.mobileMenuButton = this.querySelector('#mobileMenuButton');
         this.titleElement = this.querySelector('#contentTitle');
         this.actionsElement = this.querySelector('#contentActions');
         this.bodyElement = this.querySelector('#contentBody');
+        
+        // Set up mobile menu button
+        this.setupMobileMenuButton();
     }
 
     async initializeSections() {
@@ -71,6 +78,17 @@ export class MainContent extends Component {
         
         // Show initial section
         this.showSection(this.currentSection);
+    }
+
+    setupMobileMenuButton() {
+        if (this.mobileMenuButton) {
+            this.addEventListener(this.mobileMenuButton, 'click', this.handleMobileMenuClick);
+        }
+    }
+
+    handleMobileMenuClick() {
+        // Emit event to parent AppShell to toggle sidebar
+        this.emit('mobile-menu-toggle');
     }
 
     showSection(sectionId) {

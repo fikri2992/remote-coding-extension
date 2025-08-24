@@ -10,16 +10,41 @@ export class Sidebar extends Component {
         
         this.onToggle = options.onToggle;
         this.onSectionChange = options.onSectionChange;
+        this.stateManager = options.stateManager;
         
         this.collapsed = false;
         this.activeSection = 'prompt';
         
         // Navigation items
         this.navItems = [
-            { id: 'prompt', label: 'Prompt', icon: '💬', description: 'Chat interface' },
-            { id: 'git', label: 'Git', icon: '🔀', description: 'Git integration' },
-            { id: 'files', label: 'Files', icon: '📁', description: 'File manager' },
-            { id: 'info', label: 'Info', icon: 'ℹ️', description: 'System information' }
+            { 
+                id: 'prompt', 
+                label: 'Prompt', 
+                icon: '💬', 
+                description: 'Chat interface for sending prompts to VS Code',
+                shortcut: 'Ctrl+K'
+            },
+            { 
+                id: 'git', 
+                label: 'Git', 
+                icon: '🔀', 
+                description: 'Git integration with branch info and commit history',
+                shortcut: 'Ctrl+G'
+            },
+            { 
+                id: 'files', 
+                label: 'Files', 
+                icon: '📁', 
+                description: 'File manager with workspace navigation',
+                shortcut: 'Ctrl+E'
+            },
+            { 
+                id: 'info', 
+                label: 'Info', 
+                icon: 'ℹ️', 
+                description: 'System information and connection status',
+                shortcut: 'Ctrl+I'
+            }
         ];
     }
 
@@ -27,6 +52,43 @@ export class Sidebar extends Component {
         await super.initialize();
         this.render();
         this.setupEventListeners();
+        this.subscribeToStateChanges();
+    }
+
+    subscribeToStateChanges() {
+        if (this.stateManager) {
+            // Subscribe to connection state changes
+            this.stateManager.subscribe('connection', (connectionState) => {
+                this.updateConnectionStatus(connectionState);
+            });
+        }
+    }
+
+    updateConnectionStatus(connectionState) {
+        const statusDot = this.querySelector('#statusDot');
+        const statusText = this.querySelector('#statusText');
+        
+        if (statusDot && statusText) {
+            // Remove all status classes
+            statusDot.classList.remove('connected', 'connecting', 'disconnected');
+            
+            // Add current status class
+            statusDot.classList.add(connectionState.status);
+            
+            // Update status text
+            switch (connectionState.status) {
+                case 'connected':
+                    statusText.textContent = 'Connected';
+                    break;
+                case 'connecting':
+                    statusText.textContent = 'Connecting...';
+                    break;
+                case 'disconnected':
+                default:
+                    statusText.textContent = 'Disconnected';
+                    break;
+            }
+        }
     }
 
     render() {
@@ -35,7 +97,7 @@ export class Sidebar extends Component {
         this.element.innerHTML = `
             <div class="sidebar-header">
                 <div class="sidebar-title">Enhanced UI</div>
-                <button class="sidebar-toggle" title="Toggle Sidebar">
+                <button class="sidebar-toggle" title="Toggle Sidebar (Ctrl+B)">
                     <span class="icon">☰</span>
                 </button>
             </div>
@@ -43,12 +105,19 @@ export class Sidebar extends Component {
                 ${this.navItems.map(item => `
                     <button class="nav-item ${item.id === this.activeSection ? 'active' : ''}" 
                             data-section="${item.id}" 
-                            title="${item.description}">
+                            title="${item.description}${item.shortcut ? ' (' + item.shortcut + ')' : ''}">
                         <span class="nav-item-icon">${item.icon}</span>
                         <span class="nav-item-text">${item.label}</span>
+                        ${item.shortcut ? `<span class="nav-item-shortcut">${item.shortcut}</span>` : ''}
                     </button>
                 `).join('')}
             </nav>
+            <div class="sidebar-footer">
+                <div class="connection-status" id="connectionStatus">
+                    <span class="status-dot disconnected" id="statusDot"></span>
+                    <span class="status-text" id="statusText">Disconnected</span>
+                </div>
+            </div>
         `;
         
         this.container.appendChild(this.element);

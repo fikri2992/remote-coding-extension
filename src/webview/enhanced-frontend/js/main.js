@@ -329,6 +329,18 @@ class EnhancedWebApp {
             // Cmd/Ctrl + Shift + P - Show command palette
             event.preventDefault();
             this.appShell?.showCommandPalette();
+        } else if (cmdKey && key === 'g') {
+            // Cmd/Ctrl + G - Switch to Git section
+            event.preventDefault();
+            this.stateManager?.updateNavigation({ activeSection: 'git' });
+        } else if (cmdKey && key === 'e') {
+            // Cmd/Ctrl + E - Switch to Files section
+            event.preventDefault();
+            this.stateManager?.updateNavigation({ activeSection: 'files' });
+        } else if (cmdKey && key === 'i') {
+            // Cmd/Ctrl + I - Switch to Info section
+            event.preventDefault();
+            this.stateManager?.updateNavigation({ activeSection: 'info' });
         } else if (key === 'Escape') {
             // Escape - Close modals/overlays
             event.preventDefault();

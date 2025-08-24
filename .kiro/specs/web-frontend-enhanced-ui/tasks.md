@@ -68,6 +68,7 @@
 
 
 
+
   - Build PromptManager component for history and categorization
   - Implement .remoterc folder creation and file structure management
   - Create prompt file saving with timestamp-based naming convention
@@ -77,7 +78,10 @@
   - _Git: `feat: implement prompt management with .remoterc persistence`_
   - _Description: Create comprehensive prompt management system with automatic saving to .remoterc folder, categorization, search functionality, and template system for prompt reuse and organization._
 
-- [ ] 6. Develop git integration dashboard
+- [-] 6. Develop git integration dashboard
+
+
+
   - Create GitDashboard component with branch and status display
   - Implement BranchInfo component showing current branch and remote status
   - Build CommitHistory component with card-based commit visualization

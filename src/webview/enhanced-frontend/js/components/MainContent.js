@@ -123,6 +123,12 @@ export class MainContent extends Component {
             this.fileManager = null;
         }
 
+        if (this.infoPanel) {
+            this.removeChildComponent(this.infoPanel);
+            this.infoPanel.destroy();
+            this.infoPanel = null;
+        }
+
         // Clear and render content
         this.bodyElement.innerHTML = '';
         await section.render();
@@ -234,36 +240,38 @@ export class MainContent extends Component {
         });
     }
 
-    renderInfoSection() {
-        this.bodyElement.innerHTML = `
-            <div class="info-section">
-                <div class="info-placeholder">
-                    <h3>System Information</h3>
-                    <p>Server status, connection info, and system metrics will be displayed here.</p>
-                    <div class="info-cards">
-                        <div class="card">
-                            <div class="card-header">
-                                <div class="card-title">Connection Status</div>
-                            </div>
-                            <div class="card-body">
-                                <div class="status-indicator">
-                                    <span class="status-dot connected"></span>
-                                    <span>Connected</span>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="card">
-                            <div class="card-header">
-                                <div class="card-title">Server Info</div>
-                            </div>
-                            <div class="card-body">
-                                <p>Server information will be displayed here</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
+    async renderInfoSection() {
+        // Clear existing content
+        this.bodyElement.innerHTML = '';
+
+        // Import and initialize InfoPanel component
+        const { InfoPanel } = await import('./InfoPanel.js');
+        
+        // Create info panel container
+        const infoPanelContainer = this.createElement('div', {}, ['info-section']);
+        this.bodyElement.appendChild(infoPanelContainer);
+
+        // Initialize InfoPanel component
+        this.infoPanel = new InfoPanel({
+            container: infoPanelContainer,
+            stateManager: this.stateManager,
+            webSocketClient: this.webSocketClient,
+            notificationService: this.notificationService
+        });
+
+        await this.infoPanel.initialize();
+        this.addChildComponent(this.infoPanel);
+
+        // Listen for info panel events
+        this.addEventListener(infoPanelContainer, 'error-logged', (event) => {
+            const { error } = event.detail;
+            console.log('Error logged:', error);
+        });
+
+        this.addEventListener(infoPanelContainer, 'metrics-updated', (event) => {
+            const { metrics } = event.detail;
+            console.log('Metrics updated:', metrics);
+        });
     }
 
     focusCommandInput() {

@@ -22,7 +22,7 @@ class EnhancedWebApp {
         this.stateManager = new StateManager();
         this.themeManager = new ThemeManager();
         this.notificationService = new NotificationService();
-        this.webSocketClient = new WebSocketClient(this.stateManager);
+        this.webSocketClient = new WebSocketClient(this.stateManager, this.notificationService);
         
         // Main app shell component
         this.appShell = null;

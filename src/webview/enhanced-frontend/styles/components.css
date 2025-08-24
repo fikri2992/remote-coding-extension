@@ -526,6 +526,312 @@ holder Content Styles */
 }
 
 /* Chat Interface Styles */
+.chat-interface {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background: var(--vscode-editor-background);
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 6px;
+}
+
+.chat-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--vscode-panel-border);
+    background: var(--vscode-editorGroupHeader-tabsBackground);
+}
+
+.chat-title {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.chat-title h3 {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--vscode-foreground);
+}
+
+.chat-actions {
+    display: flex;
+    gap: 4px;
+}
+
+.chat-body {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+}
+
+/* Message History Styles */
+.message-history {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.message-history-viewport {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+}
+
+.message-history-content {
+    position: relative;
+}
+
+.message-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.message-spacer {
+    flex-shrink: 0;
+}
+
+/* Message Styles */
+.message {
+    display: flex;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    line-height: 1.4;
+    max-width: 85%;
+    word-wrap: break-word;
+}
+
+.message-user {
+    background: var(--vscode-input-background);
+    border: 1px solid var(--vscode-input-border);
+    margin-left: auto;
+    margin-right: 0;
+}
+
+.message-system {
+    background: var(--vscode-editor-background);
+    border: 1px solid var(--vscode-panel-border);
+    margin-left: 0;
+    margin-right: auto;
+}
+
+.message-error {
+    background: var(--vscode-inputValidation-errorBackground);
+    border: 1px solid var(--vscode-inputValidation-errorBorder);
+    color: var(--vscode-inputValidation-errorForeground);
+    margin-left: 0;
+    margin-right: auto;
+}
+
+.message-avatar {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 600;
+}
+
+.message-avatar.user {
+    background: var(--vscode-badge-background);
+    color: var(--vscode-badge-foreground);
+}
+
+.message-avatar.system {
+    background: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+}
+
+.message-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.message-text {
+    margin-bottom: 4px;
+}
+
+.message-timestamp {
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground);
+    opacity: 0.8;
+}
+
+/* Typing Indicator */
+.typing-indicator {
+    padding: 8px;
+}
+
+.typing-indicator.hidden {
+    display: none;
+}
+
+.message.typing {
+    opacity: 0.7;
+}
+
+.typing-dots {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+
+.typing-dots span {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--vscode-descriptionForeground);
+    animation: typing-pulse 1.4s infinite ease-in-out;
+}
+
+.typing-dots span:nth-child(1) {
+    animation-delay: -0.32s;
+}
+
+.typing-dots span:nth-child(2) {
+    animation-delay: -0.16s;
+}
+
+@keyframes typing-pulse {
+    0%, 80%, 100% {
+        opacity: 0.3;
+        transform: scale(0.8);
+    }
+    40% {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* Message Input Styles */
+.message-input {
+    border-top: 1px solid var(--vscode-panel-border);
+    background: var(--vscode-editor-background);
+}
+
+.input-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--vscode-panel-border);
+    background: var(--vscode-editorGroupHeader-tabsBackground);
+}
+
+.format-buttons {
+    display: flex;
+    gap: 4px;
+}
+
+.format-btn {
+    min-width: 28px;
+    font-weight: 600;
+}
+
+.format-btn.active {
+    background: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+}
+
+.input-actions {
+    display: flex;
+    gap: 4px;
+}
+
+.input-container {
+    padding: 12px;
+}
+
+.input-wrapper {
+    position: relative;
+    margin-bottom: 8px;
+}
+
+.message-textarea {
+    width: 100%;
+    resize: vertical;
+    min-height: 60px;
+    max-height: 200px;
+    font-family: var(--vscode-editor-font-family, 'Consolas', 'Monaco', monospace);
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+.input-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+    padding: 6px 8px;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    font-family: var(--vscode-editor-font-family, 'Consolas', 'Monaco', monospace);
+    font-size: 13px;
+    line-height: 1.4;
+    white-space: pre-wrap;
+    overflow: hidden;
+}
+
+.input-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.input-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 12px;
+    color: var(--vscode-descriptionForeground);
+}
+
+.character-count.warning {
+    color: var(--vscode-testing-iconQueued);
+    font-weight: 500;
+}
+
+.input-status {
+    font-size: 12px;
+}
+
+.input-status.error {
+    color: var(--vscode-inputValidation-errorForeground);
+}
+
+.input-status.warning {
+    color: var(--vscode-testing-iconQueued);
+}
+
+.input-status.info {
+    color: var(--vscode-descriptionForeground);
+}
+
+.input-buttons {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.message-input.focused {
+    border-color: var(--vscode-focusBorder);
+}
+
+/* Legacy Chat Styles for Backward Compatibility */
 .prompt-section {
     display: flex;
     flex-direction: column;

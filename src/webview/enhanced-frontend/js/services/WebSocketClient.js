@@ -1,11 +1,12 @@
 /**
- * WebSocket Client Service
- * Enhanced WebSocket client with reconnection, message queuing, and protocol handling
+ * Enhanced WebSocket Client Service
+ * Advanced WebSocket client with enhanced messaging protocol, offline support, and real-time features
  */
 
 export class WebSocketClient {
-    constructor(stateManager) {
+    constructor(stateManager, notificationService) {
         this.stateManager = stateManager;
+        this.notificationService = notificationService;
         this.websocket = null;
         
         // Connection state
@@ -15,22 +16,55 @@ export class WebSocketClient {
         this.reconnectDelay = 1000;
         this.maxReconnectDelay = 30000;
         this.backoffMultiplier = 1.5;
+        this.connectionStartTime = null;
         
-        // Message handling
+        // Enhanced message handling
         this.messageQueue = [];
+        this.offlineMessageQueue = [];
         this.pendingMessages = new Map();
         this.messageHandlers = new Map();
+        this.messageCallbacks = new Map();
         
-        // Heartbeat
+        // Typing indicators
+        this.typingIndicators = new Map();
+        this.typingTimeout = null;
+        this.typingDebounceMs = 1000;
+        
+        // Message status tracking
+        this.messageStatus = new Map(); // Track message delivery status
+        this.messageRetries = new Map(); // Track retry attempts
+        this.maxMessageRetries = 3;
+        
+        // Heartbeat and health monitoring
         this.heartbeatInterval = null;
         this.heartbeatTimeout = null;
         this.heartbeatIntervalMs = 30000; // 30 seconds
         this.heartbeatTimeoutMs = 10000; // 10 seconds
         this.lastPongTime = null;
+        this.connectionHealthScore = 100;
         
-        // Connection info
+        // Connection info and metrics
         this.connectionId = null;
         this.serverInfo = {};
+        this.connectionMetrics = {
+            messagesReceived: 0,
+            messagesSent: 0,
+            reconnections: 0,
+            averageLatency: 0,
+            lastLatency: 0
+        };
+        
+        // Offline mode support
+        this.isOfflineMode = false;
+        this.offlineModeEnabled = true;
+        this.maxOfflineMessages = 100;
+        
+        // Enhanced protocol support
+        this.protocolVersion = '2.0';
+        this.supportedMessageTypes = [
+            'command', 'response', 'broadcast', 'status', 'error',
+            'prompt', 'git', 'fileSystem', 'config', 'typing', 'ping', 'pong'
+        ];
         
         // Bind methods
         this.handleOpen = this.handleOpen.bind(this);
@@ -38,8 +72,11 @@ export class WebSocketClient {
         this.handleClose = this.handleClose.bind(this);
         this.handleError = this.handleError.bind(this);
         
-        // Set up message handlers
-        this.setupMessageHandlers();
+        // Set up enhanced message handlers
+        this.setupEnhancedMessageHandlers();
+        
+        // Set up page visibility handling for offline mode
+        this.setupPageVisibilityHandling();
     }
 
     /**
@@ -185,28 +222,47 @@ export class WebSocketClient {
      * Handle WebSocket open event
      */
     handleOpen() {
-        console.log('✅ WebSocket connected');
+        console.log('✅ Enhanced WebSocket connected');
         
         this.isConnected = true;
+        this.isOfflineMode = false;
         this.reconnectAttempts = 0;
+        this.connectionStartTime = Date.now();
+        this.connectionMetrics.reconnections = this.reconnectAttempts;
         
-        // Update connection state
+        // Update connection state with enhanced info
         this.stateManager.updateConnection({
             status: 'connected',
             lastConnected: new Date(),
-            reconnectAttempts: 0
+            reconnectAttempts: 0,
+            isOfflineMode: false,
+            protocolVersion: this.protocolVersion,
+            connectionHealth: this.connectionHealthScore
         });
         
-        // Start heartbeat
+        // Show connection success notification
+        if (this.notificationService) {
+            this.notificationService.show({
+                type: 'success',
+                message: 'Connected to server',
+                duration: 3000
+            });
+        }
+        
+        // Start enhanced heartbeat
         this.startHeartbeat();
         
-        // Process queued messages
-        this.processMessageQueue();
+        // Process all queued messages (both online and offline)
+        this.processAllQueuedMessages();
+        
+        // Send enhanced handshake with protocol version
+        this.sendHandshake();
         
         // Request initial server status
         this.sendMessage({
             type: 'status',
-            id: this.generateMessageId()
+            id: this.generateMessageId(),
+            protocolVersion: this.protocolVersion
         });
     }
 
@@ -246,7 +302,7 @@ export class WebSocketClient {
      * Handle WebSocket close event
      */
     handleClose(event) {
-        console.log('🔌 WebSocket closed:', event.code, event.reason);
+        console.log('🔌 Enhanced WebSocket closed:', event.code, event.reason);
         
         this.isConnected = false;
         this.connectionId = null;
@@ -254,11 +310,28 @@ export class WebSocketClient {
         // Stop heartbeat
         this.stopHeartbeat();
         
-        // Update connection state
+        // Enable offline mode if supported
+        if (this.offlineModeEnabled && !event.wasClean) {
+            this.enableOfflineMode();
+        }
+        
+        // Update connection state with enhanced info
         this.stateManager.updateConnection({
             status: 'disconnected',
-            lastConnected: new Date()
+            lastConnected: new Date(),
+            isOfflineMode: this.isOfflineMode,
+            closeCode: event.code,
+            closeReason: this.getCloseReason(event.code)
         });
+        
+        // Show disconnection notification
+        if (this.notificationService && !event.wasClean) {
+            this.notificationService.show({
+                type: 'warning',
+                message: `Connection lost: ${this.getCloseReason(event.code)}`,
+                duration: 5000
+            });
+        }
         
         // Schedule reconnection if not a clean close
         if (!event.wasClean && this.shouldReconnect(event.code)) {
@@ -412,7 +485,7 @@ export class WebSocketClient {
     }
 
     /**
-     * Handle pong message
+     * Handle pong message with enhanced metrics
      */
     handlePong(message) {
         this.lastPongTime = Date.now();
@@ -423,36 +496,148 @@ export class WebSocketClient {
             this.heartbeatTimeout = null;
         }
         
-        // Calculate latency
+        // Calculate latency and update metrics
         if (message.timestamp) {
             const latency = this.lastPongTime - message.timestamp;
-            this.stateManager.updateConnection({ latency });
+            this.connectionMetrics.lastLatency = latency;
+            
+            // Update average latency
+            if (this.connectionMetrics.averageLatency === 0) {
+                this.connectionMetrics.averageLatency = latency;
+            } else {
+                this.connectionMetrics.averageLatency = 
+                    (this.connectionMetrics.averageLatency * 0.8) + (latency * 0.2);
+            }
+            
+            // Update connection health based on latency
+            if (latency < 100) {
+                this.connectionHealthScore = Math.min(100, this.connectionHealthScore + 1);
+            } else if (latency > 1000) {
+                this.connectionHealthScore = Math.max(0, this.connectionHealthScore - 5);
+            }
+            
+            this.stateManager.updateConnection({ 
+                latency,
+                averageLatency: Math.round(this.connectionMetrics.averageLatency),
+                connectionHealth: this.connectionHealthScore
+            });
+        }
+    }
+
+    // Prompt Handling Helper Methods
+
+    /**
+     * Handle prompt save operation
+     */
+    handlePromptSave(content, metadata) {
+        this.stateManager.addPromptToHistory({
+            content,
+            category: metadata?.category,
+            tags: metadata?.tags || [],
+            filePath: metadata?.filePath,
+            timestamp: new Date(metadata?.timestamp || Date.now())
+        });
+    }
+
+    /**
+     * Handle prompt history operation
+     */
+    handlePromptHistory(content) {
+        if (Array.isArray(content)) {
+            this.stateManager.updatePrompts({
+                history: content.map(prompt => ({
+                    ...prompt,
+                    timestamp: new Date(prompt.timestamp)
+                }))
+            });
         }
     }
 
     /**
-     * Set up message handlers
+     * Handle prompt search operation
      */
-    setupMessageHandlers() {
-        // Response handler
+    handlePromptSearch(content) {
+        this.stateManager.updatePrompts({
+            searchResults: content
+        });
+    }
+
+    /**
+     * Handle prompt category operation
+     */
+    handlePromptCategory(content) {
+        this.stateManager.updatePrompts({
+            categories: content
+        });
+    }
+
+    /**
+     * Handle file system change notifications
+     */
+    handleFileSystemChange(changeData) {
+        if (changeData.type === 'file' && changeData.event === 'change') {
+            // File was modified
+            this.stateManager.updateFileSystem({
+                lastModified: {
+                    path: changeData.path,
+                    timestamp: new Date()
+                }
+            });
+        } else if (changeData.type === 'directory') {
+            // Directory structure changed, request updated tree
+            this.sendFileSystemCommand('tree', changeData.path);
+        }
+    }
+
+    /**
+     * Set up enhanced message handlers for new protocol
+     */
+    setupEnhancedMessageHandlers() {
+        // Legacy handlers
         this.messageHandlers.set('response', (message) => {
-            // Handle command responses, etc.
-            console.log('📥 Command response:', message);
+            this.handleCommandResponse(message);
         });
         
-        // Broadcast handler
         this.messageHandlers.set('broadcast', (message) => {
             this.handleBroadcast(message);
         });
         
-        // Status handler
         this.messageHandlers.set('status', (message) => {
             this.handleStatusUpdate(message);
         });
         
-        // Error handler
         this.messageHandlers.set('error', (message) => {
-            console.error('📥 Server error:', message);
+            this.handleServerError(message);
+        });
+        
+        // Enhanced protocol handlers
+        this.messageHandlers.set('prompt', (message) => {
+            this.handlePromptMessage(message);
+        });
+        
+        this.messageHandlers.set('git', (message) => {
+            this.handleGitMessage(message);
+        });
+        
+        this.messageHandlers.set('fileSystem', (message) => {
+            this.handleFileSystemMessage(message);
+        });
+        
+        this.messageHandlers.set('config', (message) => {
+            this.handleConfigMessage(message);
+        });
+        
+        this.messageHandlers.set('typing', (message) => {
+            this.handleTypingIndicator(message);
+        });
+        
+        // Message status handlers
+        this.messageHandlers.set('messageStatus', (message) => {
+            this.handleMessageStatus(message);
+        });
+        
+        this.messageHandlers.set('ack', (message) => {
+            this.handleMessageAcknowledgment(message);
         });
     }
 
@@ -512,19 +697,569 @@ export class WebSocketClient {
         };
     }
 
+    // Enhanced Message Handlers
+
     /**
-     * Destroy the WebSocket client
+     * Handle prompt messages
+     */
+    handlePromptMessage(message) {
+        console.log('📥 Prompt message:', message);
+        
+        if (message.data) {
+            const { operation, content, metadata } = message.data;
+            
+            switch (operation) {
+                case 'save':
+                    this.handlePromptSave(content, metadata);
+                    break;
+                case 'history':
+                    this.handlePromptHistory(content);
+                    break;
+                case 'search':
+                    this.handlePromptSearch(content);
+                    break;
+                case 'category':
+                    this.handlePromptCategory(content);
+                    break;
+                default:
+                    console.warn('Unknown prompt operation:', operation);
+            }
+        }
+    }
+
+    /**
+     * Handle git messages
+     */
+    handleGitMessage(message) {
+        console.log('📥 Git message:', message);
+        
+        if (message.data) {
+            const { operation, result } = message.data;
+            
+            switch (operation) {
+                case 'status':
+                    this.stateManager.updateGit({ status: result });
+                    break;
+                case 'log':
+                    this.stateManager.updateGit({ recentCommits: result });
+                    break;
+                case 'diff':
+                    this.stateManager.updateGit({ currentDiff: result });
+                    break;
+                case 'branch':
+                    this.stateManager.updateGit({ 
+                        currentBranch: result.current,
+                        remoteStatus: result.remote 
+                    });
+                    break;
+                default:
+                    console.warn('Unknown git operation:', operation);
+            }
+        }
+    }
+
+    /**
+     * Handle file system messages
+     */
+    handleFileSystemMessage(message) {
+        console.log('📥 File system message:', message);
+        
+        if (message.data) {
+            const { operation, path, content } = message.data;
+            
+            switch (operation) {
+                case 'tree':
+                    this.stateManager.updateFileSystem({ rootNodes: content });
+                    break;
+                case 'open':
+                    // File opened in VS Code
+                    this.stateManager.updateFileSystem({ selectedFile: path });
+                    break;
+                case 'watch':
+                    // File system change notification
+                    this.handleFileSystemChange(content);
+                    break;
+                case 'search':
+                    this.stateManager.updateFileSystem({ filteredNodes: content });
+                    break;
+                default:
+                    console.warn('Unknown file system operation:', operation);
+            }
+        }
+    }
+
+    /**
+     * Handle config messages
+     */
+    handleConfigMessage(message) {
+        console.log('📥 Config message:', message);
+        
+        if (message.data) {
+            const { key, value, schema } = message.data;
+            
+            // Update preferences if it's a UI config
+            if (key.startsWith('ui.')) {
+                const prefKey = key.replace('ui.', '');
+                this.stateManager.updatePreferences({ [prefKey]: value });
+            }
+            
+            // Store server config
+            this.serverInfo.config = this.serverInfo.config || {};
+            this.serverInfo.config[key] = { value, schema };
+        }
+    }
+
+    /**
+     * Handle typing indicators
+     */
+    handleTypingIndicator(message) {
+        if (message.data) {
+            const { userId, isTyping, section } = message.data;
+            
+            if (isTyping) {
+                this.typingIndicators.set(userId, {
+                    section,
+                    timestamp: Date.now()
+                });
+            } else {
+                this.typingIndicators.delete(userId);
+            }
+            
+            // Update chat state with typing indicators
+            this.stateManager.updateChat({
+                typingUsers: Array.from(this.typingIndicators.keys())
+            });
+        }
+    }
+
+    /**
+     * Handle message status updates
+     */
+    handleMessageStatus(message) {
+        if (message.data && message.data.messageId) {
+            const { messageId, status, error } = message.data;
+            
+            this.messageStatus.set(messageId, { status, error, timestamp: Date.now() });
+            
+            // Update UI with message status
+            this.stateManager.updateChat({
+                messageStatuses: Object.fromEntries(this.messageStatus)
+            });
+        }
+    }
+
+    /**
+     * Handle message acknowledgments
+     */
+    handleMessageAcknowledgment(message) {
+        if (message.data && message.data.messageId) {
+            const { messageId } = message.data;
+            
+            // Remove from pending messages
+            this.pendingMessages.delete(messageId);
+            
+            // Update message status
+            this.messageStatus.set(messageId, { 
+                status: 'delivered', 
+                timestamp: Date.now() 
+            });
+        }
+    }
+
+    /**
+     * Handle command responses with enhanced error handling
+     */
+    handleCommandResponse(message) {
+        console.log('📥 Enhanced command response:', message);
+        
+        // Update message status
+        if (message.id) {
+            this.messageStatus.set(message.id, {
+                status: message.error ? 'error' : 'success',
+                error: message.error,
+                timestamp: Date.now()
+            });
+        }
+        
+        // Execute callback if registered
+        if (message.id && this.messageCallbacks.has(message.id)) {
+            const callback = this.messageCallbacks.get(message.id);
+            this.messageCallbacks.delete(message.id);
+            
+            try {
+                callback(message.error, message.data);
+            } catch (error) {
+                console.error('Error in message callback:', error);
+            }
+        }
+        
+        // Show notification for errors
+        if (message.error && this.notificationService) {
+            this.notificationService.show({
+                type: 'error',
+                message: `Command failed: ${message.error}`,
+                duration: 5000
+            });
+        }
+    }
+
+    /**
+     * Handle server errors with enhanced reporting
+     */
+    handleServerError(message) {
+        console.error('📥 Enhanced server error:', message);
+        
+        const errorMsg = message.error || message.data?.error || 'Unknown server error';
+        
+        // Show user-friendly error notification
+        if (this.notificationService) {
+            this.notificationService.show({
+                type: 'error',
+                message: errorMsg,
+                duration: 8000,
+                actions: message.data?.suggestedActions || []
+            });
+        }
+        
+        // Update connection health score
+        this.connectionHealthScore = Math.max(0, this.connectionHealthScore - 10);
+        this.stateManager.updateConnection({ 
+            connectionHealth: this.connectionHealthScore 
+        });
+    }
+
+    // Enhanced Messaging Methods
+
+    /**
+     * Send enhanced message with callback support
+     */
+    async sendEnhancedMessage(type, data, options = {}) {
+        const message = {
+            type,
+            id: this.generateMessageId(),
+            data,
+            timestamp: Date.now(),
+            protocolVersion: this.protocolVersion,
+            ...options
+        };
+        
+        // Register callback if provided
+        if (options.callback) {
+            this.messageCallbacks.set(message.id, options.callback);
+        }
+        
+        // Set message status to pending
+        this.messageStatus.set(message.id, {
+            status: 'pending',
+            timestamp: Date.now()
+        });
+        
+        const sent = await this.sendMessage(message);
+        
+        if (!sent) {
+            // Update status to failed
+            this.messageStatus.set(message.id, {
+                status: 'failed',
+                timestamp: Date.now()
+            });
+        }
+        
+        return sent;
+    }
+
+    /**
+     * Send prompt message
+     */
+    async sendPrompt(content, options = {}) {
+        return this.sendEnhancedMessage('prompt', {
+            operation: 'execute',
+            content,
+            category: options.category,
+            tags: options.tags || [],
+            saveToHistory: options.saveToHistory !== false
+        }, options);
+    }
+
+    /**
+     * Send git command
+     */
+    async sendGitCommand(operation, params = {}, options = {}) {
+        return this.sendEnhancedMessage('git', {
+            operation,
+            params
+        }, options);
+    }
+
+    /**
+     * Send file system command
+     */
+    async sendFileSystemCommand(operation, path, options = {}) {
+        return this.sendEnhancedMessage('fileSystem', {
+            operation,
+            path,
+            ...options
+        }, options);
+    }
+
+    /**
+     * Send typing indicator
+     */
+    sendTypingIndicator(isTyping, section = 'chat') {
+        // Debounce typing indicators
+        if (this.typingTimeout) {
+            clearTimeout(this.typingTimeout);
+        }
+        
+        this.sendMessage({
+            type: 'typing',
+            data: {
+                isTyping,
+                section,
+                timestamp: Date.now()
+            }
+        });
+        
+        // Auto-stop typing after debounce period
+        if (isTyping) {
+            this.typingTimeout = setTimeout(() => {
+                this.sendTypingIndicator(false, section);
+            }, this.typingDebounceMs);
+        }
+    }
+
+    // Offline Mode Support
+
+    /**
+     * Enable offline mode
+     */
+    enableOfflineMode() {
+        if (!this.offlineModeEnabled) return;
+        
+        console.log('📴 Enabling offline mode');
+        this.isOfflineMode = true;
+        
+        this.stateManager.updateConnection({
+            isOfflineMode: true,
+            status: 'offline'
+        });
+        
+        if (this.notificationService) {
+            this.notificationService.show({
+                type: 'info',
+                message: 'Working offline - messages will be queued',
+                duration: 5000
+            });
+        }
+    }
+
+    /**
+     * Disable offline mode
+     */
+    disableOfflineMode() {
+        console.log('🌐 Disabling offline mode');
+        this.isOfflineMode = false;
+        
+        this.stateManager.updateConnection({
+            isOfflineMode: false
+        });
+    }
+
+    /**
+     * Process all queued messages (online and offline)
+     */
+    processAllQueuedMessages() {
+        // Process regular message queue
+        this.processMessageQueue();
+        
+        // Process offline message queue
+        if (this.offlineMessageQueue.length > 0) {
+            console.log(`📤 Processing ${this.offlineMessageQueue.length} offline messages`);
+            
+            const offlineQueue = [...this.offlineMessageQueue];
+            this.offlineMessageQueue = [];
+            
+            offlineQueue.forEach(message => {
+                // Add offline indicator to message
+                message.wasOffline = true;
+                this.sendMessage(message);
+            });
+        }
+    }
+
+    /**
+     * Enhanced send message with offline support
+     */
+    async sendMessage(message) {
+        // Add message ID if not present
+        if (!message.id) {
+            message.id = this.generateMessageId();
+        }
+        
+        // Update metrics
+        this.connectionMetrics.messagesSent++;
+        
+        if (!this.isConnected || !this.websocket || this.websocket.readyState !== WebSocket.OPEN) {
+            // Handle offline mode
+            if (this.isOfflineMode && this.offlineModeEnabled) {
+                // Queue in offline queue with size limit
+                if (this.offlineMessageQueue.length < this.maxOfflineMessages) {
+                    this.offlineMessageQueue.push({
+                        ...message,
+                        queuedAt: Date.now()
+                    });
+                    console.log('📴 Message queued offline:', message.type);
+                } else {
+                    console.warn('📴 Offline queue full, dropping message:', message.type);
+                }
+            } else {
+                // Queue in regular queue for non-critical messages
+                if (message.type !== 'ping' && message.type !== 'typing') {
+                    this.messageQueue.push(message);
+                    console.log('📤 Message queued (not connected):', message.type);
+                }
+            }
+            return false;
+        }
+
+        try {
+            // Track pending message if it expects a response
+            if (message.type === 'command' || message.type === 'request' || 
+                message.type === 'prompt' || message.type === 'git' || 
+                message.type === 'fileSystem') {
+                this.pendingMessages.set(message.id, {
+                    message,
+                    timestamp: Date.now(),
+                    retries: 0
+                });
+            }
+
+            // Send message
+            this.websocket.send(JSON.stringify(message));
+            console.log('📤 Sent enhanced message:', message.type, message.id);
+
+            return true;
+        } catch (error) {
+            console.error('❌ Failed to send enhanced message:', error);
+
+            // Queue message for retry if it's not a ping or typing indicator
+            if (message.type !== 'ping' && message.type !== 'typing') {
+                this.messageQueue.push(message);
+            }
+
+            return false;
+        }
+    }
+
+    // Page Visibility Handling
+
+    /**
+     * Set up page visibility handling for offline mode
+     */
+    setupPageVisibilityHandling() {
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                // Page is hidden, pause heartbeat to save resources
+                this.pauseHeartbeat();
+            } else {
+                // Page is visible, resume heartbeat
+                this.resumeHeartbeat();
+                
+                // Check connection health
+                if (this.isConnected) {
+                    this.sendPing();
+                }
+            }
+        });
+    }
+
+    // Utility Methods
+
+    /**
+     * Send handshake with protocol version
+     */
+    sendHandshake() {
+        this.sendMessage({
+            type: 'handshake',
+            data: {
+                protocolVersion: this.protocolVersion,
+                clientCapabilities: {
+                    offlineMode: this.offlineModeEnabled,
+                    typingIndicators: true,
+                    messageStatus: true,
+                    enhancedProtocol: true
+                },
+                timestamp: Date.now()
+            }
+        });
+    }
+
+    /**
+     * Get close reason with enhanced descriptions
+     */
+    getCloseReason(code) {
+        const closeReasons = {
+            1000: 'Normal closure',
+            1001: 'Going away',
+            1002: 'Protocol error',
+            1003: 'Unsupported data',
+            1005: 'No status received',
+            1006: 'Abnormal closure',
+            1007: 'Invalid frame payload data',
+            1008: 'Policy violation',
+            1009: 'Message too big',
+            1010: 'Mandatory extension',
+            1011: 'Internal server error',
+            1012: 'Service restart',
+            1013: 'Try again later',
+            1014: 'Bad gateway',
+            1015: 'TLS handshake failure'
+        };
+        
+        return closeReasons[code] || `Unknown close code: ${code}`;
+    }
+
+    /**
+     * Get enhanced connection status
+     */
+    getEnhancedConnectionStatus() {
+        return {
+            isConnected: this.isConnected,
+            isOfflineMode: this.isOfflineMode,
+            reconnectAttempts: this.reconnectAttempts,
+            lastPongTime: this.lastPongTime,
+            queuedMessages: this.messageQueue.length,
+            offlineMessages: this.offlineMessageQueue.length,
+            pendingMessages: this.pendingMessages.size,
+            connectionHealth: this.connectionHealthScore,
+            metrics: this.connectionMetrics,
+            typingUsers: Array.from(this.typingIndicators.keys())
+        };
+    }
+
+    /**
+     * Destroy the enhanced WebSocket client
      */
     destroy() {
+        // Clear typing timeout
+        if (this.typingTimeout) {
+            clearTimeout(this.typingTimeout);
+        }
+        
         // Disconnect
         this.disconnect();
         
-        // Clear message queue and pending messages
+        // Clear all queues and maps
         this.messageQueue = [];
+        this.offlineMessageQueue = [];
         this.pendingMessages.clear();
         this.messageHandlers.clear();
+        this.messageCallbacks.clear();
+        this.messageStatus.clear();
+        this.messageRetries.clear();
+        this.typingIndicators.clear();
         
         // Clear references
         this.stateManager = null;
+        this.notificationService = null;
     }
 }

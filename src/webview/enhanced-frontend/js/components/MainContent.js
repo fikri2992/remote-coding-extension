@@ -7,13 +7,14 @@ import { Component } from './base/Component.js';
 export class MainContent extends Component {
     constructor(options) {
         super(options);
-        
+
         this.stateManager = options.stateManager;
         this.webSocketClient = options.webSocketClient;
         this.notificationService = options.notificationService;
-        
+
         this.currentSection = 'prompt';
         this.sections = new Map();
+        this.chatInterface = null;
     }
 
     async initialize() {
@@ -24,7 +25,7 @@ export class MainContent extends Component {
 
     render() {
         this.element = this.createElement('div', {}, ['main-content']);
-        
+
         this.element.innerHTML = `
             <div class="content-header">
                 <button class="mobile-menu-button" id="mobileMenuButton" title="Toggle Menu">
@@ -39,15 +40,15 @@ export class MainContent extends Component {
                 <!-- Section content will be rendered here -->
             </div>
         `;
-        
+
         this.container.appendChild(this.element);
-        
+
         // Get references
         this.mobileMenuButton = this.querySelector('#mobileMenuButton');
         this.titleElement = this.querySelector('#contentTitle');
         this.actionsElement = this.querySelector('#contentActions');
         this.bodyElement = this.querySelector('#contentBody');
-        
+
         // Set up mobile menu button
         this.setupMobileMenuButton();
     }
@@ -55,29 +56,29 @@ export class MainContent extends Component {
     async initializeSections() {
         // For now, create placeholder sections
         // These will be replaced with actual components in later tasks
-        
+
         this.sections.set('prompt', {
             title: 'Prompt',
             render: () => this.renderPromptSection()
         });
-        
+
         this.sections.set('git', {
             title: 'Git',
             render: () => this.renderGitSection()
         });
-        
+
         this.sections.set('files', {
             title: 'Files',
             render: () => this.renderFilesSection()
         });
-        
+
         this.sections.set('info', {
             title: 'Info',
             render: () => this.renderInfoSection()
         });
-        
+
         // Show initial section
-        this.showSection(this.currentSection);
+        await this.showSection(this.currentSection);
     }
 
     setupMobileMenuButton() {
@@ -91,60 +92,61 @@ export class MainContent extends Component {
         this.emit('mobile-menu-toggle');
     }
 
-    showSection(sectionId) {
+    async showSection(sectionId) {
         const section = this.sections.get(sectionId);
         if (!section) {
             console.warn(`Unknown section: ${sectionId}`);
             return;
         }
-        
+
         this.currentSection = sectionId;
-        
+
         // Update title
         this.titleElement.textContent = section.title;
-        
+
+        // Clear existing child components
+        if (this.chatInterface) {
+            this.removeChildComponent(this.chatInterface);
+            this.chatInterface.destroy();
+            this.chatInterface = null;
+        }
+
         // Clear and render content
         this.bodyElement.innerHTML = '';
-        section.render();
+        await section.render();
     }
 
-    renderPromptSection() {
-        this.bodyElement.innerHTML = `
-            <div class="prompt-section">
-                <div class="chat-container">
-                    <div class="chat-messages" id="chatMessages">
-                        <div class="welcome-message">
-                            <h3>Welcome to Enhanced Web Automation</h3>
-                            <p>This is the chat interface where you can send prompts to VS Code.</p>
-                            <p>The full chat functionality will be implemented in the next tasks.</p>
-                        </div>
-                    </div>
-                    <div class="chat-input-container">
-                        <div class="input-group">
-                            <textarea class="input textarea" 
-                                     id="promptInput" 
-                                     placeholder="Type your prompt here..."
-                                     rows="3"></textarea>
-                            <button class="btn btn-primary" id="sendButton">Send</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
+    async renderPromptSection() {
+        // Clear existing content
+        this.bodyElement.innerHTML = '';
+
+        // Import and initialize ChatInterface component
+        const { ChatInterface } = await import('./ChatInterface.js');
         
-        // Add basic functionality
-        const sendButton = this.querySelector('#sendButton');
-        const promptInput = this.querySelector('#promptInput');
-        
-        if (sendButton && promptInput) {
-            this.addEventListener(sendButton, 'click', () => {
-                const message = promptInput.value.trim();
-                if (message) {
-                    this.notificationService.info('Prompt Sent', `Message: ${message}`);
-                    promptInput.value = '';
-                }
-            });
-        }
+        // Create chat interface container
+        const chatContainer = this.createElement('div', {}, ['prompt-section']);
+        this.bodyElement.appendChild(chatContainer);
+
+        // Initialize ChatInterface component
+        this.chatInterface = new ChatInterface({
+            container: chatContainer,
+            stateManager: this.stateManager,
+            webSocketClient: this.webSocketClient,
+            notificationService: this.notificationService
+        });
+
+        await this.chatInterface.initialize();
+        this.addChildComponent(this.chatInterface);
+
+        // Listen for chat events
+        this.addEventListener(chatContainer, 'message-added', (event) => {
+            const { message } = event.detail;
+            console.log('Message added:', message);
+        });
+
+        this.addEventListener(chatContainer, 'messages-cleared', () => {
+            console.log('Chat messages cleared');
+        });
     }
 
     renderGitSection() {
@@ -234,11 +236,8 @@ export class MainContent extends Component {
     }
 
     focusCommandInput() {
-        if (this.currentSection === 'prompt') {
-            const promptInput = this.querySelector('#promptInput');
-            if (promptInput) {
-                promptInput.focus();
-            }
+        if (this.currentSection === 'prompt' && this.chatInterface) {
+            this.chatInterface.focusInput();
         }
     }
 

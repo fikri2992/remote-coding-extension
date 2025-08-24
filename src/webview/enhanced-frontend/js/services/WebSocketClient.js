@@ -1219,6 +1219,107 @@ export class WebSocketClient {
     }
 
     /**
+     * Send file system command for .remoterc operations
+     */
+    sendFileSystemCommand(operation, data, callback) {
+        const message = {
+            type: 'fileSystem',
+            id: this.generateMessageId(),
+            data: {
+                operation: operation,
+                ...data
+            }
+        };
+
+        // Register callback if provided
+        if (callback) {
+            this.messageCallbacks.set(message.id, callback);
+        }
+
+        return this.sendMessage(message);
+    }
+
+    /**
+     * Send prompt command for enhanced prompt handling
+     */
+    sendPrompt(content, options = {}) {
+        const message = {
+            type: 'prompt',
+            id: this.generateMessageId(),
+            data: {
+                content: content,
+                category: options.category,
+                tags: options.tags || [],
+                saveToHistory: options.saveToHistory !== false,
+                metadata: options.metadata || {}
+            }
+        };
+
+        // Register callback if provided
+        if (options.callback) {
+            this.messageCallbacks.set(message.id, options.callback);
+        }
+
+        return this.sendMessage(message);
+    }
+
+    /**
+     * Send git command
+     */
+    sendGitCommand(operation, data, callback) {
+        const message = {
+            type: 'git',
+            id: this.generateMessageId(),
+            data: {
+                operation: operation,
+                ...data
+            }
+        };
+
+        // Register callback if provided
+        if (callback) {
+            this.messageCallbacks.set(message.id, callback);
+        }
+
+        return this.sendMessage(message);
+    }
+
+    /**
+     * Send typing indicator
+     */
+    sendTypingIndicator(isTyping, section = 'chat') {
+        // Debounce typing indicators
+        if (this.typingTimeout) {
+            clearTimeout(this.typingTimeout);
+        }
+
+        if (isTyping) {
+            this.sendMessage({
+                type: 'typing',
+                data: {
+                    isTyping: true,
+                    section: section,
+                    timestamp: Date.now()
+                }
+            });
+
+            // Auto-stop typing after timeout
+            this.typingTimeout = setTimeout(() => {
+                this.sendTypingIndicator(false, section);
+            }, this.typingDebounceMs);
+        } else {
+            this.sendMessage({
+                type: 'typing',
+                data: {
+                    isTyping: false,
+                    section: section,
+                    timestamp: Date.now()
+                }
+            });
+        }
+    }
+
+    /**
      * Get enhanced connection status
      */
     getEnhancedConnectionStatus() {

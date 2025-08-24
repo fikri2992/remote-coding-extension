@@ -5,6 +5,7 @@
 import { Component } from './base/Component.js';
 import { MessageHistory } from './MessageHistory.js';
 import { MessageInput } from './MessageInput.js';
+import { PromptManager } from './PromptManager.js';
 
 export class ChatInterface extends Component {
     constructor(options) {
@@ -22,6 +23,7 @@ export class ChatInterface extends Component {
         // Child components
         this.messageHistory = null;
         this.messageInput = null;
+        this.promptManager = null;
     }
 
     async initialize() {
@@ -47,6 +49,9 @@ export class ChatInterface extends Component {
                     </div>
                 </div>
                 <div class="chat-actions">
+                    <button class="btn btn-icon" id="promptManagerToggle" title="Toggle Prompt Manager">
+                        <span class="icon">📝</span>
+                    </button>
                     <button class="btn btn-icon" id="clearChatButton" title="Clear Chat">
                         <span class="icon">🗑️</span>
                     </button>
@@ -56,11 +61,16 @@ export class ChatInterface extends Component {
                 </div>
             </div>
             <div class="chat-body">
-                <div class="message-history-container" id="messageHistoryContainer">
-                    <!-- MessageHistory component will be rendered here -->
+                <div class="chat-main">
+                    <div class="message-history-container" id="messageHistoryContainer">
+                        <!-- MessageHistory component will be rendered here -->
+                    </div>
+                    <div class="message-input-container" id="messageInputContainer">
+                        <!-- MessageInput component will be rendered here -->
+                    </div>
                 </div>
-                <div class="message-input-container" id="messageInputContainer">
-                    <!-- MessageInput component will be rendered here -->
+                <div class="prompt-manager-container hidden" id="promptManagerContainer">
+                    <!-- PromptManager component will be rendered here -->
                 </div>
             </div>
         `;
@@ -69,10 +79,12 @@ export class ChatInterface extends Component {
 
         // Get references
         this.chatStatus = this.querySelector('#chatStatus');
+        this.promptManagerToggle = this.querySelector('#promptManagerToggle');
         this.clearChatButton = this.querySelector('#clearChatButton');
         this.scrollToggleButton = this.querySelector('#scrollToggleButton');
         this.messageHistoryContainer = this.querySelector('#messageHistoryContainer');
         this.messageInputContainer = this.querySelector('#messageInputContainer');
+        this.promptManagerContainer = this.querySelector('#promptManagerContainer');
     }
 
     async initializeChildComponents() {
@@ -96,9 +108,25 @@ export class ChatInterface extends Component {
 
         await this.messageInput.initialize();
         this.addChildComponent(this.messageInput);
+
+        // Initialize PromptManager component
+        this.promptManager = new PromptManager({
+            container: this.promptManagerContainer,
+            stateManager: this.stateManager,
+            webSocketClient: this.webSocketClient,
+            notificationService: this.notificationService
+        });
+
+        await this.promptManager.initialize();
+        this.addChildComponent(this.promptManager);
     }
 
     setupEventListeners() {
+        // Prompt manager toggle button
+        if (this.promptManagerToggle) {
+            this.addEventListener(this.promptManagerToggle, 'click', this.handlePromptManagerToggle);
+        }
+
         // Clear chat button
         if (this.clearChatButton) {
             this.addEventListener(this.clearChatButton, 'click', this.handleClearChat);
@@ -137,6 +165,12 @@ export class ChatInterface extends Component {
 
         // Listen for scroll events from MessageHistory
         this.addEventListener(this.element, 'scroll-position-changed', this.handleScrollPositionChanged);
+
+        // Listen for prompt manager events
+        if (this.promptManager) {
+            this.addEventListener(this.element, 'prompt-selected', this.handlePromptSelected);
+            this.addEventListener(this.element, 'template-selected', this.handleTemplateSelected);
+        }
     }
 
     loadInitialMessages() {
@@ -322,6 +356,40 @@ export class ChatInterface extends Component {
         }
     }
 
+    handlePromptManagerToggle() {
+        if (this.promptManagerContainer) {
+            const isHidden = this.promptManagerContainer.classList.contains('hidden');
+            
+            if (isHidden) {
+                this.promptManagerContainer.classList.remove('hidden');
+                this.promptManagerToggle.classList.add('active');
+            } else {
+                this.promptManagerContainer.classList.add('hidden');
+                this.promptManagerToggle.classList.remove('active');
+            }
+        }
+    }
+
+    handlePromptSelected(event) {
+        const { content, category, tags } = event.detail;
+        
+        // Load prompt content into message input
+        if (this.messageInput) {
+            this.messageInput.setValue(content);
+            this.messageInput.focus();
+        }
+    }
+
+    handleTemplateSelected(event) {
+        const { content, category, tags } = event.detail;
+        
+        // Load template content into message input
+        if (this.messageInput) {
+            this.messageInput.setValue(content);
+            this.messageInput.focus();
+        }
+    }
+
     addMessage(message) {
         this.messages.push(message);
         
@@ -455,6 +523,9 @@ export class ChatInterface extends Component {
         }
         if (this.messageInput) {
             this.messageInput.destroy();
+        }
+        if (this.promptManager) {
+            this.promptManager.destroy();
         }
 
         super.destroy();

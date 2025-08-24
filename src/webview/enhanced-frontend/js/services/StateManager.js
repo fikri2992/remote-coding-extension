@@ -261,6 +261,62 @@ export class StateManager {
         this.updatePrompts({ history });
     }
 
+    /**
+     * Update prompt in history
+     */
+    updatePromptInHistory(promptId, updates) {
+        const history = this.state.prompts.history.map(prompt => 
+            prompt.id === promptId ? { ...prompt, ...updates } : prompt
+        );
+        
+        this.updatePrompts({ history });
+    }
+
+    /**
+     * Remove prompt from history
+     */
+    removePromptFromHistory(promptId) {
+        const history = this.state.prompts.history.filter(prompt => prompt.id !== promptId);
+        this.updatePrompts({ history });
+    }
+
+    /**
+     * Add category
+     */
+    addPromptCategory(category) {
+        const categories = {
+            ...this.state.prompts.categories,
+            [category.id]: category
+        };
+        
+        this.updatePrompts({ categories });
+    }
+
+    /**
+     * Update category
+     */
+    updatePromptCategory(categoryId, updates) {
+        const categories = {
+            ...this.state.prompts.categories,
+            [categoryId]: {
+                ...this.state.prompts.categories[categoryId],
+                ...updates
+            }
+        };
+        
+        this.updatePrompts({ categories });
+    }
+
+    /**
+     * Remove category
+     */
+    removePromptCategory(categoryId) {
+        const categories = { ...this.state.prompts.categories };
+        delete categories[categoryId];
+        
+        this.updatePrompts({ categories });
+    }
+
     // Getter methods for common state access
 
     getCurrentSection() {

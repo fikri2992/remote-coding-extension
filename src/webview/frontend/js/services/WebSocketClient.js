@@ -1240,12 +1240,6 @@ export class WebSocketClient {
             console.error('❌ Failed to send message through extension:', error);
             return false;
         }
-    }tus
-            this.messageStatus.set(messageId, { 
-                status: 'delivered', 
-                timestamp: Date.now() 
-            });
-        }
     }
 
     /**
@@ -1726,7 +1720,6 @@ export class WebSocketClient {
         this.stateManager = null;
         this.notificationService = null;
     }
-} 
    /**
      * Get comprehensive performance metrics
      */
@@ -1946,3 +1939,4 @@ export class WebSocketClient {
             lastConnected: new Date()
         });
     }
+}

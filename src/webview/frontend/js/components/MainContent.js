@@ -31,17 +31,17 @@ export class MainContent extends Component {
     setupResponsiveHandlers() {
         // Listen for layout changes
         document.addEventListener('layout-change', this.handleLayoutChange.bind(this));
-        
+
         // Listen for window resize as fallback
         window.addEventListener('resize', this.handleResize.bind(this));
-        
+
         // Initial update
         this.updateMobileMenuVisibility();
     }
 
     handleLayoutChange(event) {
         const { type, breakpoint } = event.detail;
-        
+
         if (type === 'breakpoint') {
             this.updateMobileMenuVisibility();
             this.updateContentLayout(breakpoint);
@@ -120,14 +120,11 @@ export class MainContent extends Component {
             render: () => this.renderInfoSection()
         });
 
-<<<<<<< HEAD
         this.sections.set('automation', {
             title: 'Web Automation',
             render: () => this.renderAutomationSection()
         });
 
-=======
->>>>>>> temp-frontend-changes
         // Show initial section
         await this.showSection(this.currentSection);
     }
@@ -136,14 +133,14 @@ export class MainContent extends Component {
         if (this.mobileMenuButton) {
             // Add touch-friendly classes
             this.mobileMenuButton.classList.add('touch-feedback', 'touch-target');
-            
+
             // Click handler
             this.addEventListener(this.mobileMenuButton, 'click', this.handleMobileMenuClick);
-            
+
             // Touch handlers for better feedback
             this.addEventListener(this.mobileMenuButton, 'touchstart', this.handleMobileMenuTouchStart);
             this.addEventListener(this.mobileMenuButton, 'touchend', this.handleMobileMenuTouchEnd);
-            
+
             // Update visibility based on screen size
             this.updateMobileMenuVisibility();
         }
@@ -152,13 +149,13 @@ export class MainContent extends Component {
     handleMobileMenuClick(e) {
         e.preventDefault();
         e.stopPropagation();
-        
+
         // Add haptic feedback simulation
         this.mobileMenuButton.classList.add('haptic-light');
         setTimeout(() => {
             this.mobileMenuButton.classList.remove('haptic-light');
         }, 100);
-        
+
         // Emit event to parent AppShell to toggle sidebar
         this.emit('mobile-menu-toggle');
     }
@@ -227,16 +224,16 @@ export class MainContent extends Component {
 
         // Create new content container
         const newContent = this.createElement('div', {}, ['section-content']);
-        
+
         // Render new section content
         const oldBodyContent = this.bodyElement.innerHTML;
         this.bodyElement.innerHTML = '';
         this.bodyElement.appendChild(newContent);
-        
+
         // Set up the section render context
         const originalBodyElement = this.bodyElement;
         this.bodyElement = newContent;
-        
+
         try {
             await section.render();
         } finally {
@@ -264,7 +261,7 @@ export class MainContent extends Component {
 
         // Import and initialize ChatInterface component
         const { ChatInterface } = await import('./ChatInterface.js');
-        
+
         // Create chat interface container
         const chatContainer = this.createElement('div', {}, ['prompt-section']);
         this.bodyElement.appendChild(chatContainer);
@@ -301,7 +298,7 @@ export class MainContent extends Component {
 
         // Import and initialize GitDashboard component
         const { GitDashboard } = await import('./GitDashboard.js');
-        
+
         // Create git dashboard container
         const gitContainer = this.createElement('div', {}, ['git-section']);
         this.bodyElement.appendChild(gitContainer);
@@ -344,7 +341,7 @@ export class MainContent extends Component {
 
         // Import and initialize FileManager component
         const { FileManager } = await import('./FileManager.js');
-        
+
         // Create file manager container
         const fileManagerContainer = this.createElement('div', {}, ['files-section']);
         this.bodyElement.appendChild(fileManagerContainer);
@@ -382,7 +379,7 @@ export class MainContent extends Component {
 
         // Import and initialize InfoPanel component
         const { InfoPanel } = await import('./InfoPanel.js');
-        
+
         // Create info panel container
         const infoPanelContainer = this.createElement('div', {}, ['info-section']);
         this.bodyElement.appendChild(infoPanelContainer);
@@ -414,7 +411,6 @@ export class MainContent extends Component {
         });
     }
 
-<<<<<<< HEAD
     async renderAutomationSection() {
         // Clear existing content
         this.bodyElement.innerHTML = '';
@@ -435,8 +431,6 @@ export class MainContent extends Component {
         this.addChildComponent(this.webAutomation);
     }
 
-=======
->>>>>>> temp-frontend-changes
     focusCommandInput() {
         if (this.currentSection === 'prompt' && this.chatInterface) {
             this.chatInterface.focusInput();

@@ -21,14 +21,10 @@ export class HttpServer {
         this.config = config;
         this.errorHandler = ErrorHandler.getInstance();
         
-        // Determine which frontend to serve based on configuration
-        const useEnhancedUI = this.shouldUseEnhancedUI();
-        const frontendDir = useEnhancedUI ? 'enhanced-frontend' : 'web-frontend';
+        // Serve the advanced frontend directory - this provides the full-featured web application
+        this.webAssetsPath = path.join(__dirname, '..', 'webview', 'frontend');
         
-        // Web assets will be served from the extension's web assets directory
-        this.webAssetsPath = path.join(__dirname, '..', 'webview', frontendDir);
-        
-        console.log(`HTTP Server configured to serve ${useEnhancedUI ? 'Enhanced' : 'Basic'} UI from: ${this.webAssetsPath}`);
+        console.log(`HTTP Server configured to serve advanced web application from: ${this.webAssetsPath}`);
     }
 
     /**
@@ -489,6 +485,8 @@ export class HttpServer {
             errorCount: this.errorCount,
             errorRate: this.requestCount > 0 ? (this.errorCount / this.requestCount) * 100 : 0,
             webAssetsPath: this.webAssetsPath,
+            frontendType: 'unified', // Now serves unified frontend with client-side UI switching
+            useEnhancedUI: this.shouldUseEnhancedUI(),
             config: {
                 enableCors: this.config.enableCors,
                 allowedOrigins: this.config.allowedOrigins

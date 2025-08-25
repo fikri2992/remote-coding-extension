@@ -44,13 +44,6 @@ export class Sidebar extends Component {
                 icon: 'ℹ️', 
                 description: 'System information and connection status',
                 shortcut: 'Ctrl+I'
-            },
-            { 
-                id: 'automation', 
-                label: 'Automation', 
-                icon: '🤖', 
-                description: 'VS Code web automation and command execution',
-                shortcut: 'Ctrl+A'
             }
         ];
     }

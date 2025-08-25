@@ -12,7 +12,6 @@ export class AppShell extends Component {
         
         this.stateManager = options.stateManager;
         this.webSocketClient = options.webSocketClient;
-        this.webAutomationService = options.webAutomationService;
         this.notificationService = options.notificationService;
         this.animationService = options.animationService;
         this.responsiveLayoutService = options.responsiveLayoutService;
@@ -94,7 +93,6 @@ export class AppShell extends Component {
             container: this.mainContentContainer,
             stateManager: this.stateManager,
             webSocketClient: this.webSocketClient,
-            webAutomationService: this.webAutomationService,
             notificationService: this.notificationService,
             animationService: this.animationService,
             keyboardShortcutService: this.keyboardShortcutService,

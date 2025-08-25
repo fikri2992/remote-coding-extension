@@ -3,7 +3,6 @@
  */
 
 import { Component } from './base/Component.js';
-import { WebAutomation } from './WebAutomation.js';
 
 export class MainContent extends Component {
     constructor(options) {
@@ -11,7 +10,6 @@ export class MainContent extends Component {
 
         this.stateManager = options.stateManager;
         this.webSocketClient = options.webSocketClient;
-        this.webAutomationService = options.webAutomationService;
         this.notificationService = options.notificationService;
         this.animationService = options.animationService;
         this.keyboardShortcutService = options.keyboardShortcutService;
@@ -122,11 +120,14 @@ export class MainContent extends Component {
             render: () => this.renderInfoSection()
         });
 
+<<<<<<< HEAD
         this.sections.set('automation', {
             title: 'Web Automation',
             render: () => this.renderAutomationSection()
         });
 
+=======
+>>>>>>> temp-frontend-changes
         // Show initial section
         await this.showSection(this.currentSection);
     }
@@ -413,6 +414,7 @@ export class MainContent extends Component {
         });
     }
 
+<<<<<<< HEAD
     async renderAutomationSection() {
         // Clear existing content
         this.bodyElement.innerHTML = '';
@@ -433,6 +435,8 @@ export class MainContent extends Component {
         this.addChildComponent(this.webAutomation);
     }
 
+=======
+>>>>>>> temp-frontend-changes
     focusCommandInput() {
         if (this.currentSection === 'prompt' && this.chatInterface) {
             this.chatInterface.focusInput();

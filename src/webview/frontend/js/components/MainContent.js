@@ -3,6 +3,7 @@
  */
 
 import { Component } from './base/Component.js';
+import { WebAutomation } from './WebAutomation.js';
 
 export class MainContent extends Component {
     constructor(options) {
@@ -10,6 +11,7 @@ export class MainContent extends Component {
 
         this.stateManager = options.stateManager;
         this.webSocketClient = options.webSocketClient;
+        this.webAutomationService = options.webAutomationService;
         this.notificationService = options.notificationService;
         this.animationService = options.animationService;
         this.keyboardShortcutService = options.keyboardShortcutService;
@@ -118,6 +120,11 @@ export class MainContent extends Component {
         this.sections.set('info', {
             title: 'Info',
             render: () => this.renderInfoSection()
+        });
+
+        this.sections.set('automation', {
+            title: 'Web Automation',
+            render: () => this.renderAutomationSection()
         });
 
         // Show initial section
@@ -404,6 +411,26 @@ export class MainContent extends Component {
             const { metrics } = event.detail;
             console.log('Metrics updated:', metrics);
         });
+    }
+
+    async renderAutomationSection() {
+        // Clear existing content
+        this.bodyElement.innerHTML = '';
+
+        // Create automation container
+        const automationContainer = this.createElement('div', {}, ['automation-section']);
+        this.bodyElement.appendChild(automationContainer);
+
+        // Initialize WebAutomation component
+        this.webAutomation = new WebAutomation({
+            container: automationContainer,
+            stateManager: this.stateManager,
+            webAutomationService: this.webAutomationService,
+            notificationService: this.notificationService
+        });
+
+        await this.webAutomation.initialize();
+        this.addChildComponent(this.webAutomation);
     }
 
     focusCommandInput() {

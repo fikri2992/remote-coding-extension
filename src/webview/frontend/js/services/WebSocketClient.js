@@ -7,11 +7,11 @@ import { MessageProcessor } from '../utils/MessageProcessor.js';
 import { PerformanceOptimizer, MemoryManager } from '../utils/PerformanceOptimizer.js';
 
 export class WebSocketClient {
-    constructor(stateManager, notificationService, errorHandlingService = null, connectionRecoveryService = null) {
+    constructor(stateManager, notificationService, errorHandlingService = null, webAutomationService = null) {
         this.stateManager = stateManager;
         this.notificationService = notificationService;
         this.errorHandlingService = errorHandlingService;
-        this.connectionRecoveryService = connectionRecoveryService;
+        this.webAutomationService = webAutomationService;
         
         // Performance optimizations
         this.optimizer = new PerformanceOptimizer();
@@ -1698,6 +1698,47 @@ export class WebSocketClient {
             metrics: this.connectionMetrics,
             typingUsers: Array.from(this.typingIndicators.keys())
         };
+    }
+
+    /**
+     * Handle messages from VS Code extension (for integration)
+     */
+    handleExtensionMessage(message) {
+        if (!message || typeof message !== 'object') {
+            return;
+        }
+
+        try {
+            // Forward to web automation service if available
+            if (this.webAutomationService && typeof this.webAutomationService.handleExtensionMessage === 'function') {
+                this.webAutomationService.handleExtensionMessage(message);
+            }
+
+            // Handle WebSocket-specific extension messages
+            switch (message.command) {
+                case 'websocketConnect':
+                    if (message.data && message.data.url) {
+                        this.connect(message.data.url);
+                    }
+                    break;
+                    
+                case 'websocketDisconnect':
+                    this.disconnect();
+                    break;
+                    
+                case 'websocketSendMessage':
+                    if (message.data) {
+                        this.sendMessage(message.data);
+                    }
+                    break;
+                    
+                default:
+                    // Let other handlers process the message
+                    break;
+            }
+        } catch (error) {
+            console.error('Error handling extension message in WebSocketClient:', error);
+        }
     }
 
     /**

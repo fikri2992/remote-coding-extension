@@ -100,32 +100,37 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
 
     private _getEnhancedHtmlForWebview(webview: vscode.Webview): string {
         try {
-            // Read the enhanced frontend HTML from the built output directory
-            const htmlPath = path.join(this._extensionUri.fsPath, 'out', 'webview', 'enhanced-frontend', 'index.html');
+            // Read the unified frontend HTML from the built output directory
+            const htmlPath = path.join(this._extensionUri.fsPath, 'out', 'webview', 'frontend', 'index.html');
             let html = fs.readFileSync(htmlPath, 'utf8');
             
             // Convert local resource paths to webview URIs
-            const enhancedFrontendUri = webview.asWebviewUri(
-                vscode.Uri.joinPath(this._extensionUri, 'out', 'webview', 'enhanced-frontend')
+            const frontendUri = webview.asWebviewUri(
+                vscode.Uri.joinPath(this._extensionUri, 'out', 'webview', 'frontend')
             );
             
             // Replace relative paths with webview URIs
-            html = html.replace(/href="styles\//g, `href="${enhancedFrontendUri}/styles/`);
-            html = html.replace(/src="js\//g, `src="${enhancedFrontendUri}/js/`);
+            html = html.replace(/href="styles\//g, `href="${frontendUri}/styles/`);
+            html = html.replace(/src="js\//g, `src="${frontendUri}/js/`);
             
             // Add VS Code webview API script
             const vscodeApiScript = `
                 <script>
-                    // Make VS Code API available to enhanced frontend
+                    // Make VS Code API available to unified frontend
                     window.vscode = acquireVsCodeApi();
                     
-                    // Enhanced message handling for backward compatibility
+                    // Enhanced message handling for unified frontend
                     window.addEventListener('message', event => {
                         const message = event.data;
                         
-                        // Forward enhanced messages to the enhanced frontend
-                        if (window.enhancedWebApp && window.enhancedWebApp.webSocketClient) {
-                            window.enhancedWebApp.webSocketClient.handleExtensionMessage(message);
+                        // Forward messages to the unified web app
+                        if (window.unifiedWebApp) {
+                            if (window.unifiedWebApp.webSocketClient) {
+                                window.unifiedWebApp.webSocketClient.handleExtensionMessage(message);
+                            }
+                            if (window.unifiedWebApp.webAutomationService) {
+                                window.unifiedWebApp.webAutomationService.handleExtensionMessage(message);
+                            }
                         }
                     });
                 </script>
@@ -137,7 +142,7 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
             return html;
             
         } catch (error) {
-            console.error('Error reading enhanced HTML file:', error);
+            console.error('Error reading unified frontend HTML file:', error);
             // Fallback to basic UI
             return this._getBasicHtmlForWebview(webview);
         }

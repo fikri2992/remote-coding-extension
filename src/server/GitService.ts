@@ -20,37 +20,60 @@ export class GitService {
      */
     private async initializeGitExtension(): Promise<void> {
         try {
+            // Check if workspace is available
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+            if (!workspaceFolders || workspaceFolders.length === 0) {
+                console.log('GitService: No workspace folders found, skipping Git integration');
+                return;
+            }
+
             this._gitExtension = vscode.extensions.getExtension('vscode.git');
-            if (this._gitExtension && !this._gitExtension.isActive) {
+            if (!this._gitExtension) {
+                console.log('GitService: VS Code Git extension not found');
+                return;
+            }
+
+            if (!this._gitExtension.isActive) {
+                console.log('GitService: Activating VS Code Git extension...');
                 await this._gitExtension.activate();
+                console.log('GitService: VS Code Git extension activated');
             }
 
             if (this._gitExtension?.exports) {
                 const gitApi = this._gitExtension.exports.getAPI(1);
                 if (gitApi) {
+                    console.log('GitService: Git API available, setting up repository monitoring');
+
                     // Monitor repository changes
                     this._disposables.push(
                         gitApi.onDidOpenRepository((repo: any) => {
                             this._repositories.set(repo.rootUri.fsPath, repo);
-                            console.log(`Git repository opened: ${repo.rootUri.fsPath}`);
+                            console.log(`GitService: Git repository opened: ${repo.rootUri.fsPath}`);
                         })
                     );
 
                     this._disposables.push(
                         gitApi.onDidCloseRepository((repo: any) => {
                             this._repositories.delete(repo.rootUri.fsPath);
-                            console.log(`Git repository closed: ${repo.rootUri.fsPath}`);
+                            console.log(`GitService: Git repository closed: ${repo.rootUri.fsPath}`);
                         })
                     );
 
                     // Initialize existing repositories
                     gitApi.repositories.forEach((repo: any) => {
                         this._repositories.set(repo.rootUri.fsPath, repo);
+                        console.log(`GitService: Existing repository registered: ${repo.rootUri.fsPath}`);
                     });
+
+                    console.log(`GitService: Initialized with ${this._repositories.size} repositories`);
+                } else {
+                    console.log('GitService: Git API not available from extension');
                 }
+            } else {
+                console.log('GitService: Git extension exports not available');
             }
         } catch (error) {
-            console.warn('Failed to initialize Git extension:', error);
+            console.warn('GitService: Failed to initialize Git extension:', error);
         }
     }
 
@@ -315,25 +338,39 @@ export class GitService {
      */
     private async getRepository(workspacePath?: string): Promise<any> {
         if (!this._gitExtension?.exports) {
+            console.log('GitService: Git extension not available');
             return null;
         }
 
         const gitApi = this._gitExtension.exports.getAPI(1);
         if (!gitApi) {
+            console.log('GitService: Git API not available');
             return null;
         }
 
         if (workspacePath) {
-            return this._repositories.get(workspacePath) || null;
+            const repo = this._repositories.get(workspacePath);
+            if (repo) {
+                return repo;
+            }
+            console.log(`GitService: No repository found for workspace path: ${workspacePath}`);
+            return null;
         }
 
         // Get repository for current workspace
         const workspaceFolders = vscode.workspace.workspaceFolders;
         if (workspaceFolders && workspaceFolders.length > 0) {
             const workspaceRoot = workspaceFolders[0]!.uri.fsPath;
-            return this._repositories.get(workspaceRoot) || gitApi.repositories[0] || null;
+            const repo = this._repositories.get(workspaceRoot) || gitApi.repositories[0] || null;
+
+            if (!repo) {
+                console.log(`GitService: No Git repository found in workspace: ${workspaceRoot}`);
+            }
+
+            return repo;
         }
 
+        console.log('GitService: No workspace folders available');
         return gitApi.repositories[0] || null;
     }
 

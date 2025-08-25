@@ -124,7 +124,7 @@
     "vscode:prepublish": "npm run build",
     "compile": "tsc -p ./",
     "compile:watch": "tsc -watch -p ./",
-    "copy-assets": "xcopy /E /I /Y \"src\\webview\\web-frontend\" \"out\\webview\\web-frontend\" && xcopy /E /I /Y \"src\\webview\\enhanced-frontend\" \"out\\webview\\enhanced-frontend\" && xcopy /Y \"src\\webview\\panel.html\" \"out\\webview\\\"",
+    "copy-assets": "node src/webview/frontend/build.config.js && xcopy /Y \"src\\webview\\panel.html\" \"out\\webview\\\"",
     "pretest": "npm run build",
     "lint": "eslint src --ext ts",
     "clean": "rimraf out",

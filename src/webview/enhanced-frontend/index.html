@@ -1,8 +1,11 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; style-src 'unsafe-inline' vscode-webview-resource:; script-src 'unsafe-inline' vscode-webview-resource:; connect-src ws: wss:; img-src data: https: vscode-webview-resource:;">
     <title>VS Code Enhanced Web Automation</title>
     <link rel="stylesheet" href="styles/main.css">
     <link rel="stylesheet" href="styles/components.css">
@@ -10,6 +13,7 @@
     <link rel="stylesheet" href="styles/animations.css">
     <link rel="stylesheet" href="styles/touch.css">
 </head>
+
 <body class="vscode-theme-dark">
     <div id="app" class="app-container">
         <!-- App Shell will be rendered here -->
@@ -22,4 +26,5 @@
     <!-- Scripts -->
     <script type="module" src="js/main.js"></script>
 </body>
+
 </html>

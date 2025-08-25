@@ -143,7 +143,6 @@
   "dependencies": {
     "@types/uuid": "^10.0.0",
     "@types/ws": "^8.18.1",
-    "is-electron": "^2.2.2",
     "uuid": "^11.1.0",
     "ws": "^8.18.3"
   }

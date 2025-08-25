@@ -7,9 +7,11 @@ import { MessageProcessor } from '../utils/MessageProcessor.js';
 import { PerformanceOptimizer, MemoryManager } from '../utils/PerformanceOptimizer.js';
 
 export class WebSocketClient {
-    constructor(stateManager, notificationService) {
+    constructor(stateManager, notificationService, errorHandlingService = null, connectionRecoveryService = null) {
         this.stateManager = stateManager;
         this.notificationService = notificationService;
+        this.errorHandlingService = errorHandlingService;
+        this.connectionRecoveryService = connectionRecoveryService;
         
         // Performance optimizations
         this.optimizer = new PerformanceOptimizer();
@@ -263,6 +265,12 @@ export class WebSocketClient {
         this.connectionStartTime = Date.now();
         this.connectionMetrics.reconnections = this.reconnectAttempts;
         
+        // Emit connection event for error handling services
+        const connectEvent = new CustomEvent('websocket-connected', {
+            detail: { timestamp: this.connectionStartTime }
+        });
+        window.dispatchEvent(connectEvent);
+        
         // Update connection state with enhanced info
         this.stateManager.updateConnection({
             status: 'connected',
@@ -273,8 +281,8 @@ export class WebSocketClient {
             connectionHealth: this.connectionHealthScore
         });
         
-        // Show connection success notification
-        if (this.notificationService) {
+        // Show connection success notification only if not handled by recovery service
+        if (this.notificationService && !this.connectionRecoveryService) {
             this.notificationService.show({
                 type: 'success',
                 message: 'Connected to server',
@@ -341,6 +349,12 @@ export class WebSocketClient {
         // Stop heartbeat
         this.stopHeartbeat();
         
+        // Emit disconnection event for error handling services
+        const disconnectEvent = new CustomEvent('websocket-disconnected', {
+            detail: { code: event.code, reason: event.reason, wasClean: event.wasClean }
+        });
+        window.dispatchEvent(disconnectEvent);
+        
         // Enable offline mode if supported
         if (this.offlineModeEnabled && !event.wasClean) {
             this.enableOfflineMode();
@@ -355,8 +369,18 @@ export class WebSocketClient {
             closeReason: this.getCloseReason(event.code)
         });
         
-        // Show disconnection notification
-        if (this.notificationService && !event.wasClean) {
+        // Let error handling service manage notifications
+        if (this.errorHandlingService && !event.wasClean) {
+            this.errorHandlingService.handleError({
+                type: 'websocket',
+                category: 'websocket',
+                message: `WebSocket connection closed: ${this.getCloseReason(event.code)}`,
+                code: event.code,
+                reason: event.reason,
+                timestamp: new Date()
+            });
+        } else if (this.notificationService && !event.wasClean) {
+            // Fallback notification if no error handling service
             this.notificationService.show({
                 type: 'warning',
                 message: `Connection lost: ${this.getCloseReason(event.code)}`,
@@ -364,8 +388,9 @@ export class WebSocketClient {
             });
         }
         
-        // Schedule reconnection if not a clean close
-        if (!event.wasClean && this.shouldReconnect(event.code)) {
+        // Don't schedule reconnect here - let ConnectionRecoveryService handle it
+        // Legacy fallback for when recovery service is not available
+        if (!this.connectionRecoveryService && !event.wasClean && this.shouldReconnect(event.code)) {
             this.scheduleReconnect();
         }
     }
@@ -375,7 +400,20 @@ export class WebSocketClient {
      */
     handleError(error) {
         console.error('❌ WebSocket error:', error);
-        this.handleConnectionError(error);
+        
+        // Let error handling service manage the error
+        if (this.errorHandlingService) {
+            this.errorHandlingService.handleError({
+                type: 'websocket',
+                category: 'websocket',
+                message: error.message || 'WebSocket error occurred',
+                error: error,
+                timestamp: new Date()
+            });
+        } else {
+            // Fallback to legacy error handling
+            this.handleConnectionError(error);
+        }
     }
 
     /**
@@ -579,6 +617,12 @@ export class WebSocketClient {
             } else if (latency > 1000) {
                 this.connectionHealthScore = Math.max(0, this.connectionHealthScore - 5);
             }
+            
+            // Emit latency event for connection recovery service
+            const latencyEvent = new CustomEvent('websocket-latency', {
+                detail: { latency, averageLatency: this.connectionMetrics.averageLatency }
+            });
+            window.dispatchEvent(latencyEvent);
             
             this.stateManager.updateConnection({ 
                 latency,

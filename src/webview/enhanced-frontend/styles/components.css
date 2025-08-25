@@ -3488,4 +3488,279 @@ File Manager Styles */
     .browser-display {
         grid-template-columns: 1fr;
     }
+}/
+* Error Handling Components */
+.error-details {
+    font-family: var(--vscode-font-family);
+    line-height: 1.5;
+}
+
+.error-details h3, .error-details h4 {
+    color: var(--vscode-foreground);
+    margin: 1rem 0 0.5rem 0;
+}
+
+.error-details p {
+    margin: 0.5rem 0;
+    color: var(--vscode-foreground);
+}
+
+.error-details ul {
+    margin: 0.5rem 0;
+    padding-left: 1.5rem;
+}
+
+.error-details li {
+    margin: 0.25rem 0;
+    color: var(--vscode-foreground);
+}
+
+.error-details pre {
+    background: var(--vscode-textCodeBlock-background);
+    border: 1px solid var(--vscode-widget-border);
+    border-radius: 4px;
+    padding: 1rem;
+    overflow: auto;
+    max-height: 200px;
+    font-size: 12px;
+    font-family: var(--vscode-editor-font-family);
+    color: var(--vscode-editor-foreground);
+}
+
+.error-details details {
+    margin: 0.5rem 0;
+}
+
+.error-details summary {
+    cursor: pointer;
+    padding: 0.5rem;
+    background: var(--vscode-button-secondaryBackground);
+    border: 1px solid var(--vscode-button-border);
+    border-radius: 4px;
+    color: var(--vscode-button-secondaryForeground);
+}
+
+.error-details summary:hover {
+    background: var(--vscode-button-secondaryHoverBackground);
+}
+
+/* Offline Mode Components */
+.offline-capabilities {
+    font-family: var(--vscode-font-family);
+    line-height: 1.5;
+}
+
+.offline-capabilities h3 {
+    color: var(--vscode-foreground);
+    margin: 0 0 1rem 0;
+}
+
+.offline-capabilities ul {
+    margin: 0.5rem 0;
+    padding-left: 1.5rem;
+}
+
+.offline-capabilities li {
+    margin: 0.25rem 0;
+    color: var(--vscode-foreground);
+}
+
+.offline-capabilities p {
+    margin: 1rem 0 0.5rem 0;
+    color: var(--vscode-foreground);
+}
+
+.offline-capabilities strong {
+    color: var(--vscode-textPreformat-foreground);
+}
+
+/* Sync Error Components */
+.sync-errors {
+    font-family: var(--vscode-font-family);
+    line-height: 1.5;
+}
+
+.sync-errors h3 {
+    color: var(--vscode-errorForeground);
+    margin: 0 0 1rem 0;
+}
+
+.sync-errors ul {
+    margin: 0.5rem 0;
+    padding-left: 1.5rem;
+}
+
+.sync-errors li {
+    margin: 0.25rem 0;
+    color: var(--vscode-errorForeground);
+}
+
+.sync-errors p {
+    margin: 1rem 0 0.5rem 0;
+    color: var(--vscode-foreground);
+}
+
+/* Connection Status Indicators */
+.connection-status {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.connection-status.connected {
+    background: var(--vscode-testing-iconPassed);
+    color: var(--vscode-button-foreground);
+}
+
+.connection-status.connecting {
+    background: var(--vscode-testing-iconQueued);
+    color: var(--vscode-button-foreground);
+}
+
+.connection-status.disconnected {
+    background: var(--vscode-testing-iconFailed);
+    color: var(--vscode-button-foreground);
+}
+
+.connection-status.offline {
+    background: var(--vscode-button-secondaryBackground);
+    color: var(--vscode-button-secondaryForeground);
+    border: 1px solid var(--vscode-button-border);
+}
+
+.connection-status-icon {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: currentColor;
+}
+
+/* Recovery Progress Indicator */
+.recovery-progress {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem;
+    background: var(--vscode-badge-background);
+    color: var(--vscode-badge-foreground);
+    border-radius: 4px;
+    font-size: 12px;
+}
+
+.recovery-progress-spinner {
+    width: 12px;
+    height: 12px;
+    border: 2px solid transparent;
+    border-top: 2px solid currentColor;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Error Log Viewer */
+.error-log-viewer {
+    max-height: 400px;
+    overflow-y: auto;
+    border: 1px solid var(--vscode-widget-border);
+    border-radius: 4px;
+}
+
+.error-log-entry {
+    padding: 0.75rem;
+    border-bottom: 1px solid var(--vscode-widget-border);
+    font-size: 13px;
+}
+
+.error-log-entry:last-child {
+    border-bottom: none;
+}
+
+.error-log-entry.error {
+    background: var(--vscode-inputValidation-errorBackground);
+    border-left: 3px solid var(--vscode-inputValidation-errorBorder);
+}
+
+.error-log-entry.warning {
+    background: var(--vscode-inputValidation-warningBackground);
+    border-left: 3px solid var(--vscode-inputValidation-warningBorder);
+}
+
+.error-log-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+.error-log-type {
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 11px;
+    padding: 0.125rem 0.25rem;
+    border-radius: 2px;
+    background: var(--vscode-badge-background);
+    color: var(--vscode-badge-foreground);
+}
+
+.error-log-timestamp {
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground);
+}
+
+.error-log-message {
+    color: var(--vscode-foreground);
+    margin: 0.25rem 0;
+}
+
+.error-log-count {
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground);
+    font-style: italic;
+}
+
+/* Modal Enhancements for Error Handling */
+.modal-overlay {
+    backdrop-filter: blur(2px);
+}
+
+.modal-content {
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    animation: modalSlideIn 0.2s ease-out;
+}
+
+@keyframes modalSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-20px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+/* Responsive adjustments for error handling */
+@media (max-width: 768px) {
+    .error-details pre {
+        font-size: 11px;
+        max-height: 150px;
+    }
+    
+    .modal-content {
+        max-width: 95%;
+        max-height: 90%;
+        margin: 1rem;
+    }
+    
+    .error-log-viewer {
+        max-height: 300px;
+    }
 }

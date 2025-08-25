@@ -14,6 +14,10 @@ import { DragDropService } from './services/DragDropService.js';
 import { AnimationService } from './services/AnimationService.js';
 import { TouchGestureService } from './services/TouchGestureService.js';
 import { ResponsiveLayoutService } from './services/ResponsiveLayoutService.js';
+import { ErrorHandlingService } from './services/ErrorHandlingService.js';
+import { ConnectionRecoveryService } from './services/ConnectionRecoveryService.js';
+import { OfflineModeService } from './services/OfflineModeService.js';
+import { GracefulDegradation } from './utils/GracefulDegradation.js';
 import { globalPerformanceIntegration } from './utils/PerformanceIntegration.js';
 
 /**
@@ -30,12 +34,35 @@ class EnhancedWebApp {
         this.themeManager = new ThemeManager();
         this.notificationService = new NotificationService();
         this.animationService = new AnimationService();
+        
+        // Error handling and recovery services
+        this.errorHandlingService = new ErrorHandlingService(this.stateManager, this.notificationService);
+        this.offlineModeService = new OfflineModeService(this.stateManager, this.notificationService);
+        this.gracefulDegradation = new GracefulDegradation(this.stateManager, this.notificationService);
+        
+        // Initialize WebSocket client with error handling services
+        this.webSocketClient = new WebSocketClient(
+            this.stateManager, 
+            this.notificationService, 
+            this.errorHandlingService
+        );
+        
+        // Connection recovery service (depends on WebSocket client)
+        this.connectionRecoveryService = new ConnectionRecoveryService(
+            this.webSocketClient, 
+            this.stateManager, 
+            this.notificationService
+        );
+        
+        // Update WebSocket client with recovery service reference
+        this.webSocketClient.connectionRecoveryService = this.connectionRecoveryService;
+        
+        // Other UI services
         this.responsiveLayoutService = new ResponsiveLayoutService(this.stateManager, this.notificationService);
         this.touchGestureService = new TouchGestureService(this.stateManager, this.notificationService);
         this.keyboardShortcutService = new KeyboardShortcutService(this.stateManager, this.notificationService);
         this.contextMenuService = new ContextMenuService(this.stateManager, this.notificationService);
         this.dragDropService = new DragDropService(this.stateManager, this.notificationService);
-        this.webSocketClient = new WebSocketClient(this.stateManager, this.notificationService);
         
         // Performance integration
         this.performanceIntegration = globalPerformanceIntegration;
@@ -147,6 +174,12 @@ class EnhancedWebApp {
         // Initialize notification service
         await this.notificationService.initialize();
         
+        // Initialize error handling services early
+        await this.errorHandlingService.initialize();
+        await this.offlineModeService.initialize();
+        await this.gracefulDegradation.initialize?.() || Promise.resolve();
+        await this.connectionRecoveryService.initialize();
+        
         // Initialize animation service
         await this.animationService.initialize();
         
@@ -180,6 +213,10 @@ class EnhancedWebApp {
             stateManager: this.stateManager,
             webSocketClient: this.webSocketClient,
             notificationService: this.notificationService,
+            errorHandlingService: this.errorHandlingService,
+            connectionRecoveryService: this.connectionRecoveryService,
+            offlineModeService: this.offlineModeService,
+            gracefulDegradation: this.gracefulDegradation,
             animationService: this.animationService,
             responsiveLayoutService: this.responsiveLayoutService,
             touchGestureService: this.touchGestureService,
@@ -214,7 +251,8 @@ class EnhancedWebApp {
         // Keyboard shortcuts
         document.addEventListener('keydown', this._handleKeyboardShortcuts.bind(this));
         
-        // Error handling
+        // Error handling is now managed by ErrorHandlingService
+        // Keep these for fallback in case error service fails
         window.addEventListener('error', this._handleGlobalError.bind(this));
         window.addEventListener('unhandledrejection', this._handleUnhandledRejection.bind(this));
         
@@ -579,31 +617,37 @@ class EnhancedWebApp {
     }
 
     /**
-     * Handle global errors
+     * Handle global errors (fallback)
      */
     _handleGlobalError(event) {
-        console.error('Global error:', event.error);
+        console.error('Global error (fallback handler):', event.error);
         
-        this.notificationService?.show({
-            title: 'Application Error',
-            message: `An unexpected error occurred: ${event.error?.message || 'Unknown error'}`,
-            type: 'error',
-            duration: 5000
-        });
+        // Only handle if error handling service is not available
+        if (!this.errorHandlingService) {
+            this.notificationService?.show({
+                title: 'Application Error',
+                message: `An unexpected error occurred: ${event.error?.message || 'Unknown error'}`,
+                type: 'error',
+                duration: 5000
+            });
+        }
     }
 
     /**
-     * Handle unhandled promise rejections
+     * Handle unhandled promise rejections (fallback)
      */
     _handleUnhandledRejection(event) {
-        console.error('Unhandled promise rejection:', event.reason);
+        console.error('Unhandled promise rejection (fallback handler):', event.reason);
         
-        this.notificationService?.show({
-            title: 'Promise Rejection',
-            message: `Unhandled promise rejection: ${event.reason?.message || 'Unknown error'}`,
-            type: 'error',
-            duration: 5000
-        });
+        // Only handle if error handling service is not available
+        if (!this.errorHandlingService) {
+            this.notificationService?.show({
+                title: 'Promise Rejection',
+                message: `Unhandled promise rejection: ${event.reason?.message || 'Unknown error'}`,
+                type: 'error',
+                duration: 5000
+            });
+        }
     }
 
     /**
@@ -641,7 +685,7 @@ class EnhancedWebApp {
         // Cleanup performance integration first
         this.performanceIntegration?.destroy();
         
-        // Cleanup services
+        // Cleanup services in reverse order
         this.webSocketClient?.destroy();
         this.appShell?.destroy();
         this.dragDropService?.destroy();
@@ -650,6 +694,14 @@ class EnhancedWebApp {
         this.touchGestureService?.destroy();
         this.responsiveLayoutService?.destroy();
         this.animationService?.destroy();
+        
+        // Cleanup error handling services
+        this.connectionRecoveryService?.destroy();
+        this.offlineModeService?.destroy();
+        this.gracefulDegradation?.destroy();
+        this.errorHandlingService?.destroy();
+        
+        // Cleanup core services
         this.stateManager?.destroy();
         this.themeManager?.destroy();
         this.notificationService?.destroy();

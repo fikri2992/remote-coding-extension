@@ -100,13 +100,13 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
 
     private _getEnhancedHtmlForWebview(webview: vscode.Webview): string {
         try {
-            // Read the enhanced frontend HTML
-            const htmlPath = path.join(this._extensionUri.fsPath, 'src', 'webview', 'enhanced-frontend', 'index.html');
+            // Read the enhanced frontend HTML from the built output directory
+            const htmlPath = path.join(this._extensionUri.fsPath, 'out', 'webview', 'enhanced-frontend', 'index.html');
             let html = fs.readFileSync(htmlPath, 'utf8');
             
             // Convert local resource paths to webview URIs
             const enhancedFrontendUri = webview.asWebviewUri(
-                vscode.Uri.joinPath(this._extensionUri, 'src', 'webview', 'enhanced-frontend')
+                vscode.Uri.joinPath(this._extensionUri, 'out', 'webview', 'enhanced-frontend')
             );
             
             // Replace relative paths with webview URIs
@@ -144,8 +144,8 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
     }
 
     private _getBasicHtmlForWebview(webview: vscode.Webview): string {
-        // Read the basic HTML file from the webview directory
-        const htmlPath = path.join(this._extensionUri.fsPath, 'src', 'webview', 'panel.html');
+        // Read the basic HTML file from the built output directory
+        const htmlPath = path.join(this._extensionUri.fsPath, 'out', 'webview', 'panel.html');
         
         try {
             let html = fs.readFileSync(htmlPath, 'utf8');

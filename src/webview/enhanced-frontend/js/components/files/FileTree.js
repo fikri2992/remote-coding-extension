@@ -3,6 +3,7 @@
  */
 
 import { Component } from '../base/Component.js';
+import { VirtualScroller, PerformanceOptimizer, MemoryManager } from '../../utils/PerformanceOptimizer.js';
 
 export class FileTree extends Component {
     constructor(options) {
@@ -18,14 +19,30 @@ export class FileTree extends Component {
         this.onFolderToggle = options.onFolderToggle || (() => {});
         this.onFileOpen = options.onFileOpen || (() => {});
 
-        // Tree state
+        // Performance optimizations
+        this.optimizer = new PerformanceOptimizer();
+        this.memoryManager = new MemoryManager({
+            maxCacheSize: 300,
+            cleanupInterval: 45000,
+            maxAge: 240000
+        });
+
+        // Virtual scrolling for large trees
+        this.virtualScroller = null;
+        this.flattenedNodes = [];
+        this.virtualScrollingThreshold = 100;
+
+        // Tree state with caching
         this.renderedNodes = new Map(); // Cache rendered nodes for performance
+        this.nodeHeights = new Map(); // Cache node heights
+        this.lastUpdateTime = 0;
     }
 
     async initialize() {
         await super.initialize();
         this.render();
         this.setupEventListeners();
+        this.checkVirtualScrollingNeed();
     }
 
     render() {
@@ -35,6 +52,15 @@ export class FileTree extends Component {
     }
 
     renderNodes() {
+        // Debounce rendering for better performance
+        this.optimizer.debounce('file-tree-render', () => {
+            this.performRender();
+        }, 100);
+    }
+
+    performRender() {
+        const startTime = performance.now();
+        
         this.element.innerHTML = '';
         this.renderedNodes.clear();
 
@@ -47,13 +73,107 @@ export class FileTree extends Component {
             return;
         }
 
+        // Check if we should use virtual scrolling
+        this.flattenedNodes = this.flattenNodes(this.nodes);
+        
+        if (this.flattenedNodes.length > this.virtualScrollingThreshold) {
+            this.enableVirtualScrolling();
+        } else {
+            this.renderTraditional();
+        }
+
+        const renderTime = performance.now() - startTime;
+        console.log(`File tree rendered in ${renderTime.toFixed(2)}ms (${this.flattenedNodes.length} nodes)`);
+    }
+
+    renderTraditional() {
         const treeList = this.createElement('ul', {}, ['tree']);
         this.element.appendChild(treeList);
 
         this.nodes.forEach(node => {
-            const nodeElement = this.renderNode(node, 0);
+            const nodeElement = this.renderNodeOptimized(node, 0);
             treeList.appendChild(nodeElement);
         });
+    }
+
+    /**
+     * Flatten tree nodes for virtual scrolling
+     */
+    flattenNodes(nodes, depth = 0, result = []) {
+        nodes.forEach(node => {
+            result.push({ ...node, depth });
+            
+            if (node.type === 'directory' && 
+                node.children && 
+                node.children.length > 0 && 
+                this.expandedPaths.has(node.path)) {
+                this.flattenNodes(node.children, depth + 1, result);
+            }
+        });
+        
+        return result;
+    }
+
+    /**
+     * Enable virtual scrolling for large trees
+     */
+    enableVirtualScrolling() {
+        if (this.virtualScroller) {
+            this.virtualScroller.destroy();
+        }
+
+        this.virtualScroller = new VirtualScroller({
+            container: this.element,
+            itemHeight: 28, // Estimated height per tree item
+            bufferSize: 10,
+            renderItem: (nodeData, index) => this.renderVirtualNode(nodeData, index),
+            getItemCount: () => this.flattenedNodes.length,
+            getItemData: (index) => this.flattenedNodes[index]
+        });
+
+        console.log(`Virtual scrolling enabled for file tree (${this.flattenedNodes.length} nodes)`);
+    }
+
+    /**
+     * Render node for virtual scrolling
+     */
+    renderVirtualNode(nodeData, index) {
+        const cacheKey = `vnode-${nodeData.path}-${nodeData.depth}-${this.expandedPaths.has(nodeData.path)}`;
+        
+        // Check cache first
+        let cachedElement = this.memoryManager.get(cacheKey);
+        if (cachedElement) {
+            return cachedElement.cloneNode(true);
+        }
+
+        const nodeElement = this.renderNode(nodeData, nodeData.depth);
+        
+        // Cache the rendered element
+        this.memoryManager.set(cacheKey, nodeElement.cloneNode(true));
+        
+        return nodeElement;
+    }
+
+    /**
+     * Optimized node rendering with caching
+     */
+    renderNodeOptimized(node, depth) {
+        const cacheKey = `node-${node.path}-${depth}-${this.expandedPaths.has(node.path)}`;
+        
+        // Check cache first
+        let cachedElement = this.memoryManager.get(cacheKey);
+        if (cachedElement) {
+            const clonedElement = cachedElement.cloneNode(true);
+            this.renderedNodes.set(node.path, { element: clonedElement, node, depth });
+            return clonedElement;
+        }
+
+        const nodeElement = this.renderNode(node, depth);
+        
+        // Cache the rendered element
+        this.memoryManager.set(cacheKey, nodeElement.cloneNode(true));
+        
+        return nodeElement;
     }
 
     renderNode(node, depth) {
@@ -137,10 +257,24 @@ export class FileTree extends Component {
     }
 
     setupEventListeners() {
-        // Use event delegation for better performance
-        this.addEventListener(this.element, 'click', this.handleTreeClick);
-        this.addEventListener(this.element, 'dblclick', this.handleTreeDoubleClick);
-        this.addEventListener(this.element, 'keydown', this.handleTreeKeydown);
+        // Use event delegation with optimized handlers
+        this.optimizer.addEventListenerWithCleanup(
+            this.element,
+            'click',
+            (e) => this.optimizer.throttle('tree-click', () => this.handleTreeClick(e), 50)
+        );
+        
+        this.optimizer.addEventListenerWithCleanup(
+            this.element,
+            'dblclick',
+            (e) => this.optimizer.throttle('tree-dblclick', () => this.handleTreeDoubleClick(e), 100)
+        );
+        
+        this.optimizer.addEventListenerWithCleanup(
+            this.element,
+            'keydown',
+            (e) => this.handleTreeKeydown(e)
+        );
     }
 
     handleTreeClick(event) {
@@ -421,9 +555,189 @@ export class FileTree extends Component {
     }
 
     scrollToFile(filePath) {
-        const treeItem = this.element.querySelector(`[data-path="${filePath}"]`);
-        if (treeItem) {
-            treeItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        if (this.virtualScroller) {
+            // Find index in flattened nodes
+            const index = this.flattenedNodes.findIndex(node => node.path === filePath);
+            if (index !== -1) {
+                this.virtualScroller.scrollToIndex(index);
+            }
+        } else {
+            const treeItem = this.element.querySelector(`[data-path="${filePath}"]`);
+            if (treeItem) {
+                treeItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
         }
+    }
+
+    /**
+     * Check if virtual scrolling is needed
+     */
+    checkVirtualScrollingNeed() {
+        const totalNodes = this.countTotalNodes(this.nodes);
+        
+        if (totalNodes > this.virtualScrollingThreshold && !this.virtualScroller) {
+            this.flattenedNodes = this.flattenNodes(this.nodes);
+            this.enableVirtualScrolling();
+        } else if (totalNodes <= this.virtualScrollingThreshold && this.virtualScroller) {
+            this.disableVirtualScrolling();
+        }
+    }
+
+    /**
+     * Count total nodes in tree
+     */
+    countTotalNodes(nodes) {
+        let count = 0;
+        
+        const countRecursive = (nodeList) => {
+            nodeList.forEach(node => {
+                count++;
+                if (node.children && this.expandedPaths.has(node.path)) {
+                    countRecursive(node.children);
+                }
+            });
+        };
+        
+        countRecursive(nodes);
+        return count;
+    }
+
+    /**
+     * Disable virtual scrolling
+     */
+    disableVirtualScrolling() {
+        if (this.virtualScroller) {
+            this.virtualScroller.destroy();
+            this.virtualScroller = null;
+            this.renderTraditional();
+            console.log('Virtual scrolling disabled for file tree');
+        }
+    }
+
+    /**
+     * Optimized folder expansion
+     */
+    expandFolderOptimized(path) {
+        if (this.expandedPaths.has(path)) return;
+
+        this.expandedPaths.add(path);
+        this.onFolderToggle(path, true);
+
+        // Batch UI updates
+        this.optimizer.debounce('folder-expand', () => {
+            if (this.virtualScroller) {
+                // Refresh virtual scroller with new flattened nodes
+                this.flattenedNodes = this.flattenNodes(this.nodes);
+                this.virtualScroller.refresh();
+            } else {
+                this.expandFolder(path);
+            }
+        }, 50);
+    }
+
+    /**
+     * Optimized folder collapse
+     */
+    collapseFolderOptimized(path) {
+        if (!this.expandedPaths.has(path)) return;
+
+        this.expandedPaths.delete(path);
+        this.onFolderToggle(path, false);
+
+        // Batch UI updates
+        this.optimizer.debounce('folder-collapse', () => {
+            if (this.virtualScroller) {
+                // Refresh virtual scroller with new flattened nodes
+                this.flattenedNodes = this.flattenNodes(this.nodes);
+                this.virtualScroller.refresh();
+            } else {
+                this.collapseFolder(path);
+            }
+        }, 50);
+    }
+
+    /**
+     * Batch node updates for better performance
+     */
+    batchUpdateNodes(newNodes) {
+        this.optimizer.requestAnimationFrame('batch-node-update', () => {
+            this.nodes = newNodes;
+            this.checkVirtualScrollingNeed();
+            this.renderNodes();
+        });
+    }
+
+    /**
+     * Memory cleanup for large trees
+     */
+    performMemoryCleanup() {
+        // Clean up old rendered nodes
+        const maxCachedNodes = 200;
+        if (this.renderedNodes.size > maxCachedNodes) {
+            const keysToDelete = Array.from(this.renderedNodes.keys())
+                .slice(0, this.renderedNodes.size - maxCachedNodes);
+            
+            keysToDelete.forEach(key => this.renderedNodes.delete(key));
+        }
+
+        // Clean up node height cache
+        if (this.nodeHeights.size > maxCachedNodes) {
+            const heightKeysToDelete = Array.from(this.nodeHeights.keys())
+                .slice(0, this.nodeHeights.size - maxCachedNodes);
+            
+            heightKeysToDelete.forEach(key => this.nodeHeights.delete(key));
+        }
+
+        console.log('File tree memory cleanup completed');
+    }
+
+    /**
+     * Get performance metrics
+     */
+    getPerformanceMetrics() {
+        return {
+            nodeCount: this.nodes.length,
+            flattenedNodeCount: this.flattenedNodes.length,
+            renderedNodes: this.renderedNodes.size,
+            cachedHeights: this.nodeHeights.size,
+            virtualScrollingEnabled: !!this.virtualScroller,
+            expandedPaths: this.expandedPaths.size,
+            memoryStats: this.memoryManager.getStats(),
+            optimizerMetrics: this.optimizer.getMetrics()
+        };
+    }
+
+    /**
+     * Override original methods to use optimized versions
+     */
+    expandFolder(path) {
+        this.expandFolderOptimized(path);
+    }
+
+    collapseFolder(path) {
+        this.collapseFolderOptimized(path);
+    }
+
+    setNodes(nodes) {
+        this.batchUpdateNodes(nodes);
+    }
+
+    destroy() {
+        // Cleanup virtual scroller
+        if (this.virtualScroller) {
+            this.virtualScroller.destroy();
+            this.virtualScroller = null;
+        }
+
+        // Cleanup performance optimizers
+        this.optimizer.cleanup();
+        this.memoryManager.destroy();
+
+        // Clear caches
+        this.renderedNodes.clear();
+        this.nodeHeights.clear();
+        this.flattenedNodes = [];
+
+        super.destroy();
     }
 }

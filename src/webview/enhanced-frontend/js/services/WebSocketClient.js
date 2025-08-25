@@ -3,10 +3,24 @@
  * Advanced WebSocket client with enhanced messaging protocol, offline support, and real-time features
  */
 
+import { MessageProcessor } from '../utils/MessageProcessor.js';
+import { PerformanceOptimizer, MemoryManager } from '../utils/PerformanceOptimizer.js';
+
 export class WebSocketClient {
     constructor(stateManager, notificationService) {
         this.stateManager = stateManager;
         this.notificationService = notificationService;
+        
+        // Performance optimizations
+        this.optimizer = new PerformanceOptimizer();
+        this.memoryManager = new MemoryManager({
+            maxCacheSize: 300,
+            cleanupInterval: 90000, // 1.5 minutes
+            maxAge: 450000 // 7.5 minutes
+        });
+        
+        // Optimized message processor
+        this.messageProcessor = new MessageProcessor(stateManager, notificationService);
         this.websocket = null;
         
         // Connection state
@@ -175,14 +189,18 @@ export class WebSocketClient {
     }
 
     /**
-     * Send message to server
+     * Send message to server with performance optimizations
      */
     async sendMessage(message) {
         if (!this.isConnected || !this.websocket || this.websocket.readyState !== WebSocket.OPEN) {
-            // Queue message for later
+            // Queue message for later with deduplication
             if (message.type !== 'ping') {
-                this.messageQueue.push(message);
-                console.log('📤 Message queued (not connected):', message.type);
+                const messageKey = `${message.type}-${JSON.stringify(message.data)}`;
+                if (!this.memoryManager.has(messageKey)) {
+                    this.messageQueue.push(message);
+                    this.memoryManager.set(messageKey, true);
+                    console.log('📤 Message queued (not connected):', message.type);
+                }
             }
             return false;
         }
@@ -201,9 +219,12 @@ export class WebSocketClient {
                 });
             }
             
-            // Send message
-            this.websocket.send(JSON.stringify(message));
-            console.log('📤 Sent message:', message.type, message.id);
+            // Throttle message sending to prevent overwhelming the server
+            this.optimizer.throttle('send-message', () => {
+                this.websocket.send(JSON.stringify(message));
+                this.connectionMetrics.messagesSent++;
+                console.log('📤 Sent message:', message.type, message.id);
+            }, 10);
             
             return true;
         } catch (error) {
@@ -267,14 +288,17 @@ export class WebSocketClient {
     }
 
     /**
-     * Handle WebSocket message event
+     * Handle WebSocket message event with performance optimizations
      */
     handleMessage(event) {
         try {
             const message = JSON.parse(event.data);
             console.log('📥 Received message:', message.type, message.id);
             
-            // Handle pong responses
+            // Update metrics
+            this.connectionMetrics.messagesReceived++;
+            
+            // Handle pong responses immediately
             if (message.type === 'pong') {
                 this.handlePong(message);
                 return;
@@ -285,13 +309,8 @@ export class WebSocketClient {
                 this.pendingMessages.delete(message.id);
             }
             
-            // Route message to appropriate handler
-            const handler = this.messageHandlers.get(message.type);
-            if (handler) {
-                handler(message);
-            } else {
-                console.warn('⚠️ No handler for message type:', message.type);
-            }
+            // Use optimized message processor
+            this.messageProcessor.processMessage(message);
             
         } catch (error) {
             console.error('❌ Failed to parse WebSocket message:', error);
@@ -402,7 +421,7 @@ export class WebSocketClient {
     }
 
     /**
-     * Process queued messages
+     * Process queued messages with batching
      */
     processMessageQueue() {
         if (this.messageQueue.length === 0) {
@@ -414,9 +433,42 @@ export class WebSocketClient {
         const queue = [...this.messageQueue];
         this.messageQueue = [];
         
-        queue.forEach(message => {
-            this.sendMessage(message);
-        });
+        // Process messages in batches to avoid overwhelming the connection
+        const batchSize = 5;
+        const processBatch = (startIndex) => {
+            const batch = queue.slice(startIndex, startIndex + batchSize);
+            
+            batch.forEach(message => {
+                this.sendMessage(message);
+            });
+            
+            // Process next batch after a short delay
+            if (startIndex + batchSize < queue.length) {
+                setTimeout(() => processBatch(startIndex + batchSize), 50);
+            }
+        };
+        
+        processBatch(0);
+    }
+
+    /**
+     * Process all queued messages (online and offline)
+     */
+    processAllQueuedMessages() {
+        // Process regular message queue
+        this.processMessageQueue();
+        
+        // Process offline message queue
+        if (this.offlineMessageQueue.length > 0) {
+            console.log(`📤 Processing ${this.offlineMessageQueue.length} offline messages`);
+            
+            const offlineQueue = [...this.offlineMessageQueue];
+            this.offlineMessageQueue = [];
+            
+            offlineQueue.forEach(message => {
+                this.sendMessage(message);
+            });
+        }
     }
 
     /**
@@ -1344,4 +1396,223 @@ export class WebSocketClient {
         this.stateManager = null;
         this.notificationService = null;
     }
-}
+} 
+   /**
+     * Get comprehensive performance metrics
+     */
+    getPerformanceMetrics() {
+        return {
+            connection: {
+                isConnected: this.isConnected,
+                reconnectAttempts: this.reconnectAttempts,
+                connectionHealth: this.connectionHealthScore,
+                uptime: this.connectionStartTime ? Date.now() - this.connectionStartTime : 0
+            },
+            messages: {
+                sent: this.connectionMetrics.messagesSent,
+                received: this.connectionMetrics.messagesReceived,
+                queued: this.messageQueue.length,
+                pending: this.pendingMessages.size,
+                offlineQueued: this.offlineMessageQueue.length
+            },
+            latency: {
+                current: this.connectionMetrics.lastLatency,
+                average: Math.round(this.connectionMetrics.averageLatency)
+            },
+            memory: {
+                messageProcessor: this.messageProcessor.getStats(),
+                memoryManager: this.memoryManager.getStats(),
+                optimizer: this.optimizer.getMetrics()
+            }
+        };
+    }
+
+    /**
+     * Perform memory cleanup for long-running sessions
+     */
+    performMemoryCleanup() {
+        // Clean up old pending messages
+        const now = Date.now();
+        const maxPendingAge = 300000; // 5 minutes
+        
+        for (const [messageId, pendingData] of this.pendingMessages) {
+            if (now - pendingData.timestamp > maxPendingAge) {
+                this.pendingMessages.delete(messageId);
+            }
+        }
+
+        // Clean up old message status
+        const maxStatusAge = 180000; // 3 minutes
+        for (const [messageId, statusData] of this.messageStatus) {
+            if (now - statusData.timestamp > maxStatusAge) {
+                this.messageStatus.delete(messageId);
+            }
+        }
+
+        // Clean up typing indicators
+        const maxTypingAge = 10000; // 10 seconds
+        for (const [userId, typingData] of this.typingIndicators) {
+            if (now - typingData.timestamp > maxTypingAge) {
+                this.typingIndicators.delete(userId);
+            }
+        }
+
+        // Clean up rate limiter
+        const rateLimitWindow = 60000; // 1 minute
+        for (const [key, rateData] of this.rateLimiter) {
+            if (now - rateData.window > rateLimitWindow) {
+                this.rateLimiter.delete(key);
+            }
+        }
+
+        console.log('WebSocket client memory cleanup completed');
+    }
+
+    /**
+     * Optimize connection performance
+     */
+    optimizeConnection() {
+        // Adjust heartbeat interval based on connection health
+        if (this.connectionHealthScore > 90) {
+            this.heartbeatIntervalMs = 45000; // Increase interval for healthy connections
+        } else if (this.connectionHealthScore < 50) {
+            this.heartbeatIntervalMs = 15000; // Decrease interval for unhealthy connections
+        } else {
+            this.heartbeatIntervalMs = 30000; // Default interval
+        }
+
+        // Adjust reconnect strategy based on connection history
+        if (this.connectionMetrics.reconnections > 5) {
+            this.maxReconnectDelay = 60000; // Increase max delay for frequently disconnecting connections
+        }
+
+        // Clean up message queues if they're getting too large
+        const maxQueueSize = 100;
+        if (this.messageQueue.length > maxQueueSize) {
+            this.messageQueue = this.messageQueue.slice(-maxQueueSize);
+            console.warn('Message queue truncated due to size limit');
+        }
+
+        if (this.offlineMessageQueue.length > maxQueueSize) {
+            this.offlineMessageQueue = this.offlineMessageQueue.slice(-maxQueueSize);
+            console.warn('Offline message queue truncated due to size limit');
+        }
+    }
+
+    /**
+     * Start periodic optimization
+     */
+    startPeriodicOptimization() {
+        // Memory cleanup every 2 minutes
+        setInterval(() => {
+            this.performMemoryCleanup();
+        }, 120000);
+
+        // Connection optimization every 5 minutes
+        setInterval(() => {
+            this.optimizeConnection();
+        }, 300000);
+    }
+
+    /**
+     * Enhanced connection with performance monitoring
+     */
+    async connect() {
+        if (this.websocket && this.websocket.readyState === WebSocket.CONNECTING) {
+            return; // Already connecting
+        }
+        
+        if (this.isConnected) {
+            return; // Already connected
+        }
+
+        // Start periodic optimization
+        this.startPeriodicOptimization();
+        
+        try {
+            // Update connection state
+            this.stateManager.updateConnection({
+                status: 'connecting',
+                reconnectAttempts: this.reconnectAttempts
+            });
+            
+            // Determine WebSocket URL
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const port = parseInt(window.location.port) + 1; // WebSocket port is HTTP port + 1
+            const wsUrl = `${protocol}//${window.location.hostname}:${port}`;
+            
+            console.log(`🔌 Connecting to WebSocket: ${wsUrl} (attempt ${this.reconnectAttempts + 1})`);
+            
+            // Create WebSocket connection
+            this.websocket = new WebSocket(wsUrl);
+            
+            // Set up event listeners
+            this.websocket.addEventListener('open', this.handleOpen);
+            this.websocket.addEventListener('message', this.handleMessage);
+            this.websocket.addEventListener('close', this.handleClose);
+            this.websocket.addEventListener('error', this.handleError);
+            
+            // Set connection timeout
+            const connectionTimeout = setTimeout(() => {
+                if (this.websocket && this.websocket.readyState === WebSocket.CONNECTING) {
+                    console.warn('⏰ WebSocket connection timeout');
+                    this.websocket.close();
+                }
+            }, 10000);
+            
+            // Wait for connection to open
+            return new Promise((resolve, reject) => {
+                const cleanup = () => {
+                    clearTimeout(connectionTimeout);
+                    this.websocket.removeEventListener('open', onOpen);
+                    this.websocket.removeEventListener('error', onError);
+                };
+                
+                const onOpen = () => {
+                    cleanup();
+                    resolve();
+                };
+                
+                const onError = (error) => {
+                    cleanup();
+                    reject(error);
+                };
+                
+                this.websocket.addEventListener('open', onOpen, { once: true });
+                this.websocket.addEventListener('error', onError, { once: true });
+            });
+            
+        } catch (error) {
+            console.error('❌ Failed to create WebSocket connection:', error);
+            this.handleConnectionError(error);
+            throw error;
+        }
+    }
+
+    /**
+     * Enhanced disconnect with cleanup
+     */
+    disconnect() {
+        if (this.websocket) {
+            // Stop heartbeat
+            this.stopHeartbeat();
+            
+            // Close connection
+            this.websocket.close(1000, 'Client disconnect');
+            this.websocket = null;
+        }
+        
+        this.isConnected = false;
+        this.connectionId = null;
+        
+        // Cleanup resources
+        this.optimizer.cleanup();
+        this.messageProcessor.destroy();
+        this.memoryManager.destroy();
+        
+        // Update state
+        this.stateManager.updateConnection({
+            status: 'disconnected',
+            lastConnected: new Date()
+        });
+    }

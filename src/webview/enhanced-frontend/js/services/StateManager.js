@@ -3,8 +3,17 @@
  * Centralized state management for the enhanced web frontend
  */
 
+import { PerformanceOptimizer, MemoryManager } from '../utils/PerformanceOptimizer.js';
+
 export class StateManager {
     constructor() {
+        // Performance optimizations
+        this.optimizer = new PerformanceOptimizer();
+        this.memoryManager = new MemoryManager({
+            maxCacheSize: 100,
+            cleanupInterval: 120000, // 2 minutes
+            maxAge: 600000 // 10 minutes
+        });
         this.state = {
             // Navigation state
             navigation: {
@@ -85,8 +94,15 @@ export class StateManager {
         this.persistenceKey = 'enhanced-web-frontend-state';
         this.persistedKeys = ['preferences', 'navigation', 'prompts'];
         
-        // Debounced save function
-        this.debouncedSave = this.debounce(this.saveState.bind(this), 1000);
+        // State change batching
+        this.pendingUpdates = new Map();
+        this.updateBatchSize = 5;
+        this.updateBatchTimeout = 100;
+
+        // Performance metrics
+        this.updateCount = 0;
+        this.lastUpdateTime = 0;
+        this.batchedUpdates = 0;
     }
 
     /**
@@ -117,26 +133,131 @@ export class StateManager {
     }
 
     /**
-     * Update a section of the state
+     * Update a section of the state with performance optimizations
      */
     updateState(section, updates) {
         if (!this.state[section]) {
             console.warn(`State section '${section}' does not exist`);
             return;
         }
+
+        // Check if updates actually change the state
+        const currentState = this.state[section];
+        const hasChanges = this.hasStateChanges(currentState, updates);
         
+        if (!hasChanges) {
+            return; // No changes, skip update
+        }
+
+        // Batch updates for better performance
+        this.batchStateUpdate(section, updates);
+    }
+
+    /**
+     * Batch state updates for better performance
+     */
+    batchStateUpdate(section, updates) {
+        // Add to pending updates
+        if (!this.pendingUpdates.has(section)) {
+            this.pendingUpdates.set(section, []);
+        }
+        
+        this.pendingUpdates.get(section).push(updates);
+
+        // Process batch if it's full or schedule processing
+        if (this.pendingUpdates.get(section).length >= this.updateBatchSize) {
+            this.processBatchUpdates(section);
+        } else {
+            this.scheduleBatchProcessing(section);
+        }
+    }
+
+    /**
+     * Schedule batch processing with debouncing
+     */
+    scheduleBatchProcessing(section) {
+        this.optimizer.debounce(`state-batch-${section}`, () => {
+            this.processBatchUpdates(section);
+        }, this.updateBatchTimeout);
+    }
+
+    /**
+     * Process batched state updates
+     */
+    processBatchUpdates(section) {
+        const updates = this.pendingUpdates.get(section);
+        if (!updates || updates.length === 0) return;
+
+        // Clear pending updates
+        this.pendingUpdates.set(section, []);
+
+        // Merge all updates
+        const mergedUpdates = updates.reduce((acc, update) => {
+            return this.deepMerge(acc, update);
+        }, {});
+
+        // Apply the merged update
+        this.applyStateUpdate(section, mergedUpdates);
+        
+        this.batchedUpdates++;
+    }
+
+    /**
+     * Apply state update with caching and notifications
+     */
+    applyStateUpdate(section, updates) {
         const previousState = { ...this.state[section] };
         
         // Deep merge updates
         this.state[section] = this.deepMerge(this.state[section], updates);
         
-        // Notify subscribers
-        this.notifySubscribers(section, this.state[section], previousState);
+        // Cache the state for quick access
+        this.memoryManager.set(`state-${section}`, this.state[section]);
+        
+        // Notify subscribers with throttling
+        this.optimizer.throttle(`notify-${section}`, () => {
+            this.notifySubscribers(section, this.state[section], previousState);
+        }, 50);
         
         // Auto-save if this section is persisted
         if (this.persistedKeys.includes(section)) {
-            this.debouncedSave();
+            this.optimizer.debounce('state-save', () => this.saveState(), 1000);
         }
+
+        this.updateCount++;
+        this.lastUpdateTime = Date.now();
+    }
+
+    /**
+     * Check if updates actually change the state
+     */
+    hasStateChanges(currentState, updates) {
+        return !this.deepEqual(currentState, this.deepMerge(currentState, updates));
+    }
+
+    /**
+     * Deep equality check for objects
+     */
+    deepEqual(obj1, obj2) {
+        if (obj1 === obj2) return true;
+        
+        if (obj1 == null || obj2 == null) return false;
+        
+        if (typeof obj1 !== 'object' || typeof obj2 !== 'object') {
+            return obj1 === obj2;
+        }
+        
+        const keys1 = Object.keys(obj1);
+        const keys2 = Object.keys(obj2);
+        
+        if (keys1.length !== keys2.length) return false;
+        
+        for (const key of keys1) {
+            if (!keys2.includes(key)) return false;
+            if (!this.deepEqual(obj1[key], obj2[key])) return false;
+        }
+        
+        return true;
     }
 
     /**
@@ -169,11 +290,14 @@ export class StateManager {
     }
 
     /**
-     * Notify subscribers of state changes
+     * Notify subscribers of state changes with performance optimizations
      */
     notifySubscribers(section, newState, previousState) {
         const sectionSubscribers = this.subscribers.get(section);
-        if (sectionSubscribers) {
+        if (!sectionSubscribers || sectionSubscribers.size === 0) return;
+
+        // Use RAF for smooth UI updates
+        this.optimizer.requestAnimationFrame(`notify-${section}`, () => {
             sectionSubscribers.forEach(callback => {
                 try {
                     callback(newState, previousState);
@@ -181,7 +305,7 @@ export class StateManager {
                     console.error(`Error in state subscriber for section '${section}':`, error);
                 }
             });
-        }
+        });
     }
 
     // Convenience methods for common state updates
@@ -201,16 +325,45 @@ export class StateManager {
     }
 
     /**
-     * Add chat message
+     * Add chat message with performance optimizations
      */
     addChatMessage(message) {
-        const messages = [...this.state.chat.messages, {
+        const newMessage = {
             id: this.generateId(),
             timestamp: new Date(),
             ...message
-        }];
-        
-        this.updateChat({ messages });
+        };
+
+        // Cache the message for quick access
+        this.memoryManager.set(`msg-${newMessage.id}`, newMessage);
+
+        // Batch message additions for better performance
+        this.optimizer.debounce('add-chat-message', () => {
+            const messages = [...this.state.chat.messages, newMessage];
+            this.updateChat({ messages });
+        }, 50);
+    }
+
+    /**
+     * Add multiple chat messages in batch
+     */
+    addChatMessageBatch(messages) {
+        const newMessages = messages.map(message => ({
+            id: this.generateId(),
+            timestamp: new Date(),
+            ...message
+        }));
+
+        // Cache all messages
+        newMessages.forEach(msg => {
+            this.memoryManager.set(`msg-${msg.id}`, msg);
+        });
+
+        // Update state once for all messages
+        this.optimizer.requestAnimationFrame('batch-chat-messages', () => {
+            const allMessages = [...this.state.chat.messages, ...newMessages];
+            this.updateChat({ messages: allMessages });
+        });
     }
 
     /**
@@ -501,11 +654,147 @@ export class StateManager {
     }
 
     /**
+     * Get performance metrics
+     */
+    getPerformanceMetrics() {
+        return {
+            updateCount: this.updateCount,
+            batchedUpdates: this.batchedUpdates,
+            lastUpdateTime: this.lastUpdateTime,
+            pendingUpdates: this.pendingUpdates.size,
+            subscriberCounts: Object.fromEntries(
+                Array.from(this.subscribers.entries()).map(([key, set]) => [key, set.size])
+            ),
+            memoryStats: this.memoryManager.getStats(),
+            optimizerMetrics: this.optimizer.getMetrics()
+        };
+    }
+
+    /**
+     * Perform memory cleanup for long-running sessions
+     */
+    performMemoryCleanup() {
+        // Clean up old chat messages if there are too many
+        const maxChatMessages = 500;
+        if (this.state.chat.messages.length > maxChatMessages) {
+            const messagesToKeep = this.state.chat.messages.slice(-maxChatMessages);
+            this.updateChat({ messages: messagesToKeep });
+            console.log(`Cleaned up ${this.state.chat.messages.length - maxChatMessages} old chat messages`);
+        }
+
+        // Clean up old prompt history
+        const maxPromptHistory = 200;
+        if (this.state.prompts.history.length > maxPromptHistory) {
+            const promptsToKeep = this.state.prompts.history.slice(-maxPromptHistory);
+            this.updatePrompts({ history: promptsToKeep });
+            console.log(`Cleaned up ${this.state.prompts.history.length - maxPromptHistory} old prompts`);
+        }
+
+        // Clean up old git commits
+        const maxGitCommits = 100;
+        if (this.state.git.recentCommits.length > maxGitCommits) {
+            const commitsToKeep = this.state.git.recentCommits.slice(-maxGitCommits);
+            this.updateGit({ recentCommits: commitsToKeep });
+            console.log(`Cleaned up ${this.state.git.recentCommits.length - maxGitCommits} old commits`);
+        }
+
+        console.log('State manager memory cleanup completed');
+    }
+
+    /**
+     * Optimize state for performance
+     */
+    optimizeState() {
+        // Remove duplicate messages
+        const uniqueMessages = this.state.chat.messages.filter((message, index, array) => 
+            array.findIndex(m => m.id === message.id) === index
+        );
+        
+        if (uniqueMessages.length !== this.state.chat.messages.length) {
+            this.updateChat({ messages: uniqueMessages });
+            console.log(`Removed ${this.state.chat.messages.length - uniqueMessages.length} duplicate messages`);
+        }
+
+        // Remove duplicate prompts
+        const uniquePrompts = this.state.prompts.history.filter((prompt, index, array) => 
+            array.findIndex(p => p.id === prompt.id) === index
+        );
+        
+        if (uniquePrompts.length !== this.state.prompts.history.length) {
+            this.updatePrompts({ history: uniquePrompts });
+            console.log(`Removed ${this.state.prompts.history.length - uniquePrompts.length} duplicate prompts`);
+        }
+
+        // Compact file system expanded paths
+        const validPaths = new Set();
+        const checkPath = (nodes, parentPath = '') => {
+            nodes.forEach(node => {
+                const fullPath = parentPath ? `${parentPath}/${node.name}` : node.name;
+                if (node.type === 'directory') {
+                    validPaths.add(fullPath);
+                    if (node.children) {
+                        checkPath(node.children, fullPath);
+                    }
+                }
+            });
+        };
+        
+        checkPath(this.state.fileSystem.rootNodes);
+        
+        const validExpandedPaths = new Set(
+            Array.from(this.state.fileSystem.expandedPaths).filter(path => validPaths.has(path))
+        );
+        
+        if (validExpandedPaths.size !== this.state.fileSystem.expandedPaths.size) {
+            this.updateFileSystem({ expandedPaths: validExpandedPaths });
+            console.log(`Cleaned up ${this.state.fileSystem.expandedPaths.size - validExpandedPaths.size} invalid expanded paths`);
+        }
+    }
+
+    /**
+     * Start periodic optimization
+     */
+    startPeriodicOptimization() {
+        // Run cleanup every 5 minutes
+        setInterval(() => {
+            this.performMemoryCleanup();
+        }, 300000);
+
+        // Run optimization every 10 minutes
+        setInterval(() => {
+            this.optimizeState();
+        }, 600000);
+    }
+
+    /**
+     * Enhanced initialization with performance monitoring
+     */
+    async initialize() {
+        // Load persisted state
+        await this.loadState();
+        
+        // Set up auto-save
+        this.setupAutoSave();
+        
+        // Start periodic optimization
+        this.startPeriodicOptimization();
+        
+        console.log('✅ StateManager initialized with performance optimizations');
+    }
+
+    /**
      * Destroy the state manager
      */
     destroy() {
         // Save final state
         this.saveState();
+        
+        // Cleanup performance optimizers
+        this.optimizer.cleanup();
+        this.memoryManager.destroy();
+        
+        // Clear pending updates
+        this.pendingUpdates.clear();
         
         // Clear all subscribers
         this.subscribers.clear();

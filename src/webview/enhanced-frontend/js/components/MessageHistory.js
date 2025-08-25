@@ -3,6 +3,7 @@
  */
 
 import { Component } from './base/Component.js';
+import { VirtualScroller, PerformanceOptimizer, MemoryManager } from '../utils/PerformanceOptimizer.js';
 
 export class MessageHistory extends Component {
     constructor(options) {
@@ -12,6 +13,14 @@ export class MessageHistory extends Component {
         this.messages = options.messages || [];
         this.autoScroll = options.autoScroll !== false;
 
+        // Performance optimizations
+        this.optimizer = new PerformanceOptimizer();
+        this.memoryManager = new MemoryManager({
+            maxCacheSize: 200,
+            cleanupInterval: 60000,
+            maxAge: 300000
+        });
+
         // Virtual scrolling configuration
         this.itemHeight = 80; // Estimated height per message
         this.visibleCount = 10; // Number of visible items
@@ -19,9 +28,13 @@ export class MessageHistory extends Component {
         this.scrollTop = 0;
         this.containerHeight = 0;
 
-        // Rendered message elements
+        // Virtual scroller instance
+        this.virtualScroller = null;
+
+        // Rendered message elements cache
         this.renderedMessages = new Map();
         this.visibleRange = { start: 0, end: 0 };
+        this.messageHeights = new Map(); // Cache actual message heights
 
         // Typing indicator
         this.typingIndicator = null;
@@ -30,12 +43,17 @@ export class MessageHistory extends Component {
         // Scroll position tracking
         this.isAtBottom = true;
         this.lastScrollTop = 0;
+
+        // Performance metrics
+        this.renderCount = 0;
+        this.lastRenderTime = 0;
     }
 
     async initialize() {
         await super.initialize();
         this.render();
         this.setupEventListeners();
+        this.initializeVirtualScrolling();
         this.updateVisibleMessages();
     }
 
@@ -78,21 +96,27 @@ export class MessageHistory extends Component {
 
     setupEventListeners() {
         if (this.viewport) {
-            this.addEventListener(this.viewport, 'scroll', this.handleScroll);
+            // Use optimized scroll handler with throttling
+            this.optimizer.addEventListenerWithCleanup(
+                this.viewport,
+                'scroll',
+                () => this.optimizer.throttle('message-scroll', () => this.handleScroll(), 16)
+            );
         }
 
-        // Handle window resize for responsive behavior
-        this.addEventListener(window, 'resize', this.handleResize);
+        // Handle window resize with debouncing
+        this.optimizer.addEventListenerWithCleanup(
+            window,
+            'resize',
+            () => this.optimizer.debounce('message-resize', () => this.handleResize(), 100)
+        );
 
-        // Observe container size changes
-        if (window.ResizeObserver) {
-            this.resizeObserver = new ResizeObserver(entries => {
-                for (const entry of entries) {
-                    this.handleContainerResize(entry.contentRect);
-                }
-            });
-            this.resizeObserver.observe(this.element);
-        }
+        // Observe container size changes with debouncing
+        this.optimizer.createResizeObserver('message-history', (entries) => {
+            for (const entry of entries) {
+                this.handleContainerResize(entry.contentRect);
+            }
+        }).observe(this.element);
     }
 
     handleScroll() {
@@ -135,17 +159,29 @@ export class MessageHistory extends Component {
 
     addMessage(message) {
         this.messages.push(message);
-        this.updateContentHeight();
         
-        // If we're at the bottom or auto-scroll is enabled, update visible messages
-        if (this.isAtBottom || this.autoScroll) {
-            this.updateVisibleMessages();
-            
-            // Auto-scroll to bottom if enabled
-            if (this.autoScroll) {
-                this.scrollToBottom();
-            }
+        // Cache message for quick access
+        this.memoryManager.set(`msg-${message.id}`, message);
+        
+        // Update virtual scroller if available
+        if (this.virtualScroller) {
+            this.virtualScroller.refresh();
+        } else {
+            this.updateContentHeight();
         }
+        
+        // Batch scroll updates for better performance
+        this.optimizer.debounce('message-scroll-update', () => {
+            // If we're at the bottom or auto-scroll is enabled, update visible messages
+            if (this.isAtBottom || this.autoScroll) {
+                this.updateVisibleMessages();
+                
+                // Auto-scroll to bottom if enabled
+                if (this.autoScroll) {
+                    this.scrollToBottom();
+                }
+            }
+        }, 50);
     }
 
     clearMessages() {
@@ -389,15 +425,176 @@ export class MessageHistory extends Component {
         this.autoScroll = enabled;
     }
 
-    destroy() {
-        // Clean up resize observer
-        if (this.resizeObserver) {
-            this.resizeObserver.disconnect();
-            this.resizeObserver = null;
+    /**
+     * Initialize virtual scrolling for large message lists
+     */
+    initializeVirtualScrolling() {
+        // Only use virtual scrolling for large message lists
+        if (this.messages.length > 50) {
+            this.enableVirtualScrolling();
+        }
+    }
+
+    /**
+     * Enable virtual scrolling
+     */
+    enableVirtualScrolling() {
+        if (this.virtualScroller) return;
+
+        this.virtualScroller = new VirtualScroller({
+            container: this.viewport,
+            itemHeight: this.itemHeight,
+            bufferSize: this.bufferSize,
+            renderItem: (message, index) => this.renderMessage(message, index),
+            getItemCount: () => this.messages.length,
+            getItemData: (index) => this.messages[index]
+        });
+
+        console.log('Virtual scrolling enabled for message history');
+    }
+
+    /**
+     * Disable virtual scrolling
+     */
+    disableVirtualScrolling() {
+        if (this.virtualScroller) {
+            this.virtualScroller.destroy();
+            this.virtualScroller = null;
+            console.log('Virtual scrolling disabled for message history');
+        }
+    }
+
+    /**
+     * Optimized message rendering with caching
+     */
+    renderMessageOptimized(message, index) {
+        const cacheKey = `render-${message.id}-${message.timestamp}`;
+        
+        // Check cache first
+        let cachedElement = this.memoryManager.get(cacheKey);
+        if (cachedElement) {
+            return cachedElement.cloneNode(true);
         }
 
-        // Clear rendered messages
+        // Render new message
+        const messageElement = this.renderMessage(message, index);
+        
+        // Cache the rendered element
+        this.memoryManager.set(cacheKey, messageElement.cloneNode(true));
+        
+        return messageElement;
+    }
+
+    /**
+     * Batch message updates for better performance
+     */
+    batchUpdateMessages(messages) {
+        this.optimizer.requestAnimationFrame('batch-message-update', () => {
+            messages.forEach(message => {
+                this.messages.push(message);
+                this.memoryManager.set(`msg-${message.id}`, message);
+            });
+
+            if (this.virtualScroller) {
+                this.virtualScroller.refresh();
+            } else {
+                this.updateContentHeight();
+                this.updateVisibleMessages();
+            }
+
+            if (this.autoScroll) {
+                this.scrollToBottom();
+            }
+        });
+    }
+
+    /**
+     * Optimized scroll handling
+     */
+    handleScrollOptimized() {
+        const now = performance.now();
+        
+        // Skip if we're scrolling too frequently
+        if (now - this.lastRenderTime < 16) { // 60fps limit
+            return;
+        }
+
+        this.lastRenderTime = now;
+        this.handleScroll();
+    }
+
+    /**
+     * Memory cleanup for long-running sessions
+     */
+    performMemoryCleanup() {
+        // Clean up old rendered messages
+        const maxCachedMessages = 100;
+        if (this.renderedMessages.size > maxCachedMessages) {
+            const keysToDelete = Array.from(this.renderedMessages.keys())
+                .slice(0, this.renderedMessages.size - maxCachedMessages);
+            
+            keysToDelete.forEach(key => {
+                const element = this.renderedMessages.get(key);
+                if (element && element.parentNode) {
+                    element.parentNode.removeChild(element);
+                }
+                this.renderedMessages.delete(key);
+            });
+        }
+
+        // Clean up message height cache
+        if (this.messageHeights.size > maxCachedMessages) {
+            const heightKeysToDelete = Array.from(this.messageHeights.keys())
+                .slice(0, this.messageHeights.size - maxCachedMessages);
+            
+            heightKeysToDelete.forEach(key => this.messageHeights.delete(key));
+        }
+
+        console.log('Message history memory cleanup completed');
+    }
+
+    /**
+     * Get performance metrics
+     */
+    getPerformanceMetrics() {
+        return {
+            messageCount: this.messages.length,
+            renderedMessages: this.renderedMessages.size,
+            cachedHeights: this.messageHeights.size,
+            virtualScrollingEnabled: !!this.virtualScroller,
+            renderCount: this.renderCount,
+            memoryStats: this.memoryManager.getStats(),
+            optimizerMetrics: this.optimizer.getMetrics()
+        };
+    }
+
+    /**
+     * Toggle virtual scrolling based on message count
+     */
+    checkVirtualScrollingThreshold() {
+        const threshold = 50;
+        
+        if (this.messages.length > threshold && !this.virtualScroller) {
+            this.enableVirtualScrolling();
+        } else if (this.messages.length <= threshold && this.virtualScroller) {
+            this.disableVirtualScrolling();
+        }
+    }
+
+    destroy() {
+        // Cleanup virtual scroller
+        if (this.virtualScroller) {
+            this.virtualScroller.destroy();
+            this.virtualScroller = null;
+        }
+
+        // Cleanup performance optimizers
+        this.optimizer.cleanup();
+        this.memoryManager.destroy();
+
+        // Clear caches
         this.renderedMessages.clear();
+        this.messageHeights.clear();
 
         super.destroy();
     }

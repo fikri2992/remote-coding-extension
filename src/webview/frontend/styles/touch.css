@@ -1,0 +1,302 @@
+/* Touch and Gesture Support Styles */
+
+/* Touch-friendly interactive elements */
+.touch-target {
+    min-width: 44px;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Enhanced touch feedback */
+.touch-feedback {
+    position: relative;
+    overflow: hidden;
+}
+
+.touch-feedback::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.3);
+    transform: translate(-50%, -50%);
+    transition: width 0.3s ease-out, height 0.3s ease-out;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.touch-feedback:active::before {
+    width: 100px;
+    height: 100px;
+}
+
+/* Swipe gesture indicators */
+.swipe-indicator {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 4px;
+    height: 40px;
+    background: var(--vscode-focusBorder);
+    border-radius: 2px;
+    opacity: 0;
+    transition: opacity 0.2s ease-out;
+}
+
+.swipe-indicator.left {
+    left: 8px;
+}
+
+.swipe-indicator.right {
+    right: 8px;
+}
+
+.swipe-indicator.visible {
+    opacity: 0.7;
+}
+
+/* Pull-to-refresh indicator */
+.pull-refresh-indicator {
+    position: absolute;
+    top: -60px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--vscode-button-background);
+    border-radius: 50%;
+    color: var(--vscode-button-foreground);
+    transition: transform 0.3s ease-out, opacity 0.3s ease-out;
+    opacity: 0;
+    z-index: 10;
+}
+
+.pull-refresh-indicator.visible {
+    opacity: 1;
+    transform: translateX(-50%) translateY(80px);
+}
+
+.pull-refresh-indicator.loading {
+    animation: spin 1s linear infinite;
+}
+
+/* Long press feedback */
+.long-press-target {
+    position: relative;
+}
+
+.long-press-target::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--vscode-button-background);
+    opacity: 0;
+    border-radius: inherit;
+    transition: opacity 0.2s ease-out;
+    pointer-events: none;
+}
+
+.long-press-target.long-pressing::after {
+    opacity: 0.1;
+}
+
+/* Drag and drop touch support */
+.draggable-touch {
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+}
+
+.dragging-touch {
+    opacity: 0.8;
+    transform: scale(1.05);
+    z-index: 1000;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    transition: none;
+}
+
+.drop-zone-touch {
+    position: relative;
+}
+
+.drop-zone-touch.drag-over {
+    background: var(--vscode-list-dropBackground);
+}
+
+.drop-zone-touch::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    border: 2px dashed var(--vscode-focusBorder);
+    border-radius: 4px;
+    opacity: 0;
+    transition: opacity 0.2s ease-out;
+    pointer-events: none;
+}
+
+.drop-zone-touch.drag-over::before {
+    opacity: 1;
+}
+
+/* Scroll momentum and overscroll */
+.scroll-container {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    scroll-behavior: smooth;
+}
+
+.scroll-container.momentum {
+    scroll-behavior: auto;
+}
+
+/* Pinch zoom support for specific elements */
+.pinch-zoomable {
+    touch-action: pinch-zoom;
+}
+
+/* Gesture recognition states */
+.gesture-active {
+    pointer-events: none;
+    user-select: none;
+}
+
+/* Touch-specific button styles */
+@media (hover: none) and (pointer: coarse) {
+    .btn:hover {
+        /* Remove hover effects on touch devices */
+        background: var(--vscode-button-background);
+        transform: none;
+    }
+    
+    .btn:active {
+        background: var(--vscode-button-hoverBackground);
+        transform: scale(0.98);
+    }
+    
+    .nav-item:hover {
+        background: transparent;
+    }
+    
+    .nav-item:active {
+        background: var(--vscode-list-activeSelectionBackground);
+    }
+    
+    .tree-item-content:hover {
+        background: transparent;
+    }
+    
+    .tree-item-content:active {
+        background: var(--vscode-list-activeSelectionBackground);
+    }
+}
+
+/* Accessibility improvements for touch */
+.touch-accessible {
+    outline: none;
+}
+
+.touch-accessible:focus-visible {
+    outline: 2px solid var(--vscode-focusBorder);
+    outline-offset: 2px;
+}
+
+/* Haptic feedback simulation */
+.haptic-light {
+    animation: haptic-light 0.1s ease-out;
+}
+
+.haptic-medium {
+    animation: haptic-medium 0.15s ease-out;
+}
+
+.haptic-heavy {
+    animation: haptic-heavy 0.2s ease-out;
+}
+
+@keyframes haptic-light {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.02); }
+    100% { transform: scale(1); }
+}
+
+@keyframes haptic-medium {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+
+@keyframes haptic-heavy {
+    0% { transform: scale(1); }
+    25% { transform: scale(1.08); }
+    75% { transform: scale(0.98); }
+    100% { transform: scale(1); }
+}
+
+/* Safe area support for devices with notches */
+@supports (padding: max(0px)) {
+    .safe-area-top {
+        padding-top: max(12px, env(safe-area-inset-top));
+    }
+    
+    .safe-area-bottom {
+        padding-bottom: max(12px, env(safe-area-inset-bottom));
+    }
+    
+    .safe-area-left {
+        padding-left: max(12px, env(safe-area-inset-left));
+    }
+    
+    .safe-area-right {
+        padding-right: max(12px, env(safe-area-inset-right));
+    }
+}
+
+/* Orientation change handling */
+@media (orientation: portrait) {
+    .orientation-adaptive {
+        flex-direction: column;
+    }
+}
+
+@media (orientation: landscape) {
+    .orientation-adaptive {
+        flex-direction: row;
+    }
+    
+    .landscape-compact .sidebar {
+        width: 200px;
+        min-width: 200px;
+    }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+    .touch-feedback::before,
+    .swipe-indicator,
+    .pull-refresh-indicator,
+    .long-press-target::after,
+    .dragging-touch {
+        transition: none;
+        animation: none;
+    }
+    
+    .scroll-container {
+        scroll-behavior: auto;
+    }
+}

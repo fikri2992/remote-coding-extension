@@ -1,0 +1,77 @@
+{
+  "name": "VS Code Web Automation Tunnel",
+  "short_name": "VSCode Tunnel",
+  "description": "Web-based automation interface for VS Code",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "any",
+  "theme_color": "#1e1e1e",
+  "background_color": "#1e1e1e",
+  "categories": ["developer", "productivity", "utilities"],
+  "lang": "en",
+  "dir": "ltr",
+  "icons": [
+    {
+      "src": "./assets/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./assets/icons/icon-512.png", 
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./assets/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "./assets/screenshots/desktop.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide"
+    },
+    {
+      "src": "./assets/screenshots/mobile.png", 
+      "sizes": "390x844",
+      "type": "image/png",
+      "form_factor": "narrow"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Command Palette",
+      "short_name": "Commands",
+      "description": "Open VS Code command palette",
+      "url": "./index.html?action=commands",
+      "icons": [
+        {
+          "src": "./assets/icons/command-palette.png",
+          "sizes": "96x96"
+        }
+      ]
+    },
+    {
+      "name": "Quick Open",
+      "short_name": "Quick Open", 
+      "description": "Open VS Code quick open",
+      "url": "./index.html?action=quickopen",
+      "icons": [
+        {
+          "src": "./assets/icons/quick-open.png",
+          "sizes": "96x96"
+        }
+      ]
+    }
+  ],
+  "prefer_related_applications": false,
+  "edge_side_panel": {
+    "preferred_width": 400
+  }
+}

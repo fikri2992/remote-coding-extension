@@ -1,11 +1,255 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="no-js">
 <head>
+    <!-- Essential meta tags for mobile-first optimization -->
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
+    
+    <!-- Security and performance -->
     <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self' ws: wss:; img-src 'self' data: https:;">
+        content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self' ws: wss:; img-src 'self' data: https:; font-src 'self' data:; manifest-src 'self';">
+    <meta http-equiv="X-Content-Type-Options" content="nosniff">
+    <meta http-equiv="X-Frame-Options" content="DENY">
+    <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
+    
+    <!-- PWA and mobile optimization -->
+    <meta name="theme-color" content="#1e1e1e" media="(prefers-color-scheme: dark)">
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="VSCode Tunnel">
+    <meta name="application-name" content="VSCode Tunnel">
+    <meta name="msapplication-TileColor" content="#1e1e1e">
+    <meta name="msapplication-config" content="./browserconfig.xml">
+    
+    <!-- SEO and accessibility -->
+    <meta name="description" content="Mobile-first web automation interface for Visual Studio Code with enhanced accessibility and offline support">
+    <meta name="keywords" content="vscode, automation, accessibility, mobile, progressive web app">
+    <meta name="author" content="VS Code Web Automation Tunnel">
+    <meta name="robots" content="noindex, nofollow">
+    
+    <!-- Open Graph for better sharing -->
+    <meta property="og:title" content="VS Code Web Automation Tunnel">
+    <meta property="og:description" content="Mobile-first web automation interface for Visual Studio Code">
+    <meta property="og:type" content="website">
+    <meta property="og:image" content="./assets/icons/icon-512.png">
+    
+    <!-- Title -->
     <title>VS Code Web Automation Tunnel</title>
+    
+    <!-- PWA manifest -->
+    <link rel="manifest" href="./manifest.json">
+    
+    <!-- Icons for different platforms -->
+    <link rel="icon" type="image/svg+xml" href="./assets/icons/icon.svg">
+    <link rel="icon" type="image/png" sizes="32x32" href="./assets/icons/icon-32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="./assets/icons/icon-16.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="./assets/icons/apple-touch-icon.png">
+    <link rel="mask-icon" href="./assets/icons/safari-pinned-tab.svg" color="#007acc">
+    
+    <!-- Preload critical resources -->
+    <link rel="preload" href="./js/enhanced.js" as="script">
+    <link rel="preload" href="./js/basic.js" as="script">
+    <link rel="preconnect" href="ws://localhost" crossorigin>
+    <link rel="preconnect" href="wss://localhost" crossorigin>
+    
+    <!-- DNS prefetch for potential external resources -->
+    <link rel="dns-prefetch" href="//fonts.googleapis.com">
+    <link rel="dns-prefetch" href="//cdnjs.cloudflare.com">
+    
+    <!-- Critical CSS for immediate rendering (mobile-first) -->
+    <style>
+        /* CSS Reset and base mobile-first styles */
+        *, *::before, *::after {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        html {
+            font-size: 16px; /* Base font size for mobile readability */
+            scroll-behavior: smooth;
+        }
+        
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+            font-size: 1rem;
+            line-height: 1.5;
+            background: var(--vscode-editor-background, #1e1e1e);
+            color: var(--vscode-foreground, #cccccc);
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        
+        /* Skip link for accessibility */
+        .skip-link {
+            position: absolute;
+            top: -40px;
+            left: 6px;
+            background: var(--vscode-button-background, #0e639c);
+            color: var(--vscode-button-foreground, #ffffff);
+            padding: 8px;
+            text-decoration: none;
+            border-radius: 4px;
+            z-index: 10001;
+            font-size: 14px;
+        }
+        
+        .skip-link:focus {
+            top: 6px;
+        }
+        
+        /* Loading screen critical styles */
+        .loading-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: var(--vscode-editor-background, #1e1e1e);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            padding: 2rem;
+        }
+        
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--vscode-progressBar-background, #454545);
+            border-top: 3px solid var(--vscode-progressBar-foreground, #007acc);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 1rem;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .loading-text {
+            color: var(--vscode-foreground, #cccccc);
+            font-size: 1rem;
+            text-align: center;
+            margin-bottom: 1rem;
+        }
+        
+        .loading-progress {
+            width: 100%;
+            max-width: 300px;
+            height: 4px;
+            background: var(--vscode-progressBar-background, #454545);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        
+        .progress-bar {
+            height: 100%;
+            background: var(--vscode-progressBar-foreground, #007acc);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        
+        /* Touch-optimized interactive elements */
+        button, .interactive {
+            min-height: 44px; /* WCAG touch target minimum */
+            min-width: 44px;
+            padding: 12px 16px;
+            border: 1px solid var(--vscode-button-border, transparent);
+            border-radius: 4px;
+            background: var(--vscode-button-background, #0e639c);
+            color: var(--vscode-button-foreground, #ffffff);
+            font-size: 14px;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            text-decoration: none;
+            outline: none;
+        }
+        
+        button:hover, .interactive:hover {
+            background: var(--vscode-button-hoverBackground, #1177bb);
+        }
+        
+        button:focus, .interactive:focus {
+            outline: 2px solid var(--vscode-focusBorder, #007acc);
+            outline-offset: 2px;
+        }
+        
+        button:active, .interactive:active {
+            transform: translateY(1px);
+        }
+        
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        /* Screen reader only content */
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+        
+        /* High contrast mode support */
+        @media (prefers-contrast: high) {
+            button, .interactive {
+                border: 2px solid;
+            }
+        }
+        
+        /* Reduced motion support */
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+            
+            html {
+                scroll-behavior: auto;
+            }
+        }
+        
+        /* Dark theme adjustments */
+        .vscode-theme-dark {
+            color-scheme: dark;
+        }
+        
+        /* Light theme adjustments */
+        .vscode-theme-light {
+            color-scheme: light;
+        }
+        
+        /* Mobile-first responsive utilities */
+        @media (max-width: 767px) {
+            .loading-screen {
+                padding: 1rem;
+            }
+            
+            .loading-text {
+                font-size: 0.9rem;
+            }
+        }
+    </style>
     
     <!-- Conditional Styles -->
     <link rel="stylesheet" href="styles/enhanced-main.css" id="mainStyles">
@@ -17,114 +261,360 @@
     <link rel="stylesheet" href="styles/touch.css" id="touchStyles">
 </head>
 
-<body class="vscode-theme-dark">
-    <!-- Basic UI Container -->
-    <div id="basicApp" class="ui-container basic-ui" style="display: none;">
+<body class="vscode-theme-dark" role="application" aria-label="VS Code Web Automation Tunnel">
+    <!-- Skip navigation for accessibility -->
+    <a href="#main-content" class="skip-link" aria-label="Skip to main content">Skip to main content</a>
+    
+    <!-- Loading screen with accessibility support -->
+    <div id="loadingScreen" class="loading-screen" role="status" aria-live="polite" aria-label="Application loading">
+        <div class="loading-spinner" aria-hidden="true"></div>
+        <div class="loading-text" id="loadingText">Initializing VS Code Web Automation Tunnel...</div>
+        <div class="loading-progress" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" aria-label="Loading progress">
+            <div class="progress-bar" id="progressBar"></div>
+        </div>
+    </div>
+    
+    <!-- Basic UI Container with semantic structure -->
+    <div id="basicApp" class="ui-container basic-ui" style="display: none;" role="main" aria-label="Basic user interface">
         <div class="container">
-            <header>
-                <h1>VS Code Web Automation Tunnel</h1>
-                <div class="connection-status" id="basicConnectionStatus">
-                    <span class="status-indicator" id="basicStatusIndicator"></span>
-                    <span id="basicStatusText">Connecting...</span>
+            <!-- Main header with navigation -->
+            <header role="banner" class="app-header">
+                <div class="header-content">
+                    <h1 class="app-title">VS Code Web Automation Tunnel</h1>
+                    <nav role="navigation" aria-label="Connection status and settings">
+                        <div class="connection-status" id="basicConnectionStatus" role="status" aria-live="polite">
+                            <span class="status-indicator" id="basicStatusIndicator" aria-hidden="true"></span>
+                            <span id="basicStatusText" aria-label="Connection status">Connecting...</span>
+                        </div>
+                    </nav>
                 </div>
             </header>
 
-            <main>
-                <section class="server-info">
-                    <h2>Server Information</h2>
-                    <div class="info-grid">
-                        <div class="info-item">
-                            <label>Server URL:</label>
-                            <span id="basicServerUrl">-</span>
+            <!-- Main content area -->
+            <main id="main-content" role="main" class="app-main" aria-label="Main application content">
+                <!-- Server information section -->
+                <section class="server-info" aria-labelledby="server-info-heading">
+                    <h2 id="server-info-heading" class="section-heading">Server Information</h2>
+                    <div class="info-grid" role="group" aria-label="Server status information">
+                        <div class="info-item" role="group">
+                            <label for="basicServerUrl" class="info-label">Server URL:</label>
+                            <span id="basicServerUrl" class="info-value" aria-live="polite">-</span>
                         </div>
-                        <div class="info-item">
-                            <label>WebSocket Port:</label>
-                            <span id="basicWebsocketPort">-</span>
+                        <div class="info-item" role="group">
+                            <label for="basicWebsocketPort" class="info-label">WebSocket Port:</label>
+                            <span id="basicWebsocketPort" class="info-value" aria-live="polite">-</span>
                         </div>
-                        <div class="info-item">
-                            <label>Connected Clients:</label>
-                            <span id="basicConnectedClients">-</span>
+                        <div class="info-item" role="group">
+                            <label for="basicConnectedClients" class="info-label">Connected Clients:</label>
+                            <span id="basicConnectedClients" class="info-value" aria-live="polite">-</span>
                         </div>
-                        <div class="info-item">
-                            <label>Uptime:</label>
-                            <span id="basicUptime">-</span>
+                        <div class="info-item" role="group">
+                            <label for="basicUptime" class="info-label">Uptime:</label>
+                            <span id="basicUptime" class="info-value" aria-live="polite">-</span>
                         </div>
                     </div>
                 </section>
 
-                <section class="command-interface">
-                    <h2>Command Interface</h2>
+                <!-- Command interface section -->
+                <section class="command-interface" aria-labelledby="command-interface-heading">
+                    <h2 id="command-interface-heading" class="section-heading">Command Interface</h2>
                     
-                    <div class="quick-commands">
-                        <h3>Quick Commands</h3>
-                        <div class="command-buttons">
-                            <button class="quick-cmd-btn" data-command="workbench.action.files.newUntitledFile">New File</button>
-                            <button class="quick-cmd-btn" data-command="workbench.action.files.save">Save File</button>
-                            <button class="quick-cmd-btn" data-command="workbench.action.showCommands">Command Palette</button>
-                            <button class="quick-cmd-btn" data-command="workbench.action.quickOpen">Quick Open</button>
-                            <button class="quick-cmd-btn" data-command="workbench.action.toggleSidebarVisibility">Toggle Sidebar</button>
-                            <button class="quick-cmd-btn" data-command="workbench.action.terminal.toggleTerminal">Toggle Terminal</button>
-                            <button class="quick-cmd-btn" data-command="editor.action.formatDocument">Format Document</button>
-                            <button class="quick-cmd-btn" data-command="workbench.action.reloadWindow">Reload Window</button>
+                    <!-- Quick commands subsection -->
+                    <div class="quick-commands" aria-labelledby="quick-commands-heading">
+                        <h3 id="quick-commands-heading" class="subsection-heading">Quick Commands</h3>
+                        <div class="command-buttons" role="group" aria-label="Quick command buttons">
+                            <button class="quick-cmd-btn" data-command="workbench.action.files.newUntitledFile" 
+                                    aria-label="Create new untitled file" type="button">
+                                <span class="btn-icon" aria-hidden="true">📄</span>
+                                <span class="btn-text">New File</span>
+                            </button>
+                            <button class="quick-cmd-btn" data-command="workbench.action.files.save" 
+                                    aria-label="Save current file" type="button">
+                                <span class="btn-icon" aria-hidden="true">💾</span>
+                                <span class="btn-text">Save File</span>
+                            </button>
+                            <button class="quick-cmd-btn" data-command="workbench.action.showCommands" 
+                                    aria-label="Open command palette" type="button">
+                                <span class="btn-icon" aria-hidden="true">⌘</span>
+                                <span class="btn-text">Command Palette</span>
+                            </button>
+                            <button class="quick-cmd-btn" data-command="workbench.action.quickOpen" 
+                                    aria-label="Open quick file picker" type="button">
+                                <span class="btn-icon" aria-hidden="true">🔍</span>
+                                <span class="btn-text">Quick Open</span>
+                            </button>
+                            <button class="quick-cmd-btn" data-command="workbench.action.toggleSidebarVisibility" 
+                                    aria-label="Toggle sidebar visibility" type="button">
+                                <span class="btn-icon" aria-hidden="true">📋</span>
+                                <span class="btn-text">Toggle Sidebar</span>
+                            </button>
+                            <button class="quick-cmd-btn" data-command="workbench.action.terminal.toggleTerminal" 
+                                    aria-label="Toggle terminal panel" type="button">
+                                <span class="btn-icon" aria-hidden="true">💻</span>
+                                <span class="btn-text">Toggle Terminal</span>
+                            </button>
+                            <button class="quick-cmd-btn" data-command="editor.action.formatDocument" 
+                                    aria-label="Format current document" type="button">
+                                <span class="btn-icon" aria-hidden="true">✨</span>
+                                <span class="btn-text">Format Document</span>
+                            </button>
+                            <button class="quick-cmd-btn" data-command="workbench.action.reloadWindow" 
+                                    aria-label="Reload VS Code window" type="button">
+                                <span class="btn-icon" aria-hidden="true">🔄</span>
+                                <span class="btn-text">Reload Window</span>
+                            </button>
                         </div>
                     </div>
 
-                    <div class="command-form">
-                        <h3>Custom Command</h3>
-                        <div class="input-group">
-                            <label for="basicCommandInput">VS Code Command:</label>
-                            <input type="text" id="basicCommandInput" placeholder="e.g., workbench.action.files.newUntitledFile">
-                        </div>
-                        <div class="input-group">
-                            <label for="basicArgsInput">Arguments (JSON):</label>
-                            <textarea id="basicArgsInput" placeholder='["arg1", "arg2"] or leave empty'></textarea>
-                        </div>
-                        <button id="basicExecuteButton" disabled>Execute Command</button>
+                    <!-- Custom command form -->
+                    <div class="command-form" aria-labelledby="custom-command-heading">
+                        <h3 id="custom-command-heading" class="subsection-heading">Custom Command</h3>
+                        <form role="form" aria-label="Custom VS Code command execution">
+                            <div class="input-group">
+                                <label for="basicCommandInput" class="input-label">VS Code Command:</label>
+                                <input type="text" id="basicCommandInput" class="command-input" 
+                                       placeholder="e.g., workbench.action.files.newUntitledFile"
+                                       aria-describedby="command-help" autocomplete="off" spellcheck="false">
+                                <div id="command-help" class="input-help">Enter a VS Code command identifier</div>
+                            </div>
+                            <div class="input-group">
+                                <label for="basicArgsInput" class="input-label">Arguments (JSON):</label>
+                                <textarea id="basicArgsInput" class="args-input" rows="3"
+                                          placeholder='["arg1", "arg2"] or leave empty'
+                                          aria-describedby="args-help" spellcheck="false"></textarea>
+                                <div id="args-help" class="input-help">Optional JSON array of command arguments</div>
+                            </div>
+                            <button id="basicExecuteButton" type="button" class="execute-btn" disabled 
+                                    aria-label="Execute the custom command">
+                                <span class="btn-icon" aria-hidden="true">▶️</span>
+                                <span class="btn-text">Execute Command</span>
+                            </button>
+                        </form>
                     </div>
                 </section>
 
-                <section class="workspace-state">
-                    <h2>VS Code State</h2>
-                    <div class="state-display">
-                        <div class="state-section">
-                            <h3>Active Editor</h3>
-                            <div id="basicActiveEditor">No active editor</div>
+                <!-- Workspace state section -->
+                <section class="workspace-state" aria-labelledby="workspace-state-heading">
+                    <h2 id="workspace-state-heading" class="section-heading">VS Code State</h2>
+                    <div class="state-display" role="group" aria-label="Current VS Code workspace state">
+                        <div class="state-section" aria-labelledby="active-editor-heading">
+                            <h3 id="active-editor-heading" class="subsection-heading">Active Editor</h3>
+                            <div id="basicActiveEditor" class="state-value" role="status" aria-live="polite" 
+                                 aria-label="Currently active editor">No active editor</div>
                         </div>
-                        <div class="state-section">
-                            <h3>Workspace Folders</h3>
-                            <div id="basicWorkspaceFolders">No workspace folders</div>
+                        <div class="state-section" aria-labelledby="workspace-folders-heading">
+                            <h3 id="workspace-folders-heading" class="subsection-heading">Workspace Folders</h3>
+                            <div id="basicWorkspaceFolders" class="state-value" role="status" aria-live="polite"
+                                 aria-label="Open workspace folders">No workspace folders</div>
                         </div>
-                        <div class="state-section">
-                            <h3>Open Editors</h3>
-                            <div id="basicOpenEditors">No open editors</div>
+                        <div class="state-section" aria-labelledby="open-editors-heading">
+                            <h3 id="open-editors-heading" class="subsection-heading">Open Editors</h3>
+                            <div id="basicOpenEditors" class="state-value" role="status" aria-live="polite"
+                                 aria-label="List of open editors">No open editors</div>
                         </div>
                     </div>
                 </section>
 
-                <section class="message-log">
-                    <h2>Message Log</h2>
-                    <div class="log-controls">
-                        <button id="basicClearLogButton">Clear Log</button>
+                <!-- Message log section -->
+                <section class="message-log" aria-labelledby="message-log-heading">
+                    <h2 id="message-log-heading" class="section-heading">Message Log</h2>
+                    <div class="log-controls" role="toolbar" aria-label="Log controls">
+                        <button id="basicClearLogButton" type="button" class="clear-log-btn" 
+                                aria-label="Clear all log messages">
+                            <span class="btn-icon" aria-hidden="true">🗑️</span>
+                            <span class="btn-text">Clear Log</span>
+                        </button>
                     </div>
-                    <div class="log-container" id="basicMessageLog"></div>
+                    <div class="log-container" id="basicMessageLog" role="log" aria-live="polite" 
+                         aria-label="Application message log" tabindex="0"></div>
                 </section>
             </main>
         </div>
     </div>
 
-    <!-- Enhanced UI Container -->
-    <div id="enhancedApp" class="ui-container enhanced-ui app-container" style="display: none;">
-        <!-- App Shell will be rendered here -->
-        <div class="loading-screen" id="enhancedLoadingScreen">
-            <div class="loading-spinner"></div>
-            <div class="loading-text">Initializing Enhanced UI...</div>
+    <!-- Enhanced UI Container with semantic structure -->
+    <div id="enhancedApp" class="ui-container enhanced-ui app-container" style="display: none;" 
+         role="main" aria-label="Enhanced user interface">
+        <!-- App Shell will be rendered here by enhanced UI components -->
+        <div id="app" class="app-shell" role="application" aria-label="Enhanced VS Code automation interface">
+            <!-- Enhanced UI components will be dynamically loaded here -->
         </div>
     </div>
 
     <!-- UI Mode Toggle (for development/debugging) -->
-    <div class="ui-toggle" id="uiToggle" style="position: fixed; top: 10px; right: 10px; z-index: 9999; display: none;">
-        <button id="toggleUIButton" title="Toggle UI Mode">🔄</button>
+    <div class="ui-toggle" id="uiToggle" role="complementary" aria-label="Development tools"
+         style="position: fixed; top: 10px; right: 10px; z-index: 9999; display: none;">
+        <button id="toggleUIButton" type="button" class="toggle-btn" 
+                aria-label="Toggle between basic and enhanced UI modes" title="Toggle UI Mode">
+            <span aria-hidden="true">🔄</span>
+            <span class="sr-only">Toggle UI</span>
+        </button>
     </div>
+    
+    <!-- Accessibility and no-JavaScript fallback -->
+    <noscript>
+        <div class="no-js-fallback" role="alert" aria-live="assertive">
+            <div class="fallback-container">
+                <header class="fallback-header">
+                    <h1>JavaScript Required</h1>
+                    <p class="fallback-subtitle">VS Code Web Automation Tunnel</p>
+                </header>
+                
+                <main class="fallback-content">
+                    <section class="fallback-message">
+                        <h2>Enable JavaScript to Continue</h2>
+                        <p>This application requires JavaScript to provide the full VS Code automation experience. 
+                           Please enable JavaScript in your browser settings and refresh the page.</p>
+                    </section>
+                    
+                    <section class="fallback-instructions">
+                        <h3>How to Enable JavaScript:</h3>
+                        <details>
+                            <summary>Chrome/Edge</summary>
+                            <ol>
+                                <li>Click the three dots menu → Settings</li>
+                                <li>Go to Privacy and security → Site Settings</li>
+                                <li>Click JavaScript → Allow sites to use JavaScript</li>
+                                <li>Refresh this page</li>
+                            </ol>
+                        </details>
+                        <details>
+                            <summary>Firefox</summary>
+                            <ol>
+                                <li>Type "about:config" in the address bar</li>
+                                <li>Search for "javascript.enabled"</li>
+                                <li>Set the value to "true"</li>
+                                <li>Refresh this page</li>
+                            </ol>
+                        </details>
+                        <details>
+                            <summary>Safari</summary>
+                            <ol>
+                                <li>Safari menu → Preferences → Security</li>
+                                <li>Check "Enable JavaScript"</li>
+                                <li>Refresh this page</li>
+                            </ol>
+                        </details>
+                    </section>
+                    
+                    <section class="fallback-alternative">
+                        <h3>Alternative Access</h3>
+                        <p>If you cannot enable JavaScript, you can still access VS Code directly:</p>
+                        <ul>
+                            <li>Open VS Code desktop application</li>
+                            <li>Use VS Code in your browser at <a href="https://vscode.dev" target="_blank" rel="noopener">vscode.dev</a></li>
+                            <li>Install the VS Code extension locally</li>
+                        </ul>
+                    </section>
+                </main>
+                
+                <footer class="fallback-footer">
+                    <p>For technical support, please refer to the VS Code documentation or contact your system administrator.</p>
+                </footer>
+            </div>
+        </div>
+        
+        <style>
+            .no-js-fallback {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: #1e1e1e;
+                color: #cccccc;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 10000;
+                padding: 1rem;
+                box-sizing: border-box;
+            }
+            
+            .fallback-container {
+                max-width: 600px;
+                text-align: center;
+                line-height: 1.6;
+            }
+            
+            .fallback-header h1 {
+                color: #f14c4c;
+                font-size: 2rem;
+                margin-bottom: 0.5rem;
+            }
+            
+            .fallback-subtitle {
+                color: #9d9d9d;
+                font-size: 1.1rem;
+                margin-bottom: 2rem;
+            }
+            
+            .fallback-content {
+                text-align: left;
+            }
+            
+            .fallback-message {
+                background: #2d2d30;
+                padding: 1.5rem;
+                border-radius: 8px;
+                margin-bottom: 2rem;
+                border-left: 4px solid #007acc;
+            }
+            
+            .fallback-instructions details {
+                margin: 1rem 0;
+                background: #2d2d30;
+                padding: 1rem;
+                border-radius: 4px;
+            }
+            
+            .fallback-instructions summary {
+                cursor: pointer;
+                font-weight: bold;
+                color: #007acc;
+                margin-bottom: 0.5rem;
+            }
+            
+            .fallback-instructions ol {
+                margin: 0.5rem 0 0 1rem;
+            }
+            
+            .fallback-alternative {
+                background: #2d2d30;
+                padding: 1.5rem;
+                border-radius: 8px;
+                margin: 2rem 0;
+            }
+            
+            .fallback-alternative a {
+                color: #007acc;
+                text-decoration: none;
+            }
+            
+            .fallback-alternative a:hover {
+                text-decoration: underline;
+            }
+            
+            .fallback-footer {
+                margin-top: 2rem;
+                padding-top: 1rem;
+                border-top: 1px solid #454545;
+                color: #9d9d9d;
+                font-size: 0.9rem;
+            }
+            
+            @media (max-width: 768px) {
+                .fallback-container {
+                    padding: 1rem;
+                }
+                
+                .fallback-header h1 {
+                    font-size: 1.5rem;
+                }
+            }
+        </style>
+    </noscript>
 
     <!-- Adaptive JavaScript Loader -->
     <script>
@@ -433,6 +923,10 @@
             return errorContainer;
         }
 
+        // Remove no-js class when JavaScript is available
+        document.documentElement.classList.remove('no-js');
+        document.documentElement.classList.add('js');
+        
         // Event listeners
         document.addEventListener('DOMContentLoaded', initializeUI);
         document.getElementById('toggleUIButton').addEventListener('click', toggleUI);

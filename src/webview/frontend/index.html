@@ -60,6 +60,78 @@
     
     <!-- Critical CSS for immediate rendering (mobile-first) -->
     <style>
+        /* CSS Custom Properties for theming and consistency */
+        :root {
+            /* Color system */
+            --primary-color: #007acc;
+            --primary-hover: #1177bb;
+            --primary-active: #005a9e;
+            --secondary-color: #454545;
+            --background-primary: #1e1e1e;
+            --background-secondary: #2d2d30;
+            --background-tertiary: #3e3e42;
+            --text-primary: #cccccc;
+            --text-secondary: #9d9d9d;
+            --text-muted: #6a6a6a;
+            --border-color: #454545;
+            --focus-color: #007acc;
+            --error-color: #f14c4c;
+            --warning-color: #ffcc02;
+            --success-color: #89d185;
+            
+            /* Spacing system (mobile-first) */
+            --space-xs: 0.25rem;   /* 4px */
+            --space-sm: 0.5rem;    /* 8px */
+            --space-md: 1rem;      /* 16px */
+            --space-lg: 1.5rem;    /* 24px */
+            --space-xl: 2rem;      /* 32px */
+            --space-2xl: 3rem;     /* 48px */
+            
+            /* Touch targets and sizing */
+            --touch-target-min: 44px;
+            --touch-target-comfortable: 48px;
+            --border-radius-sm: 2px;
+            --border-radius-md: 4px;
+            --border-radius-lg: 8px;
+            
+            /* Typography scale (mobile-optimized) */
+            --font-size-xs: 0.75rem;   /* 12px */
+            --font-size-sm: 0.875rem;  /* 14px */
+            --font-size-base: 1rem;    /* 16px */
+            --font-size-lg: 1.125rem;  /* 18px */
+            --font-size-xl: 1.25rem;   /* 20px */
+            --font-size-2xl: 1.5rem;   /* 24px */
+            --font-size-3xl: 2rem;     /* 32px */
+            
+            /* Line heights */
+            --line-height-tight: 1.25;
+            --line-height-normal: 1.5;
+            --line-height-relaxed: 1.75;
+            
+            /* Animation and transitions */
+            --transition-fast: 0.15s ease;
+            --transition-normal: 0.2s ease;
+            --transition-slow: 0.3s ease;
+            
+            /* Z-index scale */
+            --z-dropdown: 1000;
+            --z-sticky: 1020;
+            --z-fixed: 1030;
+            --z-modal-backdrop: 1040;
+            --z-modal: 1050;
+            --z-popover: 1060;
+            --z-tooltip: 1070;
+            --z-toast: 1080;
+            
+            /* Container sizes */
+            --container-xs: 100%;
+            --container-sm: 540px;
+            --container-md: 720px;
+            --container-lg: 960px;
+            --container-xl: 1140px;
+            --container-2xl: 1320px;
+        }
+        
         /* CSS Reset and base mobile-first styles */
         *, *::before, *::after {
             box-sizing: border-box;
@@ -69,37 +141,123 @@
         html {
             font-size: 16px; /* Base font size for mobile readability */
             scroll-behavior: smooth;
+            -webkit-text-size-adjust: 100%;
+            -ms-text-size-adjust: 100%;
         }
         
         body {
             margin: 0;
             padding: 0;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
-            font-size: 1rem;
-            line-height: 1.5;
-            background: var(--vscode-editor-background, #1e1e1e);
-            color: var(--vscode-foreground, #cccccc);
+            font-size: var(--font-size-base);
+            line-height: var(--line-height-normal);
+            background: var(--vscode-editor-background, var(--background-primary));
+            color: var(--vscode-foreground, var(--text-primary));
             overflow-x: hidden;
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
+            min-height: 100vh;
+            min-height: 100dvh; /* Dynamic viewport height for mobile */
+        }
+        
+        /* Critical above-the-fold content rendering */
+        .app-container {
+            min-height: 100vh;
+            min-height: 100dvh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .app-header {
+            flex-shrink: 0;
+            background: var(--vscode-titleBar-activeBackground, var(--background-secondary));
+            border-bottom: 1px solid var(--vscode-panel-border, var(--border-color));
+        }
+        
+        .app-main {
+            flex: 1;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+        }
+        
+        /* Critical loading screen styles */
+        .loading-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: var(--vscode-editor-background, var(--background-primary));
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: var(--z-modal);
+            padding: var(--space-xl);
+            will-change: opacity, transform;
+        }
+        
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--vscode-progressBar-background, var(--secondary-color));
+            border-top: 3px solid var(--vscode-progressBar-foreground, var(--primary-color));
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: var(--space-md);
+            will-change: transform;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .loading-text {
+            color: var(--vscode-foreground, var(--text-primary));
+            font-size: var(--font-size-base);
+            text-align: center;
+            margin-bottom: var(--space-md);
+            font-weight: 500;
+        }
+        
+        .loading-progress {
+            width: 100%;
+            max-width: 300px;
+            height: 4px;
+            background: var(--vscode-progressBar-background, var(--secondary-color));
+            border-radius: var(--border-radius-sm);
+            overflow: hidden;
+        }
+        
+        .progress-bar {
+            height: 100%;
+            background: var(--vscode-progressBar-foreground, var(--primary-color));
+            width: 0%;
+            transition: width var(--transition-slow);
+            will-change: width;
         }
         
         /* Skip link for accessibility */
         .skip-link {
             position: absolute;
             top: -40px;
-            left: 6px;
-            background: var(--vscode-button-background, #0e639c);
+            left: var(--space-sm);
+            background: var(--vscode-button-background, var(--primary-color));
             color: var(--vscode-button-foreground, #ffffff);
-            padding: 8px;
+            padding: var(--space-sm);
             text-decoration: none;
-            border-radius: 4px;
-            z-index: 10001;
-            font-size: 14px;
+            border-radius: var(--border-radius-md);
+            z-index: var(--z-tooltip);
+            font-size: var(--font-size-sm);
+            font-weight: 500;
+            transition: all var(--transition-fast);
         }
         
         .skip-link:focus {
-            top: 6px;
+            top: var(--space-sm);
+            outline: 2px solid var(--vscode-focusBorder, var(--focus-color));
+            outline-offset: 2px;
         }
         
         /* Loading screen critical styles */
@@ -157,43 +315,96 @@
         }
         
         /* Touch-optimized interactive elements */
-        button, .interactive {
-            min-height: 44px; /* WCAG touch target minimum */
-            min-width: 44px;
-            padding: 12px 16px;
+        button, .interactive, .btn, input[type="button"], input[type="submit"], input[type="reset"] {
+            min-height: var(--touch-target-min);
+            min-width: var(--touch-target-min);
+            padding: var(--space-sm) var(--space-md);
             border: 1px solid var(--vscode-button-border, transparent);
-            border-radius: 4px;
-            background: var(--vscode-button-background, #0e639c);
+            border-radius: var(--border-radius-md);
+            background: var(--vscode-button-background, var(--primary-color));
             color: var(--vscode-button-foreground, #ffffff);
-            font-size: 14px;
+            font-size: var(--font-size-sm);
             font-family: inherit;
+            font-weight: 500;
             cursor: pointer;
-            transition: all 0.2s ease;
+            transition: all var(--transition-normal);
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            gap: 8px;
+            gap: var(--space-sm);
             text-decoration: none;
             outline: none;
+            position: relative;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
         }
         
-        button:hover, .interactive:hover {
-            background: var(--vscode-button-hoverBackground, #1177bb);
+        /* Touch feedback states */
+        button:hover, .interactive:hover, .btn:hover {
+            background: var(--vscode-button-hoverBackground, var(--primary-hover));
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
         
-        button:focus, .interactive:focus {
-            outline: 2px solid var(--vscode-focusBorder, #007acc);
+        button:focus, .interactive:focus, .btn:focus {
+            outline: 2px solid var(--vscode-focusBorder, var(--focus-color));
             outline-offset: 2px;
+            z-index: 1;
         }
         
-        button:active, .interactive:active {
-            transform: translateY(1px);
+        button:active, .interactive:active, .btn:active {
+            transform: translateY(0);
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+            background: var(--vscode-button-background, var(--primary-active));
         }
         
-        button:disabled {
+        button:disabled, .interactive:disabled, .btn:disabled {
             opacity: 0.6;
             cursor: not-allowed;
             transform: none;
+            box-shadow: none;
+        }
+        
+        /* Input elements with touch optimization */
+        input, textarea, select {
+            min-height: var(--touch-target-min);
+            padding: var(--space-sm) var(--space-md);
+            border: 1px solid var(--vscode-input-border, var(--border-color));
+            border-radius: var(--border-radius-md);
+            background: var(--vscode-input-background, var(--background-secondary));
+            color: var(--vscode-input-foreground, var(--text-primary));
+            font-size: var(--font-size-base);
+            font-family: inherit;
+            transition: all var(--transition-normal);
+            outline: none;
+        }
+        
+        input:focus, textarea:focus, select:focus {
+            border-color: var(--vscode-focusBorder, var(--focus-color));
+            box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.2);
+        }
+        
+        /* Link elements with touch targets */
+        a {
+            color: var(--vscode-textLink-foreground, var(--primary-color));
+            text-decoration: none;
+            min-height: var(--touch-target-min);
+            display: inline-flex;
+            align-items: center;
+            padding: var(--space-xs) 0;
+            transition: color var(--transition-fast);
+        }
+        
+        a:hover {
+            color: var(--vscode-textLink-activeForeground, var(--primary-hover));
+            text-decoration: underline;
+        }
+        
+        a:focus {
+            outline: 2px solid var(--vscode-focusBorder, var(--focus-color));
+            outline-offset: 2px;
+            border-radius: var(--border-radius-sm);
         }
         
         /* Screen reader only content */
@@ -216,16 +427,155 @@
             }
         }
         
+        /* Performance optimizations */
+        .ui-container {
+            contain: layout style paint;
+            will-change: auto;
+        }
+        
+        .loading-screen {
+            contain: strict;
+        }
+        
+        /* Scroll optimization */
+        .scrollable {
+            -webkit-overflow-scrolling: touch;
+            overscroll-behavior: contain;
+        }
+        
+        /* Touch gesture optimizations */
+        .touch-action-pan-y {
+            touch-action: pan-y;
+        }
+        
+        .touch-action-pan-x {
+            touch-action: pan-x;
+        }
+        
+        .touch-action-manipulation {
+            touch-action: manipulation;
+        }
+        
+        /* Critical grid and flexbox utilities */
+        .flex {
+            display: flex;
+        }
+        
+        .flex-col {
+            flex-direction: column;
+        }
+        
+        .flex-wrap {
+            flex-wrap: wrap;
+        }
+        
+        .items-center {
+            align-items: center;
+        }
+        
+        .justify-center {
+            justify-content: center;
+        }
+        
+        .justify-between {
+            justify-content: space-between;
+        }
+        
+        .gap-sm {
+            gap: var(--space-sm);
+        }
+        
+        .gap-md {
+            gap: var(--space-md);
+        }
+        
+        .gap-lg {
+            gap: var(--space-lg);
+        }
+        
+        /* Critical spacing utilities */
+        .p-sm {
+            padding: var(--space-sm);
+        }
+        
+        .p-md {
+            padding: var(--space-md);
+        }
+        
+        .p-lg {
+            padding: var(--space-lg);
+        }
+        
+        .m-0 {
+            margin: 0;
+        }
+        
+        .mb-sm {
+            margin-bottom: var(--space-sm);
+        }
+        
+        .mb-md {
+            margin-bottom: var(--space-md);
+        }
+        
+        .mb-lg {
+            margin-bottom: var(--space-lg);
+        }
+        
+        /* Critical text utilities */
+        .text-center {
+            text-align: center;
+        }
+        
+        .text-left {
+            text-align: left;
+        }
+        
+        .text-right {
+            text-align: right;
+        }
+        
+        .font-medium {
+            font-weight: 500;
+        }
+        
+        .font-semibold {
+            font-weight: 600;
+        }
+        
         /* Reduced motion support */
         @media (prefers-reduced-motion: reduce) {
             *, *::before, *::after {
                 animation-duration: 0.01ms !important;
                 animation-iteration-count: 1 !important;
                 transition-duration: 0.01ms !important;
+                scroll-behavior: auto !important;
             }
             
             html {
                 scroll-behavior: auto;
+            }
+            
+            .loading-spinner {
+                animation: none;
+                border-top-color: var(--vscode-progressBar-foreground, var(--primary-color));
+            }
+        }
+        
+        /* High contrast mode support */
+        @media (prefers-contrast: high) {
+            button, .interactive, .btn {
+                border: 2px solid;
+                border-color: var(--vscode-contrastBorder, currentColor);
+            }
+            
+            input, textarea, select {
+                border: 2px solid;
+                border-color: var(--vscode-contrastBorder, currentColor);
+            }
+            
+            .loading-spinner {
+                border-width: 4px;
             }
         }
         
@@ -237,16 +587,281 @@
         /* Light theme adjustments */
         .vscode-theme-light {
             color-scheme: light;
+            
+            --background-primary: #ffffff;
+            --background-secondary: #f3f3f3;
+            --background-tertiary: #e8e8e8;
+            --text-primary: #333333;
+            --text-secondary: #666666;
+            --text-muted: #999999;
+            --border-color: #d0d0d0;
         }
         
-        /* Mobile-first responsive utilities */
-        @media (max-width: 767px) {
+        /* Print styles */
+        @media print {
+            .loading-screen,
+            .ui-toggle,
+            button,
+            .interactive {
+                display: none !important;
+            }
+            
+            body {
+                background: white !important;
+                color: black !important;
+            }
+        }
+        
+        /* Container queries for component-level responsiveness */
+        .ui-container {
+            container-type: inline-size;
+            container-name: ui-container;
+        }
+        
+        .app-container {
+            container-type: inline-size;
+            container-name: app-container;
+        }
+        
+        .section-container {
+            container-type: inline-size;
+            container-name: section;
+        }
+        
+        /* Container query rules */
+        @container ui-container (min-width: 320px) {
+            .command-buttons {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+                gap: var(--space-sm);
+            }
+        }
+        
+        @container ui-container (min-width: 576px) {
+            .info-grid {
+                display: grid;
+                grid-template-columns: repeat(2, 1fr);
+                gap: var(--space-md);
+            }
+            
+            .command-buttons {
+                grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            }
+        }
+        
+        @container ui-container (min-width: 768px) {
+            .app-main {
+                display: grid;
+                grid-template-columns: 1fr 300px;
+                gap: var(--space-xl);
+            }
+            
+            .info-grid {
+                grid-template-columns: repeat(4, 1fr);
+            }
+            
+            .command-buttons {
+                grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            }
+        }
+        
+        @container ui-container (min-width: 992px) {
+            .container {
+                max-width: var(--container-lg);
+                margin: 0 auto;
+                padding: 0 var(--space-lg);
+            }
+            
+            .command-buttons {
+                grid-template-columns: repeat(4, 1fr);
+            }
+        }
+        
+        @container ui-container (min-width: 1200px) {
+            .container {
+                max-width: var(--container-xl);
+                padding: 0 var(--space-xl);
+            }
+            
+            .app-main {
+                grid-template-columns: 1fr 350px;
+            }
+        }
+        
+        /* Mobile-first responsive breakpoints */
+        /* Base styles (320px+) - Mobile first */
+        .container {
+            width: 100%;
+            padding: 0 var(--space-md);
+            margin: 0 auto;
+        }
+        
+        .app-header {
+            padding: var(--space-md) 0;
+            border-bottom: 1px solid var(--vscode-panel-border, var(--border-color));
+            margin-bottom: var(--space-lg);
+        }
+        
+        .section-heading {
+            font-size: var(--font-size-xl);
+            font-weight: 600;
+            margin: 0 0 var(--space-md) 0;
+            color: var(--vscode-foreground, var(--text-primary));
+        }
+        
+        .subsection-heading {
+            font-size: var(--font-size-lg);
+            font-weight: 500;
+            margin: 0 0 var(--space-sm) 0;
+            color: var(--vscode-foreground, var(--text-primary));
+        }
+        
+        /* Small devices (576px and up) */
+        @media (min-width: 576px) {
+            .container {
+                max-width: var(--container-sm);
+                padding: 0 var(--space-lg);
+            }
+            
+            .app-header {
+                padding: var(--space-lg) 0;
+            }
+            
+            .section-heading {
+                font-size: var(--font-size-2xl);
+            }
+            
             .loading-screen {
-                padding: 1rem;
+                padding: var(--space-xl);
             }
             
             .loading-text {
-                font-size: 0.9rem;
+                font-size: var(--font-size-lg);
+            }
+        }
+        
+        /* Medium devices (768px and up) - Tablets */
+        @media (min-width: 768px) {
+            .container {
+                max-width: var(--container-md);
+                padding: 0 var(--space-xl);
+            }
+            
+            .app-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }
+            
+            .section-heading {
+                font-size: var(--font-size-3xl);
+            }
+            
+            .command-form {
+                display: grid;
+                grid-template-columns: 1fr auto;
+                gap: var(--space-lg);
+                align-items: end;
+            }
+            
+            .execute-btn {
+                height: fit-content;
+            }
+        }
+        
+        /* Large devices (992px and up) - Desktop */
+        @media (min-width: 992px) {
+            .container {
+                max-width: var(--container-lg);
+            }
+            
+            .app-main {
+                display: grid;
+                grid-template-columns: 2fr 1fr;
+                gap: var(--space-2xl);
+            }
+            
+            .sidebar-content {
+                position: sticky;
+                top: var(--space-lg);
+                height: fit-content;
+            }
+            
+            .command-buttons {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+        
+        /* Extra large devices (1200px and up) - Large Desktop */
+        @media (min-width: 1200px) {
+            .container {
+                max-width: var(--container-xl);
+            }
+            
+            .app-main {
+                grid-template-columns: 3fr 1fr;
+            }
+            
+            .command-buttons {
+                grid-template-columns: repeat(4, 1fr);
+            }
+        }
+        
+        /* Extra extra large devices (1400px and up) */
+        @media (min-width: 1400px) {
+            .container {
+                max-width: var(--container-2xl);
+            }
+        }
+        
+        /* Mobile-specific optimizations */
+        @media (max-width: 767px) {
+            .loading-screen {
+                padding: var(--space-md);
+            }
+            
+            .loading-text {
+                font-size: var(--font-size-sm);
+            }
+            
+            .app-title {
+                font-size: var(--font-size-lg);
+            }
+            
+            .command-buttons {
+                grid-template-columns: 1fr;
+                gap: var(--space-sm);
+            }
+            
+            .quick-cmd-btn {
+                justify-content: flex-start;
+                text-align: left;
+            }
+            
+            .input-group {
+                margin-bottom: var(--space-lg);
+            }
+            
+            .state-display {
+                display: flex;
+                flex-direction: column;
+                gap: var(--space-md);
+            }
+        }
+        
+        /* Landscape orientation optimizations */
+        @media (orientation: landscape) and (max-height: 500px) {
+            .loading-screen {
+                flex-direction: row;
+                gap: var(--space-lg);
+            }
+            
+            .loading-spinner {
+                margin-bottom: 0;
+            }
+            
+            .app-header {
+                padding: var(--space-sm) 0;
             }
         }
     </style>

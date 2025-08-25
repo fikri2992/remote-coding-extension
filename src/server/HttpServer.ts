@@ -20,8 +20,15 @@ export class HttpServer {
     constructor(config: ServerConfig) {
         this.config = config;
         this.errorHandler = ErrorHandler.getInstance();
+        
+        // Determine which frontend to serve based on configuration
+        const useEnhancedUI = this.shouldUseEnhancedUI();
+        const frontendDir = useEnhancedUI ? 'enhanced-frontend' : 'web-frontend';
+        
         // Web assets will be served from the extension's web assets directory
-        this.webAssetsPath = path.join(__dirname, '..', 'webview', 'web-frontend');
+        this.webAssetsPath = path.join(__dirname, '..', 'webview', frontendDir);
+        
+        console.log(`HTTP Server configured to serve ${useEnhancedUI ? 'Enhanced' : 'Basic'} UI from: ${this.webAssetsPath}`);
     }
 
     /**
@@ -453,6 +460,22 @@ export class HttpServer {
      */
     get port(): number {
         return this.config.httpPort;
+    }
+
+    /**
+     * Check if enhanced UI should be used
+     */
+    private shouldUseEnhancedUI(): boolean {
+        try {
+            // Try to import VS Code API to check configuration
+            const vscode = require('vscode');
+            const config = vscode.workspace.getConfiguration('webAutomationTunnel');
+            return config.get('useEnhancedUI', true) as boolean;
+        } catch (error) {
+            // If VS Code API is not available, default to enhanced UI
+            console.log('VS Code API not available, defaulting to enhanced UI');
+            return true;
+        }
     }
 
     /**

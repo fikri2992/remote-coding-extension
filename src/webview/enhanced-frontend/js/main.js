@@ -228,8 +228,28 @@ class EnhancedWebApp {
         console.log('🔌 Connecting to WebSocket...');
         
         try {
-            await this.webSocketClient.connect();
-            console.log('✅ WebSocket connected');
+            // Check if we're running in VS Code webview
+            if (window.vscode) {
+                console.log('🔌 Running in VS Code webview - using extension integration');
+                // In webview mode, we rely on extension messages instead of direct WebSocket
+                this.webSocketClient.isVSCodeWebview = true;
+                
+                // Request initial server status from extension
+                window.vscode.postMessage({
+                    command: 'getServerStatus'
+                });
+                
+                // Mark as connected for UI purposes
+                this.webSocketClient.isConnected = true;
+                this.stateManager.updateConnection({
+                    status: 'connected',
+                    isVSCodeWebview: true
+                });
+            } else {
+                // Standalone mode - connect directly to WebSocket
+                await this.webSocketClient.connect();
+                console.log('✅ WebSocket connected');
+            }
         } catch (error) {
             console.warn('⚠️ WebSocket connection failed, will retry automatically:', error.message);
             // Don't throw here - let the WebSocket client handle reconnection

@@ -61,6 +61,16 @@
         "command": "webAutomationTunnel.resetConfiguration",
         "title": "Reset Configuration to Defaults",
         "category": "Web Automation Tunnel"
+      },
+      {
+        "command": "webAutomationTunnel.toggleUI",
+        "title": "Toggle Enhanced/Basic UI",
+        "category": "Web Automation Tunnel"
+      },
+      {
+        "command": "webAutomationTunnel.runIntegrationTest",
+        "title": "Run Enhanced UI Integration Test",
+        "category": "Web Automation Tunnel"
       }
     ],
     "configuration": {
@@ -101,6 +111,11 @@
           "type": "boolean",
           "default": true,
           "description": "Enable Cross-Origin Resource Sharing (CORS) support"
+        },
+        "webAutomationTunnel.useEnhancedUI": {
+          "type": "boolean",
+          "default": true,
+          "description": "Use the enhanced chat-like UI instead of the basic interface"
         }
       }
     }
@@ -109,7 +124,7 @@
     "vscode:prepublish": "npm run build",
     "compile": "tsc -p ./",
     "compile:watch": "tsc -watch -p ./",
-    "copy-assets": "xcopy /E /I /Y \"src\\webview\\web-frontend\" \"out\\webview\\web-frontend\" && xcopy /E /I /Y \"src\\webview\\enhanced-frontend\" \"out\\webview\\enhanced-frontend\"",
+    "copy-assets": "xcopy /E /I /Y \"src\\webview\\web-frontend\" \"out\\webview\\web-frontend\" && xcopy /E /I /Y \"src\\webview\\enhanced-frontend\" \"out\\webview\\enhanced-frontend\" && xcopy /Y \"src\\webview\\panel.html\" \"out\\webview\\\"",
     "pretest": "npm run build",
     "lint": "eslint src --ext ts",
     "clean": "rimraf out",

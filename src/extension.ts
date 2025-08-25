@@ -2,6 +2,7 @@
 import * as vscode from 'vscode';
 import { WebviewProvider } from './webview/provider';
 import { registerButtonCommands } from './commands/buttonCommands';
+import { registerIntegrationTestCommand } from './integration-test';
 
 export function activate(context: vscode.ExtensionContext) {
     console.log('Basic VSCode Extension is now active!');
@@ -61,12 +62,39 @@ export function activate(context: vscode.ExtensionContext) {
         }
     });
 
+    const toggleUICommand = vscode.commands.registerCommand('webAutomationTunnel.toggleUI', async () => {
+        const config = vscode.workspace.getConfiguration('webAutomationTunnel');
+        const currentValue = config.get('useEnhancedUI', true);
+        const newValue = !currentValue;
+        
+        try {
+            await config.update('useEnhancedUI', newValue, vscode.ConfigurationTarget.Workspace);
+            
+            const uiType = newValue ? 'Enhanced' : 'Basic';
+            const action = await vscode.window.showInformationMessage(
+                `Switched to ${uiType} UI. Refresh the webview to see changes.`,
+                'Refresh Now'
+            );
+            
+            if (action === 'Refresh Now') {
+                webviewProvider.refresh();
+            }
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+            vscode.window.showErrorMessage(`Failed to toggle UI: ${errorMessage}`);
+        }
+    });
+
     context.subscriptions.push(
         startServerCommand, 
         stopServerCommand, 
         openConfigurationCommand, 
-        resetConfigurationCommand
+        resetConfigurationCommand,
+        toggleUICommand
     );
+
+    // Register integration test command
+    registerIntegrationTestCommand(context);
 
     console.log('Basic VSCode Extension registration complete');
 }

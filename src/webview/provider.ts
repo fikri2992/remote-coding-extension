@@ -87,7 +87,64 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
     }
 
     private _getHtmlForWebview(webview: vscode.Webview): string {
-        // Read the HTML file from the webview directory
+        // Check if enhanced UI is enabled
+        const config = vscode.workspace.getConfiguration('webAutomationTunnel');
+        const useEnhancedUI = config.get<boolean>('useEnhancedUI', true);
+        
+        if (useEnhancedUI) {
+            return this._getEnhancedHtmlForWebview(webview);
+        } else {
+            return this._getBasicHtmlForWebview(webview);
+        }
+    }
+
+    private _getEnhancedHtmlForWebview(webview: vscode.Webview): string {
+        try {
+            // Read the enhanced frontend HTML
+            const htmlPath = path.join(this._extensionUri.fsPath, 'src', 'webview', 'enhanced-frontend', 'index.html');
+            let html = fs.readFileSync(htmlPath, 'utf8');
+            
+            // Convert local resource paths to webview URIs
+            const enhancedFrontendUri = webview.asWebviewUri(
+                vscode.Uri.joinPath(this._extensionUri, 'src', 'webview', 'enhanced-frontend')
+            );
+            
+            // Replace relative paths with webview URIs
+            html = html.replace(/href="styles\//g, `href="${enhancedFrontendUri}/styles/`);
+            html = html.replace(/src="js\//g, `src="${enhancedFrontendUri}/js/`);
+            
+            // Add VS Code webview API script
+            const vscodeApiScript = `
+                <script>
+                    // Make VS Code API available to enhanced frontend
+                    window.vscode = acquireVsCodeApi();
+                    
+                    // Enhanced message handling for backward compatibility
+                    window.addEventListener('message', event => {
+                        const message = event.data;
+                        
+                        // Forward enhanced messages to the enhanced frontend
+                        if (window.enhancedWebApp && window.enhancedWebApp.webSocketClient) {
+                            window.enhancedWebApp.webSocketClient.handleExtensionMessage(message);
+                        }
+                    });
+                </script>
+            `;
+            
+            // Insert the VS Code API script before the closing head tag
+            html = html.replace('</head>', `${vscodeApiScript}</head>`);
+            
+            return html;
+            
+        } catch (error) {
+            console.error('Error reading enhanced HTML file:', error);
+            // Fallback to basic UI
+            return this._getBasicHtmlForWebview(webview);
+        }
+    }
+
+    private _getBasicHtmlForWebview(webview: vscode.Webview): string {
+        // Read the basic HTML file from the webview directory
         const htmlPath = path.join(this._extensionUri.fsPath, 'src', 'webview', 'panel.html');
         
         try {

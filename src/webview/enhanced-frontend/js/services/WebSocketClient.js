@@ -25,6 +25,7 @@ export class WebSocketClient {
         
         // Connection state
         this.isConnected = false;
+        this.isVSCodeWebview = false; // Flag for VS Code webview mode
         this.reconnectAttempts = 0;
         this.maxReconnectAttempts = 10;
         this.reconnectDelay = 1000;
@@ -97,6 +98,12 @@ export class WebSocketClient {
      * Connect to WebSocket server
      */
     async connect() {
+        // Skip WebSocket connection if in VS Code webview mode
+        if (this.isVSCodeWebview) {
+            console.log('🔌 Skipping WebSocket connection - using VS Code webview integration');
+            return;
+        }
+        
         if (this.websocket && this.websocket.readyState === WebSocket.CONNECTING) {
             return; // Already connecting
         }
@@ -192,6 +199,11 @@ export class WebSocketClient {
      * Send message to server with performance optimizations
      */
     async sendMessage(message) {
+        // In VS Code webview mode, send messages through extension
+        if (this.isVSCodeWebview) {
+            return this.sendMessageThroughExtension(message);
+        }
+        
         if (!this.isConnected || !this.websocket || this.websocket.readyState !== WebSocket.OPEN) {
             // Queue message for later with deduplication
             if (message.type !== 'ping') {
@@ -911,6 +923,280 @@ export class WebSocketClient {
             this.pendingMessages.delete(messageId);
             
             // Update message status
+            this.messageStatus.set(messageId, { 
+                status: 'acknowledged', 
+                timestamp: Date.now() 
+            });
+        }
+    }
+
+    /**
+     * Handle messages from VS Code extension (for integration)
+     */
+    handleExtensionMessage(message) {
+        console.log('📥 Extension message:', message);
+        
+        switch (message.command) {
+            case 'serverStatusUpdate':
+                this.handleServerStatusFromExtension(message.data);
+                break;
+            case 'statusUpdate':
+                this.handleExtensionStatusUpdate(message.data);
+                break;
+            case 'promptOperationResult':
+                this.handlePromptOperationResult(message.data);
+                break;
+            case 'gitOperationResult':
+                this.handleGitOperationResult(message.data);
+                break;
+            case 'fileSystemOperationResult':
+                this.handleFileSystemOperationResult(message.data);
+                break;
+            case 'configOperationResult':
+                this.handleConfigOperationResult(message.data);
+                break;
+            case 'fileSystemChange':
+                this.handleFileSystemChange(message.data);
+                break;
+            default:
+                console.log('📥 Unknown extension message:', message.command);
+        }
+    }
+
+    /**
+     * Handle server status updates from VS Code extension
+     */
+    handleServerStatusFromExtension(data) {
+        if (data.status) {
+            this.stateManager.updateConnection({
+                serverStatus: data.status,
+                connectedClients: data.clients || []
+            });
+        }
+    }
+
+    /**
+     * Handle extension status updates
+     */
+    handleExtensionStatusUpdate(data) {
+        switch (data.type) {
+            case 'serverStarting':
+                this.stateManager.updateConnection({ status: 'server-starting' });
+                break;
+            case 'serverStopping':
+                this.stateManager.updateConnection({ status: 'server-stopping' });
+                break;
+            case 'serverError':
+                this.stateManager.updateConnection({ 
+                    status: 'server-error',
+                    lastError: data.error 
+                });
+                this.notificationService?.show({
+                    type: 'error',
+                    title: 'Server Error',
+                    message: data.error,
+                    duration: 5000
+                });
+                break;
+        }
+    }
+
+    /**
+     * Handle prompt operation results from extension
+     */
+    handlePromptOperationResult(data) {
+        if (data.operation === 'save' && data.result) {
+            this.stateManager.addPromptToHistory(data.result);
+            this.notificationService?.show({
+                type: 'success',
+                message: 'Prompt saved successfully',
+                duration: 3000
+            });
+        }
+    }
+
+    /**
+     * Handle git operation results from extension
+     */
+    handleGitOperationResult(data) {
+        if (data.success && data.result) {
+            switch (data.operation) {
+                case 'status':
+                    this.stateManager.updateGit({ status: data.result });
+                    break;
+                case 'log':
+                    this.stateManager.updateGit({ recentCommits: data.result });
+                    break;
+                case 'diff':
+                    this.stateManager.updateGit({ currentDiff: data.result });
+                    break;
+            }
+        } else if (data.error) {
+            this.notificationService?.show({
+                type: 'error',
+                title: 'Git Operation Failed',
+                message: data.error,
+                duration: 5000
+            });
+        }
+    }
+
+    /**
+     * Handle file system operation results from extension
+     */
+    handleFileSystemOperationResult(data) {
+        if (data.result) {
+            switch (data.operation) {
+                case 'tree':
+                    this.stateManager.updateFileSystem({ rootNodes: data.result });
+                    break;
+                case 'open':
+                    this.notificationService?.show({
+                        type: 'success',
+                        message: `File opened: ${data.result.path}`,
+                        duration: 3000
+                    });
+                    break;
+            }
+        }
+    }
+
+    /**
+     * Handle config operation results from extension
+     */
+    handleConfigOperationResult(data) {
+        if (data.result) {
+            this.stateManager.updatePreferences(data.result);
+        }
+    }
+
+    /**
+     * Send message to VS Code extension
+     */
+    sendToExtension(command, data) {
+        if (window.vscode) {
+            window.vscode.postMessage({
+                command,
+                data
+            });
+        }
+    }
+
+    /**
+     * Send prompt operation to extension
+     */
+    sendPromptOperation(operation, data) {
+        this.sendToExtension('promptOperation', {
+            operation,
+            ...data
+        });
+    }
+
+    /**
+     * Send git operation to extension
+     */
+    sendGitOperation(operation, args = []) {
+        this.sendToExtension('gitOperation', {
+            operation,
+            args
+        });
+    }
+
+    /**
+     * Send file system operation to extension
+     */
+    sendFileSystemOperation(operation, path, options = {}) {
+        this.sendToExtension('fileSystemOperation', {
+            operation,
+            path,
+            options
+        });
+    }
+
+    /**
+     * Send config operation to extension
+     */
+    sendConfigOperation(operation, key, value) {
+        this.sendToExtension('configOperation', {
+            operation,
+            key,
+            value
+        });
+    }
+
+    /**
+     * Send message through VS Code extension (webview mode)
+     */
+    sendMessageThroughExtension(message) {
+        if (!window.vscode) {
+            console.warn('📤 VS Code API not available');
+            return false;
+        }
+
+        try {
+            // Route different message types to appropriate extension handlers
+            switch (message.type) {
+                case 'command':
+                    // Send VS Code command execution
+                    window.vscode.postMessage({
+                        command: 'executeCommand',
+                        data: {
+                            command: message.command,
+                            args: message.args || []
+                        }
+                    });
+                    break;
+
+                case 'prompt':
+                    this.sendPromptOperation(
+                        message.data?.promptData?.operation || 'save',
+                        message.data?.promptData || {}
+                    );
+                    break;
+
+                case 'git':
+                    this.sendGitOperation(
+                        message.data?.gitData?.operation || 'status',
+                        message.data?.gitData?.args || []
+                    );
+                    break;
+
+                case 'fileSystem':
+                    this.sendFileSystemOperation(
+                        message.data?.fileSystemData?.operation || 'tree',
+                        message.data?.fileSystemData?.path,
+                        message.data?.fileSystemData?.options || {}
+                    );
+                    break;
+
+                case 'config':
+                    this.sendConfigOperation(
+                        message.data?.configData?.operation || 'get',
+                        message.data?.configData?.key,
+                        message.data?.configData?.value
+                    );
+                    break;
+
+                case 'status':
+                    // Request server status
+                    window.vscode.postMessage({
+                        command: 'getServerStatus'
+                    });
+                    break;
+
+                default:
+                    console.warn('📤 Unknown message type for extension:', message.type);
+                    return false;
+            }
+
+            console.log('📤 Sent message through extension:', message.type);
+            return true;
+
+        } catch (error) {
+            console.error('❌ Failed to send message through extension:', error);
+            return false;
+        }
+    }tus
             this.messageStatus.set(messageId, { 
                 status: 'delivered', 
                 timestamp: Date.now() 

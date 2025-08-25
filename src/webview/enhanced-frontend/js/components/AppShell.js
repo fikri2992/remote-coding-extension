@@ -14,6 +14,8 @@ export class AppShell extends Component {
         this.webSocketClient = options.webSocketClient;
         this.notificationService = options.notificationService;
         this.animationService = options.animationService;
+        this.responsiveLayoutService = options.responsiveLayoutService;
+        this.touchGestureService = options.touchGestureService;
         this.keyboardShortcutService = options.keyboardShortcutService;
         this.contextMenuService = options.contextMenuService;
         this.dragDropService = options.dragDropService;
@@ -26,6 +28,7 @@ export class AppShell extends Component {
         this.sidebarCollapsed = false;
         this.isMobile = false;
         this.sidebarOpen = false; // For mobile
+        this.currentBreakpoint = 'desktop';
         
         // Bind methods
         this.handleSidebarToggle = this.handleSidebarToggle.bind(this);
@@ -47,6 +50,11 @@ export class AppShell extends Component {
         
         // Subscribe to state changes
         this.subscribeToStateChanges();
+        
+        // Register with responsive layout service
+        if (this.responsiveLayoutService) {
+            this.responsiveLayoutService.registerAdaptiveComponent(this);
+        }
     }
 
     render() {
@@ -101,19 +109,24 @@ export class AppShell extends Component {
     }
 
     setupResponsive() {
-        // Check if mobile on initialization
-        this.checkMobile();
-        
-        // Set up resize observer
-        if (window.ResizeObserver) {
-            this.resizeObserver = new ResizeObserver(() => {
-                this.checkMobile();
-            });
-            this.resizeObserver.observe(document.body);
+        // Get initial responsive state
+        if (this.responsiveLayoutService) {
+            const breakpointInfo = this.responsiveLayoutService.getCurrentBreakpointInfo();
+            this.currentBreakpoint = breakpointInfo.breakpoint;
+            this.isMobile = breakpointInfo.breakpoint === 'mobile';
+        } else {
+            // Fallback responsive detection
+            this.checkMobile();
         }
         
         // Set up mobile overlay click handler
         this.mobileOverlay.addEventListener('click', this.handleMobileOverlayClick);
+        
+        // Listen for layout changes
+        document.addEventListener('layout-change', this.handleLayoutChange.bind(this));
+        
+        // Setup gesture handlers
+        this.setupGestureHandlers();
     }
 
     checkMobile() {
@@ -293,8 +306,99 @@ export class AppShell extends Component {
         }
     }
 
+    setupGestureHandlers() {
+        if (!this.touchGestureService) return;
+        
+        // Listen for swipe gestures
+        document.addEventListener('gesture-swipe-right', (e) => {
+            if (this.isMobile && !this.sidebarOpen && e.detail.target.closest('.main-content')) {
+                this.showMobileSidebar();
+            }
+        });
+        
+        document.addEventListener('gesture-swipe-left', (e) => {
+            if (this.isMobile && this.sidebarOpen && e.detail.target.closest('.sidebar')) {
+                this.hideMobileSidebar();
+            }
+        });
+        
+        // Listen for long press on mobile menu button
+        document.addEventListener('gesture-long-press', (e) => {
+            if (e.detail.target.closest('.mobile-menu-button')) {
+                // Could show additional options
+                this.notificationService?.show({
+                    title: 'Navigation',
+                    message: 'Swipe right from edge to open sidebar',
+                    type: 'info',
+                    duration: 2000
+                });
+            }
+        });
+    }
+
+    handleLayoutChange(event) {
+        const { type, data, breakpoint } = event.detail;
+        
+        if (type === 'breakpoint') {
+            const wasDesktop = this.currentBreakpoint === 'desktop' || this.currentBreakpoint === 'large';
+            const isDesktop = breakpoint === 'desktop' || breakpoint === 'large';
+            
+            this.currentBreakpoint = breakpoint;
+            this.isMobile = breakpoint === 'mobile';
+            
+            // Update responsive state
+            this.updateResponsiveState();
+            
+            // Handle transition from/to desktop
+            if (wasDesktop !== isDesktop) {
+                if (isDesktop) {
+                    // Transitioning to desktop
+                    this.hideMobileSidebar();
+                    if (this.sidebarCollapsed) {
+                        this.sidebar?.collapse();
+                    } else {
+                        this.sidebar?.expand();
+                    }
+                } else {
+                    // Transitioning to mobile/tablet
+                    this.hideMobileSidebar();
+                }
+            }
+        }
+        
+        if (type === 'orientation') {
+            // Handle orientation changes
+            this.handleOrientationChange(data);
+        }
+    }
+
+    handleOrientationChange(data) {
+        // Adjust layout for orientation changes
+        if (this.isMobile && data.to === 'landscape') {
+            // In landscape mode on mobile, make sidebar smaller
+            if (this.sidebarOpen) {
+                this.sidebar.element.style.width = '240px';
+            }
+        } else if (this.isMobile && data.to === 'portrait') {
+            // In portrait mode on mobile, use full width sidebar
+            if (this.sidebarOpen) {
+                this.sidebar.element.style.width = '100vw';
+            }
+        }
+    }
+
+    // Method for responsive layout service
+    handleLayoutChange(type, data) {
+        if (type === 'resize') {
+            this.handleResize();
+        }
+    }
+
     handleResize() {
-        this.checkMobile();
+        // Update mobile state if not using responsive layout service
+        if (!this.responsiveLayoutService) {
+            this.checkMobile();
+        }
         
         // Delegate to child components
         if (this.sidebar) {

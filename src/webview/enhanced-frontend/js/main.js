@@ -12,6 +12,8 @@ import { KeyboardShortcutService } from './services/KeyboardShortcutService.js';
 import { ContextMenuService } from './services/ContextMenuService.js';
 import { DragDropService } from './services/DragDropService.js';
 import { AnimationService } from './services/AnimationService.js';
+import { TouchGestureService } from './services/TouchGestureService.js';
+import { ResponsiveLayoutService } from './services/ResponsiveLayoutService.js';
 import { globalPerformanceIntegration } from './utils/PerformanceIntegration.js';
 
 /**
@@ -28,6 +30,8 @@ class EnhancedWebApp {
         this.themeManager = new ThemeManager();
         this.notificationService = new NotificationService();
         this.animationService = new AnimationService();
+        this.responsiveLayoutService = new ResponsiveLayoutService(this.stateManager, this.notificationService);
+        this.touchGestureService = new TouchGestureService(this.stateManager, this.notificationService);
         this.keyboardShortcutService = new KeyboardShortcutService(this.stateManager, this.notificationService);
         this.contextMenuService = new ContextMenuService(this.stateManager, this.notificationService);
         this.dragDropService = new DragDropService(this.stateManager, this.notificationService);
@@ -146,6 +150,12 @@ class EnhancedWebApp {
         // Initialize animation service
         await this.animationService.initialize();
         
+        // Initialize responsive layout service
+        await this.responsiveLayoutService.initialize();
+        
+        // Initialize touch gesture service
+        await this.touchGestureService.initialize();
+        
         // Initialize keyboard shortcut service
         await this.keyboardShortcutService.initialize();
         
@@ -171,6 +181,8 @@ class EnhancedWebApp {
             webSocketClient: this.webSocketClient,
             notificationService: this.notificationService,
             animationService: this.animationService,
+            responsiveLayoutService: this.responsiveLayoutService,
+            touchGestureService: this.touchGestureService,
             keyboardShortcutService: this.keyboardShortcutService,
             contextMenuService: this.contextMenuService,
             dragDropService: this.dragDropService
@@ -615,6 +627,8 @@ class EnhancedWebApp {
         this.dragDropService?.destroy();
         this.contextMenuService?.destroy();
         this.keyboardShortcutService?.destroy();
+        this.touchGestureService?.destroy();
+        this.responsiveLayoutService?.destroy();
         this.animationService?.destroy();
         this.stateManager?.destroy();
         this.themeManager?.destroy();

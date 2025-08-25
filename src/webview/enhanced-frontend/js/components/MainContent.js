@@ -25,6 +25,45 @@ export class MainContent extends Component {
         await super.initialize();
         this.render();
         this.initializeSections();
+        this.setupResponsiveHandlers();
+    }
+
+    setupResponsiveHandlers() {
+        // Listen for layout changes
+        document.addEventListener('layout-change', this.handleLayoutChange.bind(this));
+        
+        // Listen for window resize as fallback
+        window.addEventListener('resize', this.handleResize.bind(this));
+        
+        // Initial update
+        this.updateMobileMenuVisibility();
+    }
+
+    handleLayoutChange(event) {
+        const { type, breakpoint } = event.detail;
+        
+        if (type === 'breakpoint') {
+            this.updateMobileMenuVisibility();
+            this.updateContentLayout(breakpoint);
+        }
+    }
+
+    handleResize() {
+        this.updateMobileMenuVisibility();
+    }
+
+    updateContentLayout(breakpoint) {
+        // Update content layout based on breakpoint
+        if (breakpoint === 'mobile') {
+            this.element.classList.add('mobile-layout');
+            this.element.classList.remove('tablet-layout', 'desktop-layout');
+        } else if (breakpoint === 'tablet') {
+            this.element.classList.add('tablet-layout');
+            this.element.classList.remove('mobile-layout', 'desktop-layout');
+        } else {
+            this.element.classList.add('desktop-layout');
+            this.element.classList.remove('mobile-layout', 'tablet-layout');
+        }
     }
 
     render() {
@@ -87,13 +126,48 @@ export class MainContent extends Component {
 
     setupMobileMenuButton() {
         if (this.mobileMenuButton) {
+            // Add touch-friendly classes
+            this.mobileMenuButton.classList.add('touch-feedback', 'touch-target');
+            
+            // Click handler
             this.addEventListener(this.mobileMenuButton, 'click', this.handleMobileMenuClick);
+            
+            // Touch handlers for better feedback
+            this.addEventListener(this.mobileMenuButton, 'touchstart', this.handleMobileMenuTouchStart);
+            this.addEventListener(this.mobileMenuButton, 'touchend', this.handleMobileMenuTouchEnd);
+            
+            // Update visibility based on screen size
+            this.updateMobileMenuVisibility();
         }
     }
 
-    handleMobileMenuClick() {
+    handleMobileMenuClick(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // Add haptic feedback simulation
+        this.mobileMenuButton.classList.add('haptic-light');
+        setTimeout(() => {
+            this.mobileMenuButton.classList.remove('haptic-light');
+        }, 100);
+        
         // Emit event to parent AppShell to toggle sidebar
         this.emit('mobile-menu-toggle');
+    }
+
+    handleMobileMenuTouchStart(e) {
+        this.mobileMenuButton.classList.add('touching');
+    }
+
+    handleMobileMenuTouchEnd(e) {
+        this.mobileMenuButton.classList.remove('touching');
+    }
+
+    updateMobileMenuVisibility() {
+        if (this.mobileMenuButton) {
+            const isMobile = window.innerWidth <= 768;
+            this.mobileMenuButton.style.display = isMobile ? 'flex' : 'none';
+        }
     }
 
     async showSection(sectionId, direction = 'forward') {

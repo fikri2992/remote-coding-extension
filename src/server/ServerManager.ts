@@ -381,6 +381,13 @@ export class ServerManager {
     }
 
     /**
+     * Get WebSocket server instance
+     */
+    get webSocketServer(): WebSocketServer | null {
+        return this._webSocketServer;
+    }
+
+    /**
      * Reset configuration to defaults
      */
     async resetConfigurationToDefaults(): Promise<void> {

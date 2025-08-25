@@ -61,6 +61,18 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
                     case 'validatePort':
                         this._handleValidatePort(message.data);
                         break;
+                    case 'promptOperation':
+                        this._handlePromptOperation(message.data);
+                        break;
+                    case 'gitOperation':
+                        this._handleGitOperation(message.data);
+                        break;
+                    case 'fileSystemOperation':
+                        this._handleFileSystemOperation(message.data);
+                        break;
+                    case 'configOperation':
+                        this._handleConfigOperation(message.data);
+                        break;
                     default:
                         console.log('Unknown message received from webview:', message);
                         break;
@@ -336,6 +348,252 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
                 data: { 
                     port: data.port, 
                     valid: false, 
+                    error: errorMessage 
+                }
+            });
+        }
+    }
+
+    /**
+     * Handle prompt operation from webview
+     */
+    private async _handlePromptOperation(data: any): Promise<void> {
+        if (!this._view) return;
+
+        try {
+            // Forward prompt operation to WebSocket server
+            const wsServer = this._serverManager.webSocketServer;
+            if (wsServer) {
+                // Broadcast prompt operation to all connected clients
+                const message = {
+                    type: 'prompt',
+                    data: {
+                        promptData: data
+                    }
+                };
+                
+                wsServer.broadcastMessage(message);
+                
+                this._view.webview.postMessage({
+                    command: 'promptOperationSuccess',
+                    data: { operation: data.operation }
+                });
+            } else {
+                throw new Error('WebSocket server not available');
+            }
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            this._view.webview.postMessage({
+                command: 'promptOperationError',
+                data: { 
+                    operation: data.operation,
+                    error: errorMessage 
+                }
+            });
+        }
+    }
+
+    /**
+     * Handle git operation from webview
+     */
+    private async _handleGitOperation(data: any): Promise<void> {
+        if (!this._view) return;
+
+        try {
+            // Forward git operation to WebSocket server
+            const wsServer = this._serverManager.webSocketServer;
+            if (wsServer) {
+                // Execute git operation through the git service
+                const result = await wsServer.commandHandler.executeCommand('git.' + data.operation, data.args || []);
+                
+                this._view.webview.postMessage({
+                    command: 'gitOperationResult',
+                    data: { 
+                        operation: data.operation,
+                        success: result.success,
+                        result: result.data,
+                        error: result.error
+                    }
+                });
+            } else {
+                throw new Error('WebSocket server not available');
+            }
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            this._view.webview.postMessage({
+                command: 'gitOperationError',
+                data: { 
+                    operation: data.operation,
+                    error: errorMessage 
+                }
+            });
+        }
+    }
+
+    /**
+     * Handle file system operation from webview
+     */
+    private async _handleFileSystemOperation(data: any): Promise<void> {
+        if (!this._view) return;
+
+        try {
+            const { operation, path: filePath, options } = data;
+            let result: any;
+
+            switch (operation) {
+                case 'openFile':
+                    if (filePath) {
+                        await vscode.commands.executeCommand('vscode.open', vscode.Uri.file(filePath));
+                        result = { success: true };
+                    } else {
+                        throw new Error('File path is required');
+                    }
+                    break;
+
+                case 'createFile':
+                    if (filePath) {
+                        const uri = vscode.Uri.file(filePath);
+                        await vscode.workspace.fs.writeFile(uri, new Uint8Array());
+                        result = { success: true, path: filePath };
+                    } else {
+                        throw new Error('File path is required');
+                    }
+                    break;
+
+                case 'deleteFile':
+                    if (filePath) {
+                        const uri = vscode.Uri.file(filePath);
+                        await vscode.workspace.fs.delete(uri);
+                        result = { success: true };
+                    } else {
+                        throw new Error('File path is required');
+                    }
+                    break;
+
+                case 'renameFile':
+                    if (filePath && options?.newPath) {
+                        const oldUri = vscode.Uri.file(filePath);
+                        const newUri = vscode.Uri.file(options.newPath);
+                        await vscode.workspace.fs.rename(oldUri, newUri);
+                        result = { success: true, oldPath: filePath, newPath: options.newPath };
+                    } else {
+                        throw new Error('File path and new path are required');
+                    }
+                    break;
+
+                case 'watchFiles':
+                    // Set up file system watcher
+                    const pattern = options?.pattern || '**/*';
+                    const watcher = vscode.workspace.createFileSystemWatcher(pattern);
+                    
+                    watcher.onDidCreate(uri => {
+                        this._view?.webview.postMessage({
+                            command: 'fileSystemChange',
+                            data: { type: 'created', path: uri.fsPath }
+                        });
+                    });
+
+                    watcher.onDidChange(uri => {
+                        this._view?.webview.postMessage({
+                            command: 'fileSystemChange',
+                            data: { type: 'changed', path: uri.fsPath }
+                        });
+                    });
+
+                    watcher.onDidDelete(uri => {
+                        this._view?.webview.postMessage({
+                            command: 'fileSystemChange',
+                            data: { type: 'deleted', path: uri.fsPath }
+                        });
+                    });
+
+                    result = { success: true, watching: pattern };
+                    break;
+
+                default:
+                    throw new Error(`Unsupported file system operation: ${operation}`);
+            }
+
+            this._view.webview.postMessage({
+                command: 'fileSystemOperationResult',
+                data: { 
+                    operation,
+                    result
+                }
+            });
+
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            this._view.webview.postMessage({
+                command: 'fileSystemOperationError',
+                data: { 
+                    operation: data.operation,
+                    error: errorMessage 
+                }
+            });
+        }
+    }
+
+    /**
+     * Handle configuration operation from webview
+     */
+    private async _handleConfigOperation(data: any): Promise<void> {
+        if (!this._view) return;
+
+        try {
+            const { operation, key, value } = data;
+            let result: any;
+
+            switch (operation) {
+                case 'get':
+                    if (key) {
+                        result = vscode.workspace.getConfiguration().get(key);
+                    } else {
+                        // Get all enhanced UI configuration
+                        result = {
+                            webAutomationTunnel: vscode.workspace.getConfiguration('webAutomationTunnel').get(''),
+                            enhancedUI: vscode.workspace.getConfiguration('enhancedUI').get('')
+                        };
+                    }
+                    break;
+
+                case 'set':
+                    if (key && value !== undefined) {
+                        await vscode.workspace.getConfiguration().update(key, value, vscode.ConfigurationTarget.Workspace);
+                        result = { success: true, key, value };
+                    } else {
+                        throw new Error('Configuration key and value are required');
+                    }
+                    break;
+
+                case 'reset':
+                    if (key) {
+                        await vscode.workspace.getConfiguration().update(key, undefined, vscode.ConfigurationTarget.Workspace);
+                        result = { success: true, key };
+                    } else {
+                        throw new Error('Configuration key is required');
+                    }
+                    break;
+
+                default:
+                    throw new Error(`Unsupported config operation: ${operation}`);
+            }
+
+            this._view.webview.postMessage({
+                command: 'configOperationResult',
+                data: { 
+                    operation,
+                    key,
+                    result
+                }
+            });
+
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            this._view.webview.postMessage({
+                command: 'configOperationError',
+                data: { 
+                    operation: data.operation,
                     error: errorMessage 
                 }
             });

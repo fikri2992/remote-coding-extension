@@ -4,10 +4,12 @@
 
 import { WebSocket, WebSocketServer as WSServer } from 'ws';
 import { v4 as uuidv4 } from 'uuid';
-import { ServerConfig, WebSocketMessage, ClientConnection } from './interfaces';
+import { ServerConfig, WebSocketMessage, ClientConnection, EnhancedWebSocketMessage } from './interfaces';
 import { CommandHandler, StateChangeEvent } from './CommandHandler';
 import { ErrorHandler, ErrorCategory, ErrorSeverity } from './ErrorHandler';
 import { ConnectionRecoveryManager } from './ConnectionRecoveryManager';
+import { GitService } from './GitService';
+import { RemoteRCService } from './RemoteRCService';
 
 /**
  * Enhanced client connection with state tracking
@@ -37,12 +39,16 @@ export class WebSocketServer {
     private _clientThrottles: Map<string, { [key: string]: NodeJS.Timeout }> = new Map();
     private _errorHandler: ErrorHandler;
     private _recoveryManager: ConnectionRecoveryManager;
+    private _gitService: GitService;
+    private _remoteRCService: RemoteRCService;
 
     constructor(config: ServerConfig) {
         this._config = config;
         this._port = config.websocketPort || config.httpPort + 1;
         this._commandHandler = new CommandHandler();
         this._errorHandler = ErrorHandler.getInstance();
+        this._gitService = new GitService();
+        this._remoteRCService = new RemoteRCService();
         this._recoveryManager = new ConnectionRecoveryManager(
             {
                 maxRetries: 5,
@@ -159,8 +165,10 @@ export class WebSocketServer {
                 this._isRunning = false;
                 this._clients.clear();
                 
-                // Dispose of CommandHandler resources
+                // Dispose of service resources
                 this._commandHandler.dispose();
+                this._gitService.dispose();
+                this._remoteRCService.dispose();
                 
                 console.log('WebSocket server stopped');
                 resolve();
@@ -350,13 +358,21 @@ export class WebSocketServer {
      */
     private validateMessage(message: WebSocketMessage): boolean {
         // Check required type field
-        if (!message.type || !['command', 'response', 'broadcast', 'status', 'fileSystem'].includes(message.type)) {
+        const validTypes = ['command', 'response', 'broadcast', 'status', 'fileSystem', 'prompt', 'git', 'config'];
+        if (!message.type || !validTypes.includes(message.type)) {
             return false;
         }
 
         // Validate command messages
         if (message.type === 'command') {
             if (!message.command || typeof message.command !== 'string') {
+                return false;
+            }
+        }
+
+        // Validate enhanced message types
+        if (['prompt', 'git', 'config'].includes(message.type)) {
+            if (!message.data) {
                 return false;
             }
         }
@@ -379,6 +395,18 @@ export class WebSocketServer {
 
             case 'fileSystem':
                 await this.handleFileSystemMessage(clientId, message);
+                break;
+
+            case 'prompt':
+                await this.handlePromptMessage(clientId, message);
+                break;
+
+            case 'git':
+                await this.handleGitMessage(clientId, message);
+                break;
+
+            case 'config':
+                await this.handleConfigMessage(clientId, message);
                 break;
 
             default:
@@ -694,6 +722,223 @@ export class WebSocketServer {
         } catch (error) {
             console.error('Failed to search files:', error);
             return [];
+        }
+    }
+
+    /**
+     * Handle prompt management messages
+     */
+    private async handlePromptMessage(clientId: string, message: EnhancedWebSocketMessage): Promise<void> {
+        try {
+            const { operation, content, category, tags, promptId, query, days } = message.data?.promptData || {};
+            
+            if (!operation) {
+                this.sendError(clientId, 'Prompt operation is required', message.id);
+                return;
+            }
+
+            let result: any;
+
+            switch (operation) {
+                case 'save':
+                    if (!content) {
+                        this.sendError(clientId, 'Prompt content is required for save operation', message.id);
+                        return;
+                    }
+                    result = await this._remoteRCService.savePrompt(content, category, tags || []);
+                    break;
+
+                case 'history':
+                    result = await this._remoteRCService.getPromptHistory(days);
+                    break;
+
+                case 'search':
+                    if (!query) {
+                        this.sendError(clientId, 'Search query is required', message.id);
+                        return;
+                    }
+                    result = await this._remoteRCService.searchPrompts(query, category, tags);
+                    break;
+
+                case 'categories':
+                    result = await this._remoteRCService.getCategories();
+                    break;
+
+                case 'byCategory':
+                    if (!category) {
+                        this.sendError(clientId, 'Category is required for byCategory operation', message.id);
+                        return;
+                    }
+                    result = await this._remoteRCService.getPromptsByCategory(category);
+                    break;
+
+                case 'updateUsage':
+                    if (!promptId) {
+                        this.sendError(clientId, 'Prompt ID is required for updateUsage operation', message.id);
+                        return;
+                    }
+                    await this._remoteRCService.updatePromptUsage(promptId);
+                    result = { success: true };
+                    break;
+
+                case 'toggleFavorite':
+                    if (!promptId) {
+                        this.sendError(clientId, 'Prompt ID is required for toggleFavorite operation', message.id);
+                        return;
+                    }
+                    result = { favorite: await this._remoteRCService.togglePromptFavorite(promptId) };
+                    break;
+
+                case 'structure':
+                    result = await this._remoteRCService.getRemoteRCStructure();
+                    break;
+
+                default:
+                    this.sendError(clientId, `Unsupported prompt operation: ${operation}`, message.id);
+                    return;
+            }
+
+            // Send response
+            const response: WebSocketMessage = {
+                type: 'prompt',
+                data: {
+                    operation,
+                    result
+                }
+            };
+
+            if (message.id) {
+                response.id = message.id;
+            }
+
+            this.sendToClient(clientId, response);
+
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown prompt operation error';
+            console.error(`Prompt operation failed for client ${clientId}:`, error);
+            this.sendError(clientId, `Prompt operation failed: ${errorMessage}`, message.id);
+        }
+    }
+
+    /**
+     * Handle git operation messages
+     */
+    private async handleGitMessage(clientId: string, message: EnhancedWebSocketMessage): Promise<void> {
+        try {
+            const { operation, path, options } = message.data?.gitData || {};
+            
+            if (!operation) {
+                this.sendError(clientId, 'Git operation is required', message.id);
+                return;
+            }
+
+            const result = await this._gitService.executeGitCommand(operation, { 
+                workspacePath: path, 
+                ...options 
+            });
+
+            // Send response
+            const response: WebSocketMessage = {
+                type: 'git',
+                data: {
+                    operation,
+                    result
+                }
+            };
+
+            if (message.id) {
+                response.id = message.id;
+            }
+
+            this.sendToClient(clientId, response);
+
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown git operation error';
+            console.error(`Git operation failed for client ${clientId}:`, error);
+            this.sendError(clientId, `Git operation failed: ${errorMessage}`, message.id);
+        }
+    }
+
+    /**
+     * Handle configuration messages
+     */
+    private async handleConfigMessage(clientId: string, message: EnhancedWebSocketMessage): Promise<void> {
+        try {
+            const { operation, key, value } = message.data?.configData || {};
+            
+            if (!operation) {
+                this.sendError(clientId, 'Config operation is required', message.id);
+                return;
+            }
+
+            let result: any;
+
+            switch (operation) {
+                case 'get':
+                    if (key === 'remoterc') {
+                        result = await this._remoteRCService.getRemoteRCStructure();
+                    } else {
+                        // Get VS Code configuration
+                        const vscode = await import('vscode');
+                        result = vscode.workspace.getConfiguration().get(key);
+                    }
+                    break;
+
+                case 'set':
+                    if (!key) {
+                        this.sendError(clientId, 'Configuration key is required for set operation', message.id);
+                        return;
+                    }
+                    
+                    if (key.startsWith('remoterc.')) {
+                        // Update RemoteRC configuration
+                        const configKey = key.replace('remoterc.', '') as keyof typeof this._remoteRCService['_config'];
+                        await this._remoteRCService.updateConfiguration(configKey, value);
+                        result = { success: true };
+                    } else {
+                        // Update VS Code configuration
+                        const vscode = await import('vscode');
+                        await vscode.workspace.getConfiguration().update(key, value, vscode.ConfigurationTarget.Workspace);
+                        result = { success: true };
+                    }
+                    break;
+
+                case 'schema':
+                    // Return configuration schema for UI generation
+                    result = {
+                        remoterc: {
+                            defaultCategory: { type: 'string', default: 'general' },
+                            autoSave: { type: 'boolean', default: true },
+                            maxHistoryDays: { type: 'number', default: 30, min: 1, max: 365 }
+                        }
+                    };
+                    break;
+
+                default:
+                    this.sendError(clientId, `Unsupported config operation: ${operation}`, message.id);
+                    return;
+            }
+
+            // Send response
+            const response: WebSocketMessage = {
+                type: 'config',
+                data: {
+                    operation,
+                    key,
+                    result
+                }
+            };
+
+            if (message.id) {
+                response.id = message.id;
+            }
+
+            this.sendToClient(clientId, response);
+
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown config operation error';
+            console.error(`Config operation failed for client ${clientId}:`, error);
+            this.sendError(clientId, `Config operation failed: ${errorMessage}`, message.id);
         }
     }
 

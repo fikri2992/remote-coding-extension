@@ -43,7 +43,7 @@ export interface ServerStatus {
  */
 export interface WebSocketMessage {
     /** Message type for routing */
-    type: 'command' | 'response' | 'broadcast' | 'status' | 'fileSystem';
+    type: 'command' | 'response' | 'broadcast' | 'status' | 'fileSystem' | 'prompt' | 'git' | 'config';
     /** Unique identifier for request/response correlation */
     id?: string;
     /** VS Code command name to execute */
@@ -54,6 +54,47 @@ export interface WebSocketMessage {
     data?: any;
     /** Error information (if applicable) */
     error?: string;
+}
+
+/**
+ * Enhanced WebSocket message with additional data payloads for new features
+ */
+export interface EnhancedWebSocketMessage extends WebSocketMessage {
+    data?: {
+        // Prompt-specific data
+        promptData?: {
+            content: string;
+            category?: string;
+            tags?: string[];
+            timestamp?: Date;
+        };
+        
+        // Git-specific data
+        gitData?: {
+            operation: 'status' | 'log' | 'diff' | 'branch' | 'commit' | 'push' | 'pull';
+            result?: any;
+            path?: string;
+            options?: any;
+        };
+        
+        // File system data
+        fileSystemData?: {
+            operation: 'tree' | 'open' | 'watch' | 'create' | 'delete' | 'rename';
+            path?: string;
+            content?: any;
+            options?: any;
+        };
+        
+        // Configuration data
+        configData?: {
+            key: string;
+            value: any;
+            schema?: any;
+        };
+        
+        // Generic data for backward compatibility
+        [key: string]: any;
+    };
 }
 
 /**
@@ -92,4 +133,135 @@ export interface WorkspaceState {
     openEditors: string[];
     /** Recently accessed files */
     recentFiles: string[];
+    /** Git repository state */
+    gitState?: GitRepositoryState;
+    /** File system tree structure */
+    fileTree?: FileNode[];
+}
+
+/**
+ * Git repository state information
+ */
+export interface GitRepositoryState {
+    /** Current branch name */
+    currentBranch: string;
+    /** Repository status */
+    status: {
+        staged: string[];
+        unstaged: string[];
+        untracked: string[];
+        conflicted: string[];
+    };
+    /** Recent commits */
+    recentCommits: GitCommit[];
+    /** Current diff information */
+    currentDiff?: GitDiff[];
+    /** Remote status */
+    remoteStatus: {
+        ahead: number;
+        behind: number;
+        remote: string;
+    };
+    /** Repository root path */
+    repositoryRoot: string;
+}
+
+/**
+ * Git commit information
+ */
+export interface GitCommit {
+    /** Commit hash */
+    hash: string;
+    /** Commit message */
+    message: string;
+    /** Author information */
+    author: string;
+    /** Commit date */
+    date: Date;
+    /** Modified files */
+    files: string[];
+}
+
+/**
+ * Git diff information
+ */
+export interface GitDiff {
+    /** File path */
+    file: string;
+    /** Change type */
+    type: 'added' | 'modified' | 'deleted' | 'renamed';
+    /** Number of additions */
+    additions: number;
+    /** Number of deletions */
+    deletions: number;
+    /** Diff content */
+    content: string;
+}
+
+/**
+ * File system node information
+ */
+export interface FileNode {
+    /** File/directory name */
+    name: string;
+    /** Full path relative to workspace */
+    path: string;
+    /** Node type */
+    type: 'file' | 'directory';
+    /** File size (for files) */
+    size?: number;
+    /** Last modified date */
+    modified?: Date;
+    /** Child nodes (for directories) */
+    children?: FileNode[];
+    /** Whether directory is expanded */
+    expanded?: boolean;
+    /** File type icon */
+    icon?: string;
+    /** Programming language (for files) */
+    language?: string;
+}
+
+/**
+ * Prompt record for .remoterc management
+ */
+export interface PromptRecord {
+    /** Unique identifier */
+    id: string;
+    /** Prompt content */
+    content: string;
+    /** Creation timestamp */
+    timestamp: Date;
+    /** Category/folder */
+    category?: string;
+    /** Tags for organization */
+    tags: string[];
+    /** File path in .remoterc */
+    filePath: string;
+    /** Whether marked as favorite */
+    favorite: boolean;
+    /** Number of times executed */
+    executionCount: number;
+    /** Last used timestamp */
+    lastUsed?: Date;
+}
+
+/**
+ * .remoterc folder structure
+ */
+export interface RemoteRCStructure {
+    /** Prompts organized by date */
+    prompts: {
+        [date: string]: PromptRecord[];
+    };
+    /** Categories mapping */
+    categories: {
+        [category: string]: string[];
+    };
+    /** Configuration */
+    config: {
+        defaultCategory: string;
+        autoSave: boolean;
+        maxHistoryDays: number;
+    };
 }

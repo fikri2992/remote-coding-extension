@@ -119,6 +119,13 @@ export class CommandHandler {
             'git.openChange',
             'git.stage',
             'git.unstage',
+            'git.status',
+            'git.log',
+            'git.diff',
+            'git.branch',
+            'git.commit',
+            'git.push',
+            'git.pull',
             
             // Workspace operations
             'workbench.action.reloadWindow',

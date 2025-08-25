@@ -87,91 +87,174 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
     }
 
     private _getHtmlForWebview(webview: vscode.Webview): string {
-        // Check if enhanced UI is enabled
-        const config = vscode.workspace.getConfiguration('webAutomationTunnel');
-        const useEnhancedUI = config.get<boolean>('useEnhancedUI', true);
-        
-        if (useEnhancedUI) {
-            return this._getEnhancedHtmlForWebview(webview);
-        } else {
-            return this._getBasicHtmlForWebview(webview);
+        // Use simple panel HTML for VS Code webview - the main app is served via HTTP at localhost:8080
+        return this._getPanelHtmlForWebview(webview);
+    }
+
+    private _getPanelHtmlForWebview(webview: vscode.Webview): string {
+        try {
+            // Read the simple panel HTML from the built output directory
+            const htmlPath = path.join(this._extensionUri.fsPath, 'out', 'webview', 'panel.html');
+            let html = fs.readFileSync(htmlPath, 'utf8');
+            
+            // Add VS Code webview API script
+            const vscodeApiScript = 
+                '<script>' +
+                '    // Make VS Code API available to panel' +
+                '    window.vscode = acquireVsCodeApi();' +
+                '</script>';
+            
+            // Insert the VS Code API script before the closing body tag
+            html = html.replace('</body>', vscodeApiScript + '</body>');
+            
+            return html;
+            
+        } catch (error) {
+            console.error('Failed to load panel HTML:', error);
+            return this._getFallbackHtml(webview);
         }
     }
 
-    private _getEnhancedHtmlForWebview(webview: vscode.Webview): string {
+    private _getUnifiedHtmlForWebview(webview: vscode.Webview): string {
         try {
-            // Read the enhanced frontend HTML from the built output directory
-            const htmlPath = path.join(this._extensionUri.fsPath, 'out', 'webview', 'enhanced-frontend', 'index.html');
+            // Read the unified frontend HTML from the built output directory
+            const htmlPath = path.join(this._extensionUri.fsPath, 'out', 'webview', 'frontend', 'index.html');
             let html = fs.readFileSync(htmlPath, 'utf8');
             
             // Convert local resource paths to webview URIs
-            const enhancedFrontendUri = webview.asWebviewUri(
-                vscode.Uri.joinPath(this._extensionUri, 'out', 'webview', 'enhanced-frontend')
+            const frontendUri = webview.asWebviewUri(
+                vscode.Uri.joinPath(this._extensionUri, 'out', 'webview', 'frontend')
             );
             
             // Replace relative paths with webview URIs
-            html = html.replace(/href="styles\//g, `href="${enhancedFrontendUri}/styles/`);
-            html = html.replace(/src="js\//g, `src="${enhancedFrontendUri}/js/`);
+            html = html.replace(/href="styles\//g, 'href="' + frontendUri + '/styles/');
+            html = html.replace(/src="js\//g, 'src="' + frontendUri + '/js/');
+            html = html.replace(/src="\.\/js\//g, 'src="' + frontendUri + '/js/');
+            
+            // Also replace JavaScript string literals for loadScript calls
+            html = html.replace(/loadScript\('\.\/js\//g, "loadScript('" + frontendUri + '/js/');
+            html = html.replace(/loadScript\("\.\/js\//g, 'loadScript("' + frontendUri + '/js/');
+            
+            // Debug logging to verify path replacement
+            console.log('Frontend URI:', frontendUri.toString());
+            if (html.includes('./js/')) {
+                console.warn('Warning: HTML still contains unresolved ./js/ paths');
+            }
+            
+            // Get UI preference and inject it
+            const config = vscode.workspace.getConfiguration('webAutomationTunnel');
+            const useEnhancedUI = config.get<boolean>('useEnhancedUI', true);
+            const uiMode = useEnhancedUI ? 'enhanced' : 'basic';
+            
+            // Add UI mode to the URL
+            const uiModeScript = [
+                '                // Set UI mode from VS Code configuration',
+                '                window.webAutomationConfig.useEnhancedUI = ' + useEnhancedUI + ';',
+                '                // Add UI mode to URL for consistency',
+                '                if (window.location.search.indexOf("ui=") === -1) {',
+                '                    const separator = window.location.search ? "&" : "?";',
+                '                    window.history.replaceState({}, "", window.location.pathname + window.location.search + separator + "ui=' + uiMode + '");',
+                '                }'
+            ].join('\n');
+            html = html.replace('</script>', '\n' + uiModeScript + '\n            </script>');
             
             // Add VS Code webview API script
-            const vscodeApiScript = `
-                <script>
-                    // Make VS Code API available to enhanced frontend
-                    window.vscode = acquireVsCodeApi();
-                    
-                    // Enhanced message handling for backward compatibility
-                    window.addEventListener('message', event => {
-                        const message = event.data;
-                        
-                        // Forward enhanced messages to the enhanced frontend
-                        if (window.enhancedWebApp && window.enhancedWebApp.webSocketClient) {
-                            window.enhancedWebApp.webSocketClient.handleExtensionMessage(message);
-                        }
-                    });
-                </script>
-            `;
+            const vscodeApiScript = 
+                '<script>' +
+                '    // Make VS Code API available to unified frontend' +
+                '    window.vscode = acquireVsCodeApi();' +
+                '    ' +
+                '    // Enhanced message handling for backward compatibility' +
+                '    window.addEventListener("message", function(event) {' +
+                '        var message = event.data;' +
+                '        ' +
+                '        // Forward to active UI instance' +
+                '        if (window.webAutomationConfig.useEnhancedUI && window.enhancedApp) {' +
+                '            if (window.enhancedApp.handleMessage) {' +
+                '                window.enhancedApp.handleMessage(message);' +
+                '            }' +
+                '        } else if (window.basicApp) {' +
+                '            if (window.basicApp.handleMessage) {' +
+                '                window.basicApp.handleMessage(message);' +
+                '            }' +
+                '        }' +
+                '    });' +
+                '</script>';
             
-            // Insert the VS Code API script before the closing head tag
-            html = html.replace('</head>', `${vscodeApiScript}</head>`);
+            // Insert the VS Code API script before the closing body tag
+            html = html.replace('</body>', vscodeApiScript + '</body>');
             
             return html;
             
         } catch (error) {
-            console.error('Error reading enhanced HTML file:', error);
-            // Fallback to basic UI
-            return this._getBasicHtmlForWebview(webview);
+            console.error('Failed to load unified frontend HTML:', error);
+            return this._getFallbackHtml(webview);
         }
+    }
+    /**
+     * Fallback HTML when unified frontend fails to load
+     */
+    private _getFallbackHtml(webview: vscode.Webview): string {
+        return [
+            '<!DOCTYPE html>',
+            '<html lang="en">',
+            '<head>',
+            '    <meta charset="UTF-8">',
+            '    <meta name="viewport" content="width=device-width, initial-scale=1.0">',
+            '    <title>Web Automation Tunnel - Error</title>',
+            '    <style>',
+            '        body {',
+            '            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;',
+            '            padding: 20px;',
+            '            background: var(--vscode-editor-background, #1e1e1e);',
+            '            color: var(--vscode-foreground, #cccccc);',
+            '        }',
+            '        .error-container {',
+            '            max-width: 600px;',
+            '            margin: 0 auto;',
+            '            text-align: center;',
+            '            padding: 40px 20px;',
+            '        }',
+            '        .error-title {',
+            '            color: var(--vscode-errorForeground, #f14c4c);',
+            '            font-size: 24px;',
+            '            margin-bottom: 16px;',
+            '        }',
+            '        .error-message {',
+            '            font-size: 16px;',
+            '            line-height: 1.5;',
+            '            margin-bottom: 24px;',
+            '        }',
+            '        .retry-button {',
+            '            background: var(--vscode-button-background, #0e639c);',
+            '            color: var(--vscode-button-foreground, #ffffff);',
+            '            border: none;',
+            '            padding: 8px 16px;',
+            '            border-radius: 2px;',
+            '            cursor: pointer;',
+            '            font-size: 14px;',
+            '        }',
+            '        .retry-button:hover {',
+            '            background: var(--vscode-button-hoverBackground, #1177bb);',
+            '        }',
+            '    </style>',
+            '</head>',
+            '<body>',
+            '    <div class="error-container">',
+            '        <h1 class="error-title">Frontend Load Error</h1>',
+            '        <p class="error-message">',
+            '            Failed to load the web automation interface. This may be due to missing files or build issues.',
+            '        </p>',
+            '        <button class="retry-button" onclick="location.reload()">Retry</button>',
+            '    </div>',
+            '    <script>',
+            '        window.vscode = acquireVsCodeApi();',
+            '    </script>',
+            '</body>',
+            '</html>'
+        ].join('\n');
     }
 
-    private _getBasicHtmlForWebview(webview: vscode.Webview): string {
-        // Read the basic HTML file from the built output directory
-        const htmlPath = path.join(this._extensionUri.fsPath, 'out', 'webview', 'panel.html');
-        
-        try {
-            let html = fs.readFileSync(htmlPath, 'utf8');
-            
-            // Replace any local resource references with webview URIs if needed
-            // For now, return the HTML as-is since we're not using external resources yet
-            return html;
-        } catch (error) {
-            console.error('Error reading HTML file:', error);
-            // Fallback HTML content
-            return `
-                <!DOCTYPE html>
-                <html lang="en">
-                <head>
-                    <meta charset="UTF-8">
-                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                    <title>Basic Extension</title>
-                </head>
-                <body>
-                    <h3>Basic Extension Panel</h3>
-                    <p>Error loading panel content.</p>
-                </body>
-                </html>
-            `;
-        }
-    }
 
     private _handleExecuteAction(data: any) {
         // Handle the execute action message from webview
@@ -199,7 +282,7 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
             this._sendStatusUpdate({ type: 'serverError', error: errorMessage });
-            vscode.window.showErrorMessage(`Failed to start server: ${errorMessage}`);
+            vscode.window.showErrorMessage('Failed to start server: ' + errorMessage);
         }
     }
 
@@ -215,7 +298,7 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
             this._sendStatusUpdate({ type: 'serverError', error: errorMessage });
-            vscode.window.showErrorMessage(`Failed to stop server: ${errorMessage}`);
+            vscode.window.showErrorMessage('Failed to stop server: ' + errorMessage);
         }
     }
 
@@ -568,7 +651,7 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
                     break;
 
                 default:
-                    throw new Error(`Unsupported file system operation: ${operation}`);
+                    throw new Error('Unsupported file system operation: ' + operation);
             }
 
             this._view.webview.postMessage({
@@ -633,7 +716,7 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
                     break;
 
                 default:
-                    throw new Error(`Unsupported config operation: ${operation}`);
+                    throw new Error('Unsupported config operation: ' + operation);
             }
 
             this._view.webview.postMessage({

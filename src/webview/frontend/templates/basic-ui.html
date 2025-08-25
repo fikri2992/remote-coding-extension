@@ -1,0 +1,99 @@
+<!-- Basic UI Template -->
+<div class="container">
+    <header role="banner" class="app-header">
+        <div class="header-content">
+            <h1 class="app-title">VS Code Web Automation Tunnel</h1>
+            <nav role="navigation" aria-label="Connection status and settings">
+                <div class="connection-status" id="basicConnectionStatus" role="status" aria-live="polite">
+                    <span class="status-indicator" id="basicStatusIndicator" aria-hidden="true"></span>
+                    <span id="basicStatusText" aria-label="Connection status">Connecting...</span>
+                </div>
+            </nav>
+        </div>
+    </header>
+
+    <main id="main-content" role="main" class="app-main" aria-label="Main application content">
+        <section class="server-info" aria-labelledby="server-info-heading">
+            <h2 id="server-info-heading" class="section-heading">Server Information</h2>
+            <div class="info-grid" role="group" aria-label="Server status information">
+                <div class="info-item" role="group">
+                    <label for="basicServerUrl" class="info-label">Server URL:</label>
+                    <span id="basicServerUrl" class="info-value" aria-live="polite">-</span>
+                </div>
+                <div class="info-item" role="group">
+                    <label for="basicWebsocketPort" class="info-label">WebSocket Port:</label>
+                    <span id="basicWebsocketPort" class="info-value" aria-live="polite">-</span>
+                </div>
+                <div class="info-item" role="group">
+                    <label for="basicConnectedClients" class="info-label">Connected Clients:</label>
+                    <span id="basicConnectedClients" class="info-value" aria-live="polite">-</span>
+                </div>
+                <div class="info-item" role="group">
+                    <label for="basicUptime" class="info-label">Uptime:</label>
+                    <span id="basicUptime" class="info-value" aria-live="polite">-</span>
+                </div>
+            </div>
+        </section>
+
+        <section class="command-interface" aria-labelledby="command-interface-heading">
+            <h2 id="command-interface-heading" class="section-heading">Command Interface</h2>
+            
+            <div class="quick-commands" aria-labelledby="quick-commands-heading">
+                <h3 id="quick-commands-heading" class="subsection-heading">Quick Commands</h3>
+                <div class="command-buttons" role="group" aria-label="Quick command buttons">
+                    <button class="quick-cmd-btn" data-command="workbench.action.files.newUntitledFile" 
+                            aria-label="Create new untitled file" type="button">
+                        <span class="btn-icon" aria-hidden="true">📄</span>
+                        <span class="btn-text">New File</span>
+                    </button>
+                    <button class="quick-cmd-btn" data-command="workbench.action.files.save" 
+                            aria-label="Save current file" type="button">
+                        <span class="btn-icon" aria-hidden="true">💾</span>
+                        <span class="btn-text">Save File</span>
+                    </button>
+                    <button class="quick-cmd-btn" data-command="workbench.action.showCommands" 
+                            aria-label="Open command palette" type="button">
+                        <span class="btn-icon" aria-hidden="true">⌘</span>
+                        <span class="btn-text">Command Palette</span>
+                    </button>
+                    <button class="quick-cmd-btn" data-command="workbench.action.quickOpen" 
+                            aria-label="Open quick file picker" type="button">
+                        <span class="btn-icon" aria-hidden="true">🔍</span>
+                        <span class="btn-text">Quick Open</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="command-form" aria-labelledby="custom-command-heading">
+                <h3 id="custom-command-heading" class="subsection-heading">Custom Command</h3>
+                <form role="form" aria-label="Custom VS Code command execution">
+                    <div class="input-group">
+                        <label for="basicCommandInput" class="input-label">VS Code Command:</label>
+                        <input type="text" id="basicCommandInput" class="command-input" 
+                               placeholder="e.g., workbench.action.files.newUntitledFile"
+                               aria-describedby="command-help" autocomplete="off" spellcheck="false">
+                        <div id="command-help" class="input-help">Enter a VS Code command identifier</div>
+                    </div>
+                    <button id="basicExecuteButton" type="button" class="execute-btn" disabled 
+                            aria-label="Execute the custom command">
+                        <span class="btn-icon" aria-hidden="true">▶️</span>
+                        <span class="btn-text">Execute Command</span>
+                    </button>
+                </form>
+            </div>
+        </section>
+
+        <section class="message-log" aria-labelledby="message-log-heading">
+            <h2 id="message-log-heading" class="section-heading">Message Log</h2>
+            <div class="log-controls" role="toolbar" aria-label="Log controls">
+                <button id="basicClearLogButton" type="button" class="clear-log-btn" 
+                        aria-label="Clear all log messages">
+                    <span class="btn-icon" aria-hidden="true">🗑️</span>
+                    <span class="btn-text">Clear Log</span>
+                </button>
+            </div>
+            <div class="log-container" id="basicMessageLog" role="log" aria-live="polite" 
+                 aria-label="Application message log" tabindex="0"></div>
+        </section>
+    </main>
+</div>

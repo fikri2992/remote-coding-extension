@@ -1,0 +1,237 @@
+/* Responsive Layouts, Container Queries, and Media Queries */
+
+/* Container queries for component-level responsiveness */
+.ui-container {
+    container-type: inline-size;
+    container-name: ui-container;
+}
+
+.app-container {
+    container-type: inline-size;
+    container-name: app-container;
+}
+
+.section-container {
+    container-type: inline-size;
+    container-name: section;
+}
+
+/* Container query rules */
+@container ui-container (min-width: 320px) {
+    .command-buttons {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        gap: var(--space-sm);
+    }
+}
+
+@container ui-container (min-width: 576px) {
+    .info-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: var(--space-md);
+    }
+    
+    .command-buttons {
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    }
+}
+
+@container ui-container (min-width: 768px) {
+    .app-main {
+        display: grid;
+        grid-template-columns: 1fr 300px;
+        gap: var(--space-xl);
+    }
+    
+    .info-grid {
+        grid-template-columns: repeat(4, 1fr);
+    }
+    
+    .command-buttons {
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    }
+}
+
+@container ui-container (min-width: 992px) {
+    .container {
+        max-width: var(--container-lg);
+        margin: 0 auto;
+        padding: 0 var(--space-lg);
+    }
+    
+    .command-buttons {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
+
+@container ui-container (min-width: 1200px) {
+    .container {
+        max-width: var(--container-xl);
+        padding: 0 var(--space-xl);
+    }
+    
+    .app-main {
+        grid-template-columns: 1fr 350px;
+    }
+}
+
+/* Mobile-first responsive breakpoints */
+/* Base styles (320px+) - Mobile first */
+.container {
+    width: 100%;
+    padding: 0 var(--space-md);
+    margin: 0 auto;
+}
+
+.app-header {
+    padding: var(--space-md) 0;
+    border-bottom: 1px solid var(--vscode-panel-border, var(--border-color));
+    margin-bottom: var(--space-lg);
+}
+
+.section-heading {
+    font-size: var(--font-size-xl);
+    font-weight: 600;
+    margin: 0 0 var(--space-md) 0;
+    color: var(--vscode-foreground, var(--text-primary));
+}
+
+.subsection-heading {
+    font-size: var(--font-size-lg);
+    font-weight: 500;
+    margin: 0 0 var(--space-sm) 0;
+    color: var(--vscode-foreground, var(--text-primary));
+}
+
+/* Small devices (576px and up) */
+@media (min-width: 576px) {
+    .container {
+        max-width: var(--container-sm);
+        padding: 0 var(--space-lg);
+    }
+    
+    .app-header {
+        padding: var(--space-lg) 0;
+    }
+    
+    .section-heading {
+        font-size: var(--font-size-2xl);
+    }
+    
+    .loading-screen {
+        padding: var(--space-xl);
+    }
+    
+    .loading-text {
+        font-size: var(--font-size-lg);
+    }
+}
+
+/* Medium devices (768px and up) - Tablets */
+@media (min-width: 768px) {
+    .container {
+        max-width: var(--container-md);
+        padding: 0 var(--space-xl);
+    }
+    
+    .app-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    
+    .section-heading {
+        font-size: var(--font-size-3xl);
+    }
+    
+    .command-form {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: var(--space-lg);
+        align-items: end;
+    }
+    
+    .execute-btn {
+        height: fit-content;
+    }
+}
+
+/* Large devices (992px and up) - Desktop */
+@media (min-width: 992px) {
+    .container {
+        max-width: var(--container-lg);
+    }
+    
+    .app-main {
+        display: grid;
+        grid-template-columns: 2fr 1fr;
+        gap: var(--space-2xl);
+    }
+    
+    .sidebar-content {
+        position: sticky;
+        top: var(--space-lg);
+        height: fit-content;
+    }
+    
+    .command-buttons {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+/* Extra large devices (1200px and up) - Large Desktop */
+@media (min-width: 1200px) {
+    .container {
+        max-width: var(--container-xl);
+    }
+    
+    .app-main {
+        grid-template-columns: 3fr 1fr;
+    }
+    
+    .command-buttons {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
+
+/* Extra extra large devices (1400px and up) */
+@media (min-width: 1400px) {
+    .container {
+        max-width: var(--container-2xl);
+    }
+}
+
+/* Mobile-specific optimizations */
+@media (max-width: 767px) {
+    .app-title {
+        font-size: var(--font-size-lg);
+    }
+    
+    .command-buttons {
+        grid-template-columns: 1fr;
+        gap: var(--space-sm);
+    }
+    
+    .quick-cmd-btn {
+        justify-content: flex-start;
+        text-align: left;
+    }
+    
+    .input-group {
+        margin-bottom: var(--space-lg);
+    }
+    
+    .state-display {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-md);
+    }
+}
+
+/* Landscape orientation optimizations */
+@media (orientation: landscape) and (max-height: 500px) {
+    .app-header {
+        padding: var(--space-sm) 0;
+    }
+}

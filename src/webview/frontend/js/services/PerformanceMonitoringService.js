@@ -61,8 +61,6 @@ class PerformanceMonitoringService {
         };
         
         // Bind methods
-        this.handlePerformanceEntry = this.handlePerformanceEntry.bind(this);
-        this.handleMemoryWarning = this.handleMemoryWarning.bind(this);
         this.handleVisibilityChange = this.handleVisibilityChange.bind(this);
     }
 

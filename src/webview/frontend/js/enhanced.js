@@ -244,9 +244,6 @@ class EnhancedWebApp {
             this._updateConnectionStatus('disconnected', 'Offline Mode');
         }
     }
-        
-        console.log('✅ Services initialized');
-    }
 
     /**
      * Initialize UI components

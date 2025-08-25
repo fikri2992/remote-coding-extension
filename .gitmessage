@@ -1,0 +1,18 @@
+# <type>(scope): <description>
+#
+# Types: feat, fix, refactor, style, perf, test, docs, chore
+# Scopes: mobile, responsive, css, html, js, perf, a11y, setup
+#
+# Examples:
+# feat(mobile): implement mobile-first viewport configuration
+# fix(responsive): resolve touch interaction issues on iOS
+# perf(css): optimize critical CSS loading for mobile
+#
+# Body (optional):
+# - Explain what and why, not how
+# - Reference requirements: Requirements: 1.1, 1.2
+# - Include breaking changes if any
+#
+# Footer (optional):
+# - Reference issues: Fixes #123
+# - Note breaking changes: BREAKING CHANGE: ...

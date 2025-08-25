@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import { ServerManager } from '../server/ServerManager';
-import { ServerStatus } from '../server/interfaces';
+import { ServerStatus, WebSocketMessage } from '../server/interfaces';
 
 export class WebviewProvider implements vscode.WebviewViewProvider {
     public static readonly viewType = 'basicExtensionView';
@@ -365,7 +365,7 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
             const wsServer = this._serverManager.webSocketServer;
             if (wsServer) {
                 // Broadcast prompt operation to all connected clients
-                const message = {
+                const message: WebSocketMessage = {
                     type: 'prompt',
                     data: {
                         promptData: data

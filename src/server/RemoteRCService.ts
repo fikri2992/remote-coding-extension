@@ -26,7 +26,7 @@ export class RemoteRCService {
         try {
             const workspaceFolders = vscode.workspace.workspaceFolders;
             if (workspaceFolders && workspaceFolders.length > 0) {
-                const workspaceRoot = workspaceFolders[0].uri.fsPath;
+                const workspaceRoot = workspaceFolders[0]!.uri.fsPath;
                 this._remoteRCPath = path.join(workspaceRoot, '.remoterc');
                 
                 // Ensure .remoterc directory exists
@@ -142,7 +142,7 @@ export class RemoteRCService {
             await fs.writeFile(filePath, promptFileContent);
             
             // Update category index
-            await this.updateCategoryIndex(promptRecord.category, relativeFilePath);
+            await this.updateCategoryIndex(promptRecord.category || this._config.defaultCategory, relativeFilePath);
             
             console.log(`Saved prompt to: ${relativeFilePath}`);
             return promptRecord;
@@ -321,7 +321,7 @@ export class RemoteRCService {
             if (!promptsByDate[dateKey]) {
                 promptsByDate[dateKey] = [];
             }
-            promptsByDate[dateKey].push(prompt);
+            promptsByDate[dateKey]!.push(prompt);
         });
 
         // Create categories mapping
@@ -343,7 +343,7 @@ export class RemoteRCService {
      * Update configuration
      */
     async updateConfiguration(key: keyof RemoteRCStructure['config'], value: any): Promise<void> {
-        this._config[key] = value;
+        (this._config as any)[key] = value;
         await this.saveConfiguration();
     }
 
@@ -358,14 +358,14 @@ export class RemoteRCService {
      * Format date for folder name (YYYY-MM-DD)
      */
     private formatDateForFolder(date: Date): string {
-        return date.toISOString().split('T')[0];
+        return date.toISOString().split('T')[0]!;
     }
 
     /**
      * Generate prompt file name
      */
     private generatePromptFileName(timestamp: Date, promptId: string): string {
-        const timeStr = timestamp.toISOString().replace(/[:.]/g, '-').split('T')[1].split('.')[0];
+        const timeStr = timestamp.toISOString().replace(/[:.]/g, '-').split('T')[1]!.split('.')[0];
         return `${timeStr}_${promptId}.md`;
     }
 
@@ -407,7 +407,7 @@ ${prompt.content}
             }
 
             const metadata: any = {};
-            frontMatter.split('\n').forEach(line => {
+            frontMatter?.split('\n').forEach(line => {
                 const [key, ...valueParts] = line.split(': ');
                 if (key && valueParts.length > 0) {
                     try {
@@ -430,7 +430,7 @@ ${prompt.content}
                 filePath: relativePath,
                 favorite: metadata.favorite || false,
                 executionCount: metadata.executionCount || 1,
-                lastUsed: metadata.lastUsed ? new Date(metadata.lastUsed) : undefined
+                lastUsed: metadata.lastUsed ? new Date(metadata.lastUsed) : new Date()
             };
         } catch (error) {
             console.error(`Failed to load prompt record from ${filePath}:`, error);
@@ -459,8 +459,8 @@ ${prompt.content}
                 categories[category] = [];
             }
 
-            if (!categories[category].includes(filePath)) {
-                categories[category].push(filePath);
+            if (!categories[category]!.includes(filePath)) {
+                categories[category]!.push(filePath);
             }
 
             await fs.writeFile(categoriesPath, JSON.stringify(categories, null, 2));

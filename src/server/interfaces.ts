@@ -63,10 +63,14 @@ export interface EnhancedWebSocketMessage extends WebSocketMessage {
     data?: {
         // Prompt-specific data
         promptData?: {
-            content: string;
+            operation?: string;
+            content?: string;
             category?: string;
             tags?: string[];
             timestamp?: Date;
+            promptId?: string;
+            query?: string;
+            days?: number;
         };
         
         // Git-specific data
@@ -87,8 +91,9 @@ export interface EnhancedWebSocketMessage extends WebSocketMessage {
         
         // Configuration data
         configData?: {
-            key: string;
-            value: any;
+            operation?: string;
+            key?: string;
+            value?: any;
             schema?: any;
         };
         

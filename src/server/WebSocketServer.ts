@@ -877,10 +877,12 @@ export class WebSocketServer {
                 case 'get':
                     if (key === 'remoterc') {
                         result = await this._remoteRCService.getRemoteRCStructure();
-                    } else {
+                    } else if (key) {
                         // Get VS Code configuration
                         const vscode = await import('vscode');
                         result = vscode.workspace.getConfiguration().get(key);
+                    } else {
+                        result = null;
                     }
                     break;
 

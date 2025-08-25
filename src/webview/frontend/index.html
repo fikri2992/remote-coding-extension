@@ -1251,39 +1251,508 @@
             }
         }
 
-        // UI Mode Detection and Loading
-        async function initializeUI() {
-            try {
-                // Detect UI mode from URL parameters or configuration
-                const urlParams = new URLSearchParams(window.location.search);
-                const uiMode = urlParams.get('ui') || 'enhanced';
-                const debugMode = urlParams.has('debug');
+        // Enhanced UI Loader with Intelligent Decision Making and Fallback Mechanisms
+        class EnhancedUILoader {
+            constructor() {
+                this.loadingState = 'initializing';
+                this.progressSteps = [];
+                this.currentStep = 0;
+                this.retryCount = 0;
+                this.maxRetries = 3;
+                this.loadingTimeout = 30000; // 30 seconds
+                this.progressiveEnhancement = null;
+                this.loadingStrategy = null;
+                this.errorHistory = [];
                 
-                window.webAutomationConfig.useEnhancedUI = uiMode === 'enhanced';
-                window.webAutomationConfig.debugMode = debugMode;
-
-                // Show debug toggle in debug mode
-                if (debugMode) {
-                    document.getElementById('uiToggle').style.display = 'block';
+                // Loading step definitions
+                this.loadingSteps = [
+                    { id: 'detection', name: 'Detecting capabilities...', weight: 15 },
+                    { id: 'strategy', name: 'Determining strategy...', weight: 10 },
+                    { id: 'resources', name: 'Loading resources...', weight: 30 },
+                    { id: 'initialization', name: 'Initializing components...', weight: 35 },
+                    { id: 'finalization', name: 'Finalizing setup...', weight: 10 }
+                ];
+                
+                // Bind methods
+                this.handleLoadingError = this.handleLoadingError.bind(this);
+                this.updateProgress = this.updateProgress.bind(this);
+            }
+            
+            async initialize() {
+                try {
+                    console.log('🚀 Starting Enhanced UI Loader...');
+                    this.updateLoadingState('initializing');
+                    
+                    // Set up loading timeout with recovery
+                    const loadingTimeout = setTimeout(() => {
+                        this.handleLoadingTimeout();
+                    }, this.loadingTimeout);
+                    
+                    // Detect UI mode from URL parameters or configuration
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const uiMode = urlParams.get('ui') || 'auto';
+                    const debugMode = urlParams.has('debug');
+                    
+                    window.webAutomationConfig.debugMode = debugMode;
+                    
+                    // Show debug toggle in debug mode
+                    if (debugMode) {
+                        document.getElementById('uiToggle').style.display = 'block';
+                    }
+                    
+                    // Step 1: Progressive Enhancement Detection
+                    this.updateStep('detection');
+                    const enhancementDecision = await this.performCapabilityDetection();
+                    
+                    // Step 2: Strategy Determination
+                    this.updateStep('strategy');
+                    const loadingStrategy = await this.determineLoadingStrategy(enhancementDecision, uiMode);
+                    
+                    // Step 3: Load UI based on strategy
+                    this.updateStep('resources');
+                    const uiInstance = await this.loadUIWithFallback(loadingStrategy);
+                    
+                    // Step 4: Initialize UI components
+                    this.updateStep('initialization');
+                    await this.initializeUIComponents(uiInstance, loadingStrategy);
+                    
+                    // Step 5: Finalize setup
+                    this.updateStep('finalization');
+                    await this.finalizeUISetup(uiInstance, loadingStrategy);
+                    
+                    clearTimeout(loadingTimeout);
+                    
+                    // Smooth transition to hide loading screen
+                    await this.hideLoadingScreenWithTransition();
+                    
+                    console.log('✅ Enhanced UI Loader completed successfully');
+                    this.updateLoadingState('completed');
+                    
+                    return uiInstance;
+                    
+                } catch (error) {
+                    console.error('❌ Enhanced UI Loader failed:', error);
+                    return this.handleLoadingError(error);
                 }
-
-                // Load appropriate UI
-                if (window.webAutomationConfig.useEnhancedUI) {
-                    await loadEnhancedUI();
+            }
+            
+            async performCapabilityDetection() {
+                try {
+                    // Initialize progressive enhancement system if available
+                    if (typeof ProgressiveEnhancement !== 'undefined') {
+                        this.progressiveEnhancement = new ProgressiveEnhancement();
+                        const decision = await this.progressiveEnhancement.initialize();
+                        console.log('📊 Progressive enhancement decision:', decision);
+                        return decision;
+                    }
+                    
+                    // Fallback capability detection
+                    return this.basicCapabilityDetection();
+                    
+                } catch (error) {
+                    console.warn('⚠️ Progressive enhancement failed, using basic detection:', error);
+                    return this.basicCapabilityDetection();
+                }
+            }
+            
+            basicCapabilityDetection() {
+                const capabilities = {
+                    touchSupport: 'ontouchstart' in window,
+                    highDPI: window.devicePixelRatio > 1,
+                    serviceWorker: 'serviceWorker' in navigator,
+                    intersectionObserver: 'IntersectionObserver' in window,
+                    webGL: !!this.detectWebGL(),
+                    localStorage: this.testLocalStorage(),
+                    deviceMemory: navigator.deviceMemory || 4,
+                    connectionSpeed: navigator.connection?.effectiveType || '4g'
+                };
+                
+                const networkConditions = {
+                    effectiveType: navigator.connection?.effectiveType || '4g',
+                    saveData: navigator.connection?.saveData || false,
+                    quality: this.assessNetworkQuality()
+                };
+                
+                const performanceMetrics = {
+                    deviceClass: this.classifyDevice(capabilities),
+                    loadTime: performance.now()
+                };
+                
+                return {
+                    capabilities,
+                    networkConditions,
+                    performanceMetrics,
+                    loadingStrategy: { useEnhancedUI: true }
+                };
+            }
+            
+            detectWebGL() {
+                try {
+                    const canvas = document.createElement('canvas');
+                    return !!canvas.getContext('webgl') || !!canvas.getContext('experimental-webgl');
+                } catch (e) {
+                    return false;
+                }
+            }
+            
+            testLocalStorage() {
+                try {
+                    const test = '__test__';
+                    localStorage.setItem(test, test);
+                    localStorage.removeItem(test);
+                    return true;
+                } catch (e) {
+                    return false;
+                }
+            }
+            
+            assessNetworkQuality() {
+                const connection = navigator.connection;
+                if (!connection) return 'good';
+                
+                const effectiveType = connection.effectiveType;
+                if (effectiveType === '4g') return 'excellent';
+                if (effectiveType === '3g') return 'good';
+                if (effectiveType === 'slow-2g' || effectiveType === '2g') return 'poor';
+                return 'fair';
+            }
+            
+            classifyDevice(capabilities) {
+                const memory = capabilities.deviceMemory || 4;
+                const hasWebGL = capabilities.webGL;
+                const isHighDPI = capabilities.highDPI;
+                
+                if (memory >= 8 && hasWebGL && isHighDPI) return 'high-end';
+                if (memory >= 4 && (hasWebGL || isHighDPI)) return 'mid-range';
+                return 'low-end';
+            }
+            
+            async determineLoadingStrategy(enhancementDecision, requestedMode) {
+                const { capabilities, networkConditions, performanceMetrics } = enhancementDecision;
+                
+                // Handle explicit mode requests
+                if (requestedMode === 'enhanced') {
+                    return { useEnhancedUI: true, forced: true };
+                }
+                if (requestedMode === 'basic') {
+                    return { useEnhancedUI: false, forced: true };
+                }
+                
+                // Auto-detection logic
+                const shouldUseEnhanced = (
+                    performanceMetrics.deviceClass !== 'low-end' &&
+                    networkConditions.quality !== 'poor' &&
+                    !networkConditions.saveData &&
+                    capabilities.serviceWorker &&
+                    capabilities.intersectionObserver
+                );
+                
+                const strategy = {
+                    useEnhancedUI: shouldUseEnhanced,
+                    lazyLoad: networkConditions.quality === 'fair' || networkConditions.quality === 'poor',
+                    enableAnimations: performanceMetrics.deviceClass === 'high-end',
+                    preloadCritical: networkConditions.quality === 'excellent',
+                    compressionLevel: networkConditions.saveData ? 'maximum' : 'standard'
+                };
+                
+                console.log('📋 Loading strategy determined:', strategy);
+                this.loadingStrategy = strategy;
+                window.webAutomationConfig.useEnhancedUI = strategy.useEnhancedUI;
+                
+                return strategy;
+            }
+            
+            async loadUIWithFallback(strategy) {
+                this.retryCount = 0;
+                
+                while (this.retryCount <= this.maxRetries) {
+                    try {
+                        if (strategy.useEnhancedUI) {
+                            console.log(`🎨 Attempting to load Enhanced UI (attempt ${this.retryCount + 1})...`);
+                            return await this.loadEnhancedUIWithRecovery();
+                        } else {
+                            console.log(`🔧 Loading Basic UI...`);
+                            return await this.loadBasicUIWithRecovery();
+                        }
+                    } catch (error) {
+                        this.errorHistory.push({ error, attempt: this.retryCount + 1, timestamp: Date.now() });
+                        console.warn(`⚠️ UI loading attempt ${this.retryCount + 1} failed:`, error);
+                        
+                        this.retryCount++;
+                        
+                        if (this.retryCount <= this.maxRetries) {
+                            // Try fallback on next attempt
+                            if (strategy.useEnhancedUI && this.retryCount > 1) {
+                                console.log('🔄 Falling back to Basic UI...');
+                                strategy.useEnhancedUI = false;
+                                window.webAutomationConfig.useEnhancedUI = false;
+                            }
+                            
+                            // Show retry message
+                            this.updateLoadingText(`Retrying... (${this.retryCount}/${this.maxRetries})`);
+                            await this.delay(1000 * this.retryCount); // Exponential backoff
+                        } else {
+                            // Final fallback
+                            throw new Error(`All UI loading attempts failed after ${this.maxRetries} retries`);
+                        }
+                    }
+                }
+            }
+            
+            async loadEnhancedUIWithRecovery() {
+                // Show enhanced container
+                document.getElementById('enhancedApp').style.display = 'block';
+                document.getElementById('basicApp').style.display = 'none';
+                
+                // Load enhanced styles with fallback
+                this.updateLoadingText('Loading enhanced styles...');
+                this.enableStylesheets(['enhancedStyles', 'componentsStyles', 'themesStyles', 'animationsStyles', 'touchStyles']);
+                this.disableStylesheets(['basicStyles']);
+                
+                // Set up enhanced UI container elements
+                const enhancedContainer = document.getElementById('enhancedApp');
+                let appElement = document.getElementById('app');
+                if (!appElement) {
+                    appElement = document.createElement('div');
+                    appElement.id = 'app';
+                    appElement.className = 'app-container';
+                    enhancedContainer.appendChild(appElement);
+                }
+                
+                // Load enhanced JavaScript with timeout and retry
+                this.updateLoadingText('Loading enhanced components...');
+                await this.loadScriptWithRetry('./js/enhanced.js', 'EnhancedApp');
+                
+                // Create and return enhanced app instance
+                if (typeof window.EnhancedApp !== 'undefined') {
+                    return new window.EnhancedApp();
+                } else if (typeof window.EnhancedWebApp !== 'undefined') {
+                    return new window.EnhancedWebApp();
                 } else {
-                    await loadBasicUI();
+                    throw new Error('Enhanced UI class not found after loading script');
                 }
-
-            } catch (error) {
-                console.error('Failed to initialize UI:', error);
-                // Fallback to basic UI
-                await loadBasicUI();
+            }
+            
+            async loadBasicUIWithRecovery() {
+                // Show basic container
+                document.getElementById('basicApp').style.display = 'block';
+                document.getElementById('enhancedApp').style.display = 'none';
+                
+                // Load basic styles
+                this.updateLoadingText('Loading basic interface...');
+                this.enableStylesheets(['basicStyles']);
+                this.disableStylesheets(['enhancedStyles', 'componentsStyles', 'themesStyles', 'animationsStyles', 'touchStyles']);
+                
+                // Update element IDs for basic UI compatibility
+                this.updateBasicUIElementIds();
+                
+                // Load basic JavaScript with timeout and retry
+                this.updateLoadingText('Initializing basic components...');
+                await this.loadScriptWithRetry('./js/basic.js', 'BasicApp');
+                
+                // Create and return basic app instance
+                if (typeof window.BasicApp !== 'undefined') {
+                    return new window.BasicApp();
+                } else {
+                    throw new Error('Basic UI class not found after loading script');
+                }
+            }
+            
+            async loadScriptWithRetry(src, expectedClass, retries = 3) {
+                for (let attempt = 1; attempt <= retries; attempt++) {
+                    try {
+                        await this.loadScript(src);
+                        
+                        // Verify the expected class is available
+                        if (expectedClass && !window[expectedClass]) {
+                            throw new Error(`Expected class ${expectedClass} not found after loading ${src}`);
+                        }
+                        
+                        return;
+                    } catch (error) {
+                        if (attempt === retries) {
+                            throw error;
+                        }
+                        console.warn(`Script loading attempt ${attempt} failed, retrying...`, error);
+                        await this.delay(500 * attempt);
+                    }
+                }
+            }
+            
+            enableStylesheets(ids) {
+                ids.forEach(id => {
+                    const stylesheet = document.getElementById(id);
+                    if (stylesheet) stylesheet.disabled = false;
+                });
+            }
+            
+            disableStylesheets(ids) {
+                ids.forEach(id => {
+                    const stylesheet = document.getElementById(id);
+                    if (stylesheet) stylesheet.disabled = true;
+                });
+            }
+            
+            async initializeUIComponents(uiInstance, strategy) {
+                if (!uiInstance) {
+                    throw new Error('No UI instance to initialize');
+                }
+                
+                this.updateLoadingText('Initializing UI components...');
+                
+                // Initialize with timeout
+                const initTimeout = setTimeout(() => {
+                    throw new Error('UI initialization timeout');
+                }, 15000);
+                
+                try {
+                    if (typeof uiInstance.initialize === 'function') {
+                        await uiInstance.initialize();
+                    }
+                    
+                    clearTimeout(initTimeout);
+                    
+                    // Store reference for later use
+                    if (strategy.useEnhancedUI) {
+                        window.enhancedApp = uiInstance;
+                    } else {
+                        window.basicApp = uiInstance;
+                    }
+                    
+                } catch (error) {
+                    clearTimeout(initTimeout);
+                    throw error;
+                }
+            }
+            
+            async finalizeUISetup(uiInstance, strategy) {
+                this.updateLoadingText('Finalizing setup...');
+                
+                // Set up message handling for VS Code webview
+                if (window.webAutomationConfig.isVSCodeWebview) {
+                    window.addEventListener('message', event => {
+                        const message = event.data;
+                        if (uiInstance && typeof uiInstance.handleMessage === 'function') {
+                            uiInstance.handleMessage(message);
+                        }
+                    });
+                }
+                
+                // Final progress update
+                this.updateProgress(100);
+                this.updateLoadingText('Ready!');
+                
+                // Brief delay for user feedback
+                await this.delay(500);
+            }
+            
+            async hideLoadingScreenWithTransition() {
+                const loadingScreen = document.getElementById('loadingScreen');
+                if (!loadingScreen) return;
+                
+                // Add fade-out class with animation
+                loadingScreen.style.transition = 'opacity 0.5s ease-out, transform 0.5s ease-out';
+                loadingScreen.style.opacity = '0';
+                loadingScreen.style.transform = 'scale(0.95)';
+                
+                // Wait for animation to complete
+                await this.delay(500);
+                
+                // Remove from DOM
+                if (loadingScreen.parentNode) {
+                    loadingScreen.parentNode.removeChild(loadingScreen);
+                }
+            }
+            
+            handleLoadingTimeout() {
+                console.error('❌ UI loading timeout after', this.loadingTimeout, 'ms');
+                
+                const errorScreen = this.createTimeoutErrorScreen();
+                document.body.appendChild(errorScreen);
+            }
+            
+            async handleLoadingError(error) {
+                console.error('❌ Critical loading error:', error);
+                
+                // Try emergency fallback to basic UI
+                try {
+                    console.log('🚨 Attempting emergency fallback to basic UI...');
+                    
+                    this.updateLoadingText('Attempting emergency recovery...');
+                    
+                    const basicApp = await this.loadBasicUIWithRecovery();
+                    await this.initializeUIComponents(basicApp, { useEnhancedUI: false });
+                    await this.hideLoadingScreenWithTransition();
+                    
+                    // Show recovery notification
+                    this.showRecoveryNotification();
+                    
+                    return basicApp;
+                    
+                } catch (emergencyError) {
+                    console.error('❌ Emergency fallback failed:', emergencyError);
+                    
+                    // Show critical error screen
+                    const errorScreen = this.createCriticalErrorScreen(error, emergencyError);
+                    document.body.appendChild(errorScreen);
+                    
+                    throw new Error('Complete UI loading failure');
+                }
+            }
+            
+            updateStep(stepId) {
+                this.currentStep++;
+                const step = this.loadingSteps.find(s => s.id === stepId);
+                if (step) {
+                    console.log(`📋 Step ${this.currentStep}/${this.loadingSteps.length}: ${step.name}`);
+                    this.updateLoadingText(step.name);
+                    
+                    // Calculate progress based on completed steps
+                    const completedWeight = this.loadingSteps.slice(0, this.currentStep - 1)
+                        .reduce((sum, s) => sum + s.weight, 0);
+                    const progress = (completedWeight / 100) * 100;
+                    this.updateProgress(Math.min(progress, 95)); // Cap at 95% until completion
+                }
+            }
+            
+            updateLoadingState(state) {
+                this.loadingState = state;
+                console.log(`🔄 Loading state: ${state}`);
+            }
+            
+            updateLoadingText(text) {
+                const loadingText = document.getElementById('loadingText');
+                if (loadingText) {
+                    loadingText.textContent = text;
+                }
+            }
+            
+            updateProgress(percentage) {
+                const progressBar = document.getElementById('progressBar');
+                if (progressBar) {
+                    progressBar.style.width = `${Math.min(percentage, 100)}%`;
+                }
+                
+                const loadingScreen = document.getElementById('loadingScreen');
+                if (loadingScreen) {
+                    loadingScreen.setAttribute('aria-valuenow', percentage.toString());
+                }
+            }
+            
+            delay(ms) {
+                return new Promise(resolve => setTimeout(resolve, ms));
             }
         }
+        
+        // UI Mode Detection and Loading (Updated)
+        async function initializeUI() {
+            const loader = new EnhancedUILoader();
+            return await loader.initialize();
+        }
 
-        // Load Enhanced UI
+        // Legacy UI Loading Functions (Updated for compatibility)
         async function loadEnhancedUI() {
-            console.log('Step 1/6: Loading Enhanced UI...');
+            console.log('🎨 Loading Enhanced UI (legacy function)...');
             
             // Show enhanced container
             document.getElementById('enhancedApp').style.display = 'block';
@@ -1297,7 +1766,7 @@
             document.getElementById('animationsStyles').disabled = false;
             document.getElementById('touchStyles').disabled = false;
 
-            console.log('Step 2/6: Enhanced styles loaded');
+            console.log('Enhanced styles loaded');
 
             // Set up enhanced UI container elements
             const enhancedContainer = document.getElementById('enhancedApp');
@@ -1310,14 +1779,8 @@
                 appElement.className = 'app-container';
                 enhancedContainer.appendChild(appElement);
             }
-            
-            // Update loading screen reference (enhanced UI expects 'loadingScreen' id)
-            const enhancedLoadingScreen = document.getElementById('enhancedLoadingScreen');
-            if (enhancedLoadingScreen && !document.getElementById('loadingScreen')) {
-                enhancedLoadingScreen.id = 'loadingScreen';
-            }
 
-            console.log('Step 3/6: Enhanced UI container prepared');
+            console.log('Enhanced UI container prepared');
 
             // Implement 30-second timeout mechanism
             const initializationTimeout = setTimeout(() => {
@@ -1327,22 +1790,28 @@
 
             // Load enhanced JavaScript modules with graceful degradation
             try {
-                console.log('Step 4/6: Loading Enhanced JavaScript modules...');
+                console.log('Loading Enhanced JavaScript modules...');
                 
                 // Use traditional script loading instead of dynamic imports
                 await loadScript('./js/enhanced.js');
                 
-                console.log('Step 5/6: Enhanced modules loaded, initializing app...');
+                console.log('Enhanced modules loaded, initializing app...');
                 
                 // Check if EnhancedApp class is available
                 if (typeof window.EnhancedApp !== 'undefined') {
                     window.enhancedApp = new window.EnhancedApp();
                     await window.enhancedApp.initialize();
                     
-                    console.log('Step 6/6: Enhanced UI initialization complete ✅');
+                    console.log('Enhanced UI initialization complete ✅');
+                    clearTimeout(initializationTimeout);
+                } else if (typeof window.EnhancedWebApp !== 'undefined') {
+                    window.enhancedApp = new window.EnhancedWebApp();
+                    await window.enhancedApp.initialize();
+                    
+                    console.log('Enhanced Web UI initialization complete ✅');
                     clearTimeout(initializationTimeout);
                 } else {
-                    throw new Error('EnhancedApp class not found after loading script');
+                    throw new Error('Enhanced UI class not found after loading script');
                 }
                 
             } catch (error) {
@@ -1355,9 +1824,9 @@
             }
         }
 
-        // Load Basic UI
+        // Load Basic UI (Updated)
         async function loadBasicUI() {
-            console.log('Step 1/4: Loading Basic UI...');
+            console.log('🔧 Loading Basic UI (legacy function)...');
             
             // Show basic container
             document.getElementById('basicApp').style.display = 'block';
@@ -1371,12 +1840,12 @@
             document.getElementById('animationsStyles').disabled = true;
             document.getElementById('touchStyles').disabled = true;
 
-            console.log('Step 2/4: Basic styles loaded');
+            console.log('Basic styles loaded');
 
             // Update element IDs for basic UI (it expects elements without 'basic' prefix)
             updateBasicUIElementIds();
 
-            console.log('Step 3/4: Basic UI elements prepared');
+            console.log('Basic UI elements prepared');
 
             // Implement 30-second timeout mechanism
             const initializationTimeout = setTimeout(() => {
@@ -1394,7 +1863,7 @@
                     window.basicApp = new window.BasicApp();
                     await window.basicApp.initialize();
                     
-                    console.log('Step 4/4: Basic UI initialization complete ✅');
+                    console.log('Basic UI initialization complete ✅');
                     clearTimeout(initializationTimeout);
                 } else {
                     throw new Error('BasicApp class not found after loading script');
@@ -1409,12 +1878,208 @@
             }
         }
 
-        // Toggle UI Mode (for debugging)
-        function toggleUI() {
-            window.webAutomationConfig.useEnhancedUI = !window.webAutomationConfig.useEnhancedUI;
-            location.reload();
-        }
-
+        // Enhanced Error Handling and Recovery Functions
+        
+        // Create timeout error screen with recovery options
+        EnhancedUILoader.prototype.createTimeoutErrorScreen = function() {
+            return this.createErrorScreen(
+                'Initialization Timeout',
+                'The UI failed to load within 30 seconds. This may be due to missing dependencies or network issues.',
+                [
+                    { text: 'Retry Enhanced UI', action: () => { window.location.search = '?ui=enhanced'; location.reload(); } },
+                    { text: 'Try Basic UI', action: () => { window.location.search = '?ui=basic'; location.reload(); } },
+                    { text: 'Debug Mode', action: () => { window.location.search = '?debug&ui=enhanced'; location.reload(); } },
+                    { text: 'Force Reload', action: () => location.reload() }
+                ]
+            );
+        };
+        
+        // Create critical error screen
+        EnhancedUILoader.prototype.createCriticalErrorScreen = function(primaryError, emergencyError) {
+            const combinedError = new Error(
+                `Primary: ${primaryError.message}\nEmergency: ${emergencyError.message}`
+            );
+            combinedError.stack = `Primary Error:\n${primaryError.stack}\n\nEmergency Error:\n${emergencyError.stack}`;
+            
+            return this.createErrorScreen(
+                'Critical UI Failure',
+                'Both Enhanced and Basic UIs failed to load. The application cannot start properly.',
+                [
+                    { text: 'Reload Page', action: () => location.reload() },
+                    { text: 'Clear Cache & Reload', action: () => { 
+                        if ('caches' in window) {
+                            caches.keys().then(names => {
+                                names.forEach(name => caches.delete(name));
+                                location.reload();
+                            });
+                        } else {
+                            location.reload(true);
+                        }
+                    }},
+                    { text: 'Report Issue', action: () => window.open('https://github.com/microsoft/vscode/issues/new', '_blank') },
+                    { text: 'Download Logs', action: () => this.downloadErrorLogs() }
+                ],
+                combinedError
+            );
+        };
+        
+        // Show recovery notification
+        EnhancedUILoader.prototype.showRecoveryNotification = function() {
+            const notification = document.createElement('div');
+            notification.className = 'recovery-notification';
+            notification.innerHTML = `
+                <div style="position: fixed; top: 20px; right: 20px; background: var(--vscode-notifications-background, #2d2d30); color: var(--vscode-notifications-foreground, #cccccc); padding: 16px; border-radius: 8px; border-left: 4px solid var(--warning-color, #ffcc02); z-index: 10001; box-shadow: 0 4px 12px rgba(0,0,0,0.3); max-width: 400px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+                    <div style="display: flex; align-items: flex-start; gap: 12px;">
+                        <div style="font-size: 20px;">⚠️</div>
+                        <div style="flex: 1;">
+                            <div style="font-weight: 600; margin-bottom: 8px;">UI Recovery Mode</div>
+                            <div style="font-size: 14px; line-height: 1.4; margin-bottom: 12px;">Enhanced UI failed to load. Running in Basic UI mode with reduced features.</div>
+                            <div style="display: flex; gap: 8px;">
+                                <button onclick="this.parentElement.parentElement.parentElement.parentElement.remove()" style="background: var(--vscode-button-background, #0e639c); color: var(--vscode-button-foreground, #ffffff); border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">Dismiss</button>
+                                <button onclick="window.location.search='?ui=enhanced&debug'; location.reload();" style="background: transparent; color: var(--vscode-textLink-foreground, #4daafc); border: 1px solid currentColor; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">Debug Mode</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(notification);
+            
+            // Auto-dismiss after 10 seconds
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.remove();
+                }
+            }, 10000);
+        };
+        
+        // Download error logs for debugging
+        EnhancedUILoader.prototype.downloadErrorLogs = function() {
+            const errorData = {
+                timestamp: new Date().toISOString(),
+                userAgent: navigator.userAgent,
+                url: window.location.href,
+                errorHistory: this.errorHistory,
+                capabilities: this.progressiveEnhancement?.capabilities || 'Not detected',
+                networkConditions: this.progressiveEnhancement?.networkConditions || 'Not detected',
+                loadingStrategy: this.loadingStrategy || 'Not determined',
+                consoleLogs: console.history || 'Console history not available'
+            };
+            
+            const blob = new Blob([JSON.stringify(errorData, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `vscode-ui-error-log-${Date.now()}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        };
+        
+        // Create standardized error screen (Enhanced version)
+        EnhancedUILoader.prototype.createErrorScreen = function(title, message, actions = [], error = null) {
+            const errorContainer = document.createElement('div');
+            errorContainer.className = 'enhanced-error-screen';
+            
+            let errorDetails = '';
+            if (error) {
+                errorDetails = `
+                    <details style="margin: 1.5rem 0; text-align: left; background: var(--vscode-textCodeBlock-background, #2d2d30); border-radius: 6px; padding: 1rem;">
+                        <summary style="cursor: pointer; font-weight: 600; padding: 8px; color: var(--vscode-textLink-foreground, #4daafc);">Technical Details & Stack Trace</summary>
+                        <div style="margin-top: 1rem; font-family: 'Courier New', Consolas, monospace; font-size: 11px; line-height: 1.4; white-space: pre-wrap; background: var(--vscode-editor-background, #1e1e1e); padding: 12px; border-radius: 4px; overflow: auto; max-height: 300px; border: 1px solid var(--vscode-widget-border, #454545);">${error.message}\n\n${error.stack || ''}</div>
+                    </details>
+                `;
+            }
+            
+            const actionButtons = actions.map(action => 
+                `<button onclick="(${action.action.toString()})()" style="
+                    background: var(--vscode-button-background, #0e639c); 
+                    color: var(--vscode-button-foreground, #ffffff); 
+                    border: none; 
+                    padding: 12px 20px; 
+                    margin: 6px; 
+                    border-radius: 4px; 
+                    cursor: pointer; 
+                    font-size: 14px; 
+                    font-weight: 500;
+                    transition: background-color 0.2s ease;
+                    min-width: 120px;
+                " onmouseover="this.style.background='var(--vscode-button-hoverBackground, #1177bb)'" onmouseout="this.style.background='var(--vscode-button-background, #0e639c)'">${action.text}</button>`
+            ).join('');
+            
+            errorContainer.innerHTML = `
+                <div style="
+                    position: fixed; 
+                    top: 0; 
+                    left: 0; 
+                    right: 0; 
+                    bottom: 0; 
+                    background: var(--vscode-editor-background, #1e1e1e); 
+                    color: var(--vscode-foreground, #cccccc); 
+                    display: flex; 
+                    align-items: center; 
+                    justify-content: center; 
+                    z-index: 10000; 
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                    padding: 2rem;
+                    box-sizing: border-box;
+                ">
+                    <div style="
+                        max-width: 700px; 
+                        width: 100%; 
+                        text-align: center;
+                        background: var(--vscode-sideBar-background, #252526);
+                        border-radius: 12px;
+                        padding: 2.5rem;
+                        border: 1px solid var(--vscode-widget-border, #454545);
+                        box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+                    ">
+                        <div style="
+                            font-size: 48px; 
+                            margin-bottom: 1rem;
+                            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+                        ">⚠️</div>
+                        <h1 style="
+                            color: var(--vscode-errorForeground, #f14c4c); 
+                            font-size: 28px; 
+                            margin-bottom: 16px;
+                            font-weight: 600;
+                        ">${title}</h1>
+                        <p style="
+                            font-size: 16px; 
+                            line-height: 1.6; 
+                            margin-bottom: 24px;
+                            color: var(--vscode-descriptionForeground, #9d9d9d);
+                        ">${message}</p>
+                        ${errorDetails}
+                        <div style="
+                            display: flex; 
+                            gap: 1rem; 
+                            justify-content: center; 
+                            margin-top: 2rem; 
+                            flex-wrap: wrap;
+                        ">
+                            ${actionButtons}
+                        </div>
+                        <div style="
+                            margin-top: 2.5rem; 
+                            padding-top: 1.5rem; 
+                            border-top: 1px solid var(--vscode-widget-border, #454545); 
+                            color: var(--vscode-descriptionForeground, #9d9d9d); 
+                            font-size: 13px;
+                            line-height: 1.5;
+                        ">
+                            <p style="margin: 0 0 8px 0; font-weight: 600;">VS Code Web Automation Tunnel</p>
+                            <p style="margin: 0;">If this problem persists, please check the browser console (F12) for additional information or try refreshing the page.</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            return errorContainer;
+        };
+        
         // Update Basic UI element IDs (remove 'basic' prefix for compatibility)
         function updateBasicUIElementIds() {
             const elementMapping = {
@@ -1443,7 +2108,9 @@
             }
         }
 
-        // Show timeout error screen
+        // Legacy Error Handling Functions (Updated for compatibility)
+        
+        // Show timeout error screen (Legacy compatibility)
         function showTimeoutError() {
             const errorScreen = createErrorScreen(
                 'Initialization Timeout',
@@ -1457,7 +2124,7 @@
             document.body.appendChild(errorScreen);
         }
 
-        // Show final error screen when both UIs fail
+        // Show final error screen when both UIs fail (Legacy compatibility)
         function showFinalErrorScreen(error) {
             const errorScreen = createErrorScreen(
                 'Critical UI Failure',
@@ -1470,13 +2137,20 @@
             );
             document.body.appendChild(errorScreen);
         }
+        
+        // Toggle UI Mode (for debugging)
+        function toggleUI() {
+            window.webAutomationConfig.useEnhancedUI = !window.webAutomationConfig.useEnhancedUI;
+            location.reload();
+        }
 
-        // Load script using traditional method (compatible with VS Code webviews)
+        // Load script using traditional method (compatible with VS Code webviews) - Enhanced version
         function loadScript(src) {
             return new Promise((resolve, reject) => {
                 // Check if script is already loaded
                 const existingScript = document.querySelector(`script[src="${src}"]`);
                 if (existingScript) {
+                    console.log(`✅ Script already loaded: ${src}`);
                     resolve();
                     return;
                 }
@@ -1484,13 +2158,26 @@
                 const script = document.createElement('script');
                 script.src = src;
                 script.type = 'text/javascript';
+                script.async = true; // Ensure async loading
+                
+                // Add timeout for script loading
+                const timeout = setTimeout(() => {
+                    script.onload = null;
+                    script.onerror = null;
+                    if (script.parentNode) {
+                        script.parentNode.removeChild(script);
+                    }
+                    reject(new Error(`Script loading timeout: ${src}`));
+                }, 15000); // 15 second timeout
                 
                 script.onload = () => {
+                    clearTimeout(timeout);
                     console.log(`✅ Script loaded: ${src}`);
                     resolve();
                 };
                 
                 script.onerror = (error) => {
+                    clearTimeout(timeout);
                     console.error(`❌ Failed to load script: ${src}`, error);
                     reject(new Error(`Failed to load script: ${src}`));
                 };
@@ -1499,7 +2186,7 @@
             });
         }
 
-        // Create standardized error screen
+        // Create standardized error screen (Legacy compatibility function)
         function createErrorScreen(title, message, actions = [], error = null) {
             const errorContainer = document.createElement('div');
             errorContainer.className = 'error-screen';
@@ -1537,14 +2224,47 @@
             
             return errorContainer;
         }
+        
+        // Enhanced Performance Monitoring
+        function initializePerformanceMonitoring() {
+            // Monitor Core Web Vitals if available
+            if (typeof PerformanceObserver !== 'undefined') {
+                try {
+                    const observer = new PerformanceObserver((list) => {
+                        for (const entry of list.getEntries()) {
+                            console.log(`Performance metric: ${entry.name} = ${entry.value}`);
+                            
+                            // Log critical metrics
+                            if (entry.name === 'first-contentful-paint') {
+                                console.log(`🎨 First Contentful Paint: ${entry.value}ms`);
+                            } else if (entry.name === 'largest-contentful-paint') {
+                                console.log(`🖼️ Largest Contentful Paint: ${entry.value}ms`);
+                            }
+                        }
+                    });
+                    
+                    observer.observe({ entryTypes: ['paint', 'largest-contentful-paint', 'first-input', 'layout-shift'] });
+                } catch (error) {
+                    console.warn('Performance monitoring setup failed:', error);
+                }
+            }
+        }
 
         // Remove no-js class when JavaScript is available
         document.documentElement.classList.remove('no-js');
         document.documentElement.classList.add('js');
         
+        // Initialize performance monitoring early
+        initializePerformanceMonitoring();
+        
         // Event listeners
         document.addEventListener('DOMContentLoaded', initializeUI);
-        document.getElementById('toggleUIButton').addEventListener('click', toggleUI);
+        
+        // Set up toggle UI button if it exists
+        const toggleUIButton = document.getElementById('toggleUIButton');
+        if (toggleUIButton) {
+            toggleUIButton.addEventListener('click', toggleUI);
+        }
 
         // Enhanced message handling for VS Code webview
         if (window.webAutomationConfig.isVSCodeWebview) {
@@ -1553,11 +2273,52 @@
                 
                 // Forward messages to active UI
                 if (window.webAutomationConfig.useEnhancedUI && window.enhancedApp) {
-                    window.enhancedApp.handleMessage?.(message);
+                    if (typeof window.enhancedApp.handleMessage === 'function') {
+                        window.enhancedApp.handleMessage(message);
+                    }
                 } else if (window.basicApp) {
-                    window.basicApp.handleMessage?.(message);
+                    if (typeof window.basicApp.handleMessage === 'function') {
+                        window.basicApp.handleMessage(message);
+                    }
                 }
             });
+        }
+        
+        // Global error handling with enhanced reporting
+        window.addEventListener('error', (event) => {
+            console.error('Global error caught:', {
+                message: event.message,
+                filename: event.filename,
+                lineno: event.lineno,
+                colno: event.colno,
+                error: event.error
+            });
+            
+            // If no UI has been loaded yet and this is a critical error, show fallback
+            if (!window.enhancedApp && !window.basicApp && event.error) {
+                const criticalErrors = ['Script error', 'NetworkError', 'TypeError: Failed to fetch'];
+                if (criticalErrors.some(errType => event.message.includes(errType))) {
+                    showFinalErrorScreen(event.error);
+                }
+            }
+        });
+        
+        window.addEventListener('unhandledrejection', (event) => {
+            console.error('Unhandled promise rejection:', event.reason);
+            
+            // Log rejection details
+            if (event.reason instanceof Error) {
+                console.error('Rejection stack:', event.reason.stack);
+            }
+        });
+        
+        // Log initialization start
+        console.log('🚀 VS Code Web Automation Tunnel initializing...');
+        console.log('📋 Configuration:', window.webAutomationConfig);
+        
+        // Performance mark for initialization start
+        if (performance.mark) {
+            performance.mark('ui-initialization-start');
         }
     </script>
     

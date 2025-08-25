@@ -1,5 +1,7 @@
 /* Enhanced Web Frontend - Component Styles */
 
+@import url('./terminal.css');
+
 /* Button Components */
 .btn {
     display: inline-flex;
@@ -3488,8 +3490,8 @@ File Manager Styles */
     .browser-display {
         grid-template-columns: 1fr;
     }
-}/
-* Error Handling Components */
+}
+/* Error Handling Components */
 .error-details {
     font-family: var(--vscode-font-family);
     line-height: 1.5;

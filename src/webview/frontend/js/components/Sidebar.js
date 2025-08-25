@@ -39,6 +39,13 @@ export class Sidebar extends Component {
                 shortcut: 'Ctrl+E'
             },
             { 
+                id: 'terminal', 
+                label: 'Terminal', 
+                icon: '⚡', 
+                description: 'Terminal interface for command execution',
+                shortcut: 'Ctrl+T'
+            },
+            { 
                 id: 'info', 
                 label: 'Info', 
                 icon: 'ℹ️', 

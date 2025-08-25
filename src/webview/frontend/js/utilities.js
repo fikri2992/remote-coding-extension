@@ -319,6 +319,19 @@ function toggleUI() {
 
 // UI Mode Detection and Loading (Updated)
 async function initializeUI() {
+    // Check if EnhancedUILoader is available
+    if (typeof window.EnhancedUILoader !== 'function') {
+        console.warn('⚠️ EnhancedUILoader not available, falling back to basic initialization');
+        // Fallback to basic UI initialization
+        try {
+            await loadBasicUI();
+            return window.basicApp;
+        } catch (error) {
+            console.error('❌ Basic UI fallback failed:', error);
+            throw error;
+        }
+    }
+    
     const loader = new window.EnhancedUILoader();
     window.currentUILoader = loader; // Store for error logging
     return await loader.initialize();

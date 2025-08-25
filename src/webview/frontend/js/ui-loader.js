@@ -103,10 +103,8 @@ class EnhancedUILoader {
         ];
         
         // Bind methods
-        this.handleLoadingError = this.handleLoadingError.bind(this);
         this.updateProgress = this.updateProgress.bind(this);
         this.handleTransitionEnd = this.handleTransitionEnd.bind(this);
-        this.handleRecoveryAction = this.handleRecoveryAction.bind(this);
     }
     
     async initialize() {
@@ -1580,7 +1578,6 @@ class EnhancedUILoader {
     showRecoveryNotification() {
         return window.showRecoveryNotification();
     }
-}
 
     // Additional utility methods
     storeUIReference(uiInstance, strategy) {
@@ -1805,3 +1802,10 @@ class EnhancedUILoader {
 
 // Export for use in other modules
 window.EnhancedUILoader = EnhancedUILoader;
+
+// Verify export was successful
+if (typeof window.EnhancedUILoader === 'function') {
+    console.log('✅ EnhancedUILoader successfully exported to global scope');
+} else {
+    console.error('❌ Failed to export EnhancedUILoader to global scope');
+}

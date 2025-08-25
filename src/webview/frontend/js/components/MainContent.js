@@ -115,6 +115,11 @@ export class MainContent extends Component {
             render: () => this.renderFilesSection()
         });
 
+        this.sections.set('terminal', {
+            title: 'Terminal',
+            render: () => this.renderTerminalSection()
+        });
+
         this.sections.set('info', {
             title: 'Info',
             render: () => this.renderInfoSection()
@@ -214,6 +219,12 @@ export class MainContent extends Component {
             this.removeChildComponent(this.fileManager);
             this.fileManager.destroy();
             this.fileManager = null;
+        }
+
+        if (this.terminal) {
+            this.removeChildComponent(this.terminal);
+            this.terminal.destroy();
+            this.terminal = null;
         }
 
         if (this.infoPanel) {
@@ -373,6 +384,42 @@ export class MainContent extends Component {
         });
     }
 
+    async renderTerminalSection() {
+        // Clear existing content
+        this.bodyElement.innerHTML = '';
+
+        // Import and initialize Terminal component
+        const { Terminal } = await import('./Terminal.js');
+
+        // Create terminal container
+        const terminalContainer = this.createElement('div', {}, ['terminal-section']);
+        this.bodyElement.appendChild(terminalContainer);
+
+        // Initialize Terminal component
+        this.terminal = new Terminal({
+            container: terminalContainer,
+            stateManager: this.stateManager,
+            webSocketClient: this.webSocketClient,
+            notificationService: this.notificationService,
+            animationService: this.animationService,
+            keyboardShortcutService: this.keyboardShortcutService
+        });
+
+        await this.terminal.initialize();
+        this.addChildComponent(this.terminal);
+
+        // Listen for terminal events
+        this.addEventListener(terminalContainer, 'command-executed', (event) => {
+            const { command, output } = event.detail;
+            console.log('Command executed:', command, output);
+        });
+
+        this.addEventListener(terminalContainer, 'connection-changed', (event) => {
+            const { connected } = event.detail;
+            console.log('Terminal connection changed:', connected);
+        });
+    }
+
     async renderInfoSection() {
         // Clear existing content
         this.bodyElement.innerHTML = '';
@@ -434,6 +481,8 @@ export class MainContent extends Component {
     focusCommandInput() {
         if (this.currentSection === 'prompt' && this.chatInterface) {
             this.chatInterface.focusInput();
+        } else if (this.currentSection === 'terminal' && this.terminal) {
+            this.terminal.focusInput();
         }
     }
 

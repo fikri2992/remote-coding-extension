@@ -62,6 +62,12 @@ class EnhancedWebApp {
             // Show simple notification
             this._showSimpleNotification('Enhanced UI Ready', 'VS Code Web Automation enhanced interface is active.');
             
+            // Update workspace information
+            this._updateWorkspaceInfo();
+            
+            // Add initial log message
+            this._addLogMessage('Enhanced UI initialized successfully', 'success');
+            
         } catch (error) {
             console.error('❌ Failed to initialize Enhanced Web Frontend:', error);
             this._showInitializationError(error);
@@ -227,6 +233,192 @@ class EnhancedWebApp {
     }
 
     /**
+     * Switch between different views
+     */
+    _switchView(viewId) {
+        try {
+            // Update navigation active state
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.classList.remove('active');
+                if (item.getAttribute('data-view') === viewId) {
+                    item.classList.add('active');
+                }
+            });
+            
+            // Hide all views
+            document.querySelectorAll('.content-view').forEach(view => {
+                view.classList.remove('active');
+            });
+            
+            // Show selected view
+            const selectedView = document.getElementById(`${viewId}-view`);
+            if (selectedView) {
+                selectedView.classList.add('active');
+            }
+            
+            // Log view switch
+            this._addLogMessage(`Switched to ${viewId} view`);
+            
+        } catch (error) {
+            console.warn('⚠️ Failed to switch view:', error);
+        }
+    }
+
+    /**
+     * Execute a VS Code command
+     */
+    _executeCommand(command) {
+        try {
+            if (!command) {
+                this._addLogMessage('Error: No command specified', 'error');
+                return;
+            }
+            
+            this._addLogMessage(`Executing command: ${command}`, 'info');
+            
+            // If we're in VS Code webview, send command to extension
+            if (window.vscode) {
+                window.vscode.postMessage({
+                    command: 'executeCommand',
+                    data: command
+                });
+                this._addLogMessage(`Command sent to VS Code: ${command}`, 'success');
+            } else {
+                // In standalone mode, simulate command execution
+                this._simulateCommand(command);
+            }
+            
+            // Clear command input
+            const commandInput = document.getElementById('enhancedCommandInput');
+            if (commandInput) {
+                commandInput.value = '';
+            }
+            
+        } catch (error) {
+            console.error('❌ Failed to execute command:', error);
+            this._addLogMessage(`Error executing command: ${error.message}`, 'error');
+        }
+    }
+
+    /**
+     * Simulate command execution in standalone mode
+     */
+    _simulateCommand(command) {
+        const simulatedCommands = {
+            'workbench.action.files.newUntitledFile': 'New untitled file created',
+            'workbench.action.showCommands': 'Command palette opened',
+            'workbench.action.terminal.toggleTerminal': 'Terminal toggled',
+            'workbench.action.files.save': 'File saved',
+            'workbench.action.closeActiveEditor': 'Active editor closed'
+        };
+        
+        const response = simulatedCommands[command] || `Simulated execution of: ${command}`;
+        this._addLogMessage(`Simulation: ${response}`, 'info');
+    }
+
+    /**
+     * Add a log message to the activity log
+     */
+    _addLogMessage(message, type = 'info') {
+        try {
+            const logContainer = document.getElementById('enhancedMessageLog');
+            if (!logContainer) return;
+            
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.className = `log-entry log-${type}`;
+            logEntry.style.cssText = `
+                padding: 8px 12px;
+                margin-bottom: 4px;
+                border-radius: 4px;
+                font-size: 12px;
+                line-height: 1.4;
+                background: var(--vscode-textCodeBlock-background, #1e1e1e);
+                border-left: 3px solid ${this._getLogColor(type)};
+                color: var(--vscode-foreground, #cccccc);
+                animation: slideIn 0.3s ease;
+            `;
+            
+            logEntry.innerHTML = `
+                <span style="color: var(--vscode-descriptionForeground, #999); font-size: 11px;">[${timestamp}]</span>
+                <span style="margin-left: 8px;">${message}</span>
+            `;
+            
+            logContainer.appendChild(logEntry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+            
+            // Keep only last 50 log entries
+            const entries = logContainer.querySelectorAll('.log-entry');
+            if (entries.length > 50) {
+                entries[0].remove();
+            }
+            
+        } catch (error) {
+            console.warn('⚠️ Failed to add log message:', error);
+        }
+    }
+
+    /**
+     * Get color for log entry type
+     */
+    _getLogColor(type) {
+        const colors = {
+            'info': '#007acc',
+            'success': '#4caf50',
+            'warning': '#ff9800',
+            'error': '#f44336'
+        };
+        return colors[type] || colors.info;
+    }
+
+    /**
+     * Clear activity logs
+     */
+    _clearLogs() {
+        try {
+            const logContainer = document.getElementById('enhancedMessageLog');
+            if (logContainer) {
+                logContainer.innerHTML = '';
+                this._addLogMessage('Logs cleared', 'info');
+            }
+        } catch (error) {
+            console.warn('⚠️ Failed to clear logs:', error);
+        }
+    }
+
+    /**
+     * Update workspace information
+     */
+    _updateWorkspaceInfo() {
+        try {
+            const workspaceInfo = document.getElementById('enhancedWorkspaceInfo');
+            if (!workspaceInfo) return;
+            
+            if (window.vscode) {
+                // Request workspace info from extension
+                window.vscode.postMessage({
+                    command: 'getWorkspaceInfo'
+                });
+                workspaceInfo.textContent = 'Requesting workspace information from VS Code...';
+            } else {
+                // Standalone mode - show placeholder info
+                workspaceInfo.innerHTML = `
+                    <div style="color: var(--vscode-descriptionForeground, #999);">
+                        <p><strong>Mode:</strong> Standalone Web Application</p>
+                        <p><strong>URL:</strong> ${window.location.href}</p>
+                        <p><strong>User Agent:</strong> ${navigator.userAgent.substring(0, 60)}...</p>
+                        <p><strong>Language:</strong> ${navigator.language}</p>
+                        <p><strong>Platform:</strong> ${navigator.platform}</p>
+                        <p><strong>Viewport:</strong> ${window.innerWidth}x${window.innerHeight}</p>
+                    </div>
+                `;
+            }
+        } catch (error) {
+            console.warn('⚠️ Failed to update workspace info:', error);
+        }
+    }
+
+    /**
      * Initialize basic WebSocket connection
      */
     async _initializeBasicWebSocket() {
@@ -242,6 +434,185 @@ class EnhancedWebApp {
         } catch (error) {
             console.warn('⚠️ WebSocket connection failed, continuing in offline mode:', error);
             this._updateConnectionStatus('disconnected', 'Offline Mode');
+        }
+    }
+
+    /**
+     * Show a simple notification
+     */
+    _showSimpleNotification(title, message, type = 'info') {
+        try {
+            // If we have a notification service, use it
+            if (this.notificationService && typeof this.notificationService.show === 'function') {
+                this.notificationService.show({
+                    title: title,
+                    message: message,
+                    type: type,
+                    duration: 4000
+                });
+                return;
+            }
+            
+            // Fallback to console logging
+            console.log(`🔔 ${title}: ${message}`);
+            
+            // Create a simple toast notification if no service is available
+            this._createToastNotification(title, message, type);
+            
+        } catch (error) {
+            console.warn('⚠️ Failed to show notification:', error);
+            // Ultimate fallback - just log to console
+            console.log(`📢 ${title}: ${message}`);
+        }
+    }
+
+    /**
+     * Create a simple toast notification
+     */
+    _createToastNotification(title, message, type = 'info') {
+        try {
+            // Create toast container if it doesn't exist
+            let toastContainer = document.getElementById('toast-container');
+            if (!toastContainer) {
+                toastContainer = document.createElement('div');
+                toastContainer.id = 'toast-container';
+                toastContainer.className = 'toast-container';
+                toastContainer.style.cssText = `
+                    position: fixed;
+                    top: 20px;
+                    right: 20px;
+                    z-index: 10000;
+                    pointer-events: none;
+                `;
+                document.body.appendChild(toastContainer);
+            }
+            
+            // Create toast element
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            toast.style.cssText = `
+                background: var(--vscode-notifications-background, #1e1e1e);
+                color: var(--vscode-notifications-foreground, #cccccc);
+                border: 1px solid var(--vscode-notifications-border, #454545);
+                border-radius: 4px;
+                padding: 12px 16px;
+                margin-bottom: 8px;
+                max-width: 350px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                pointer-events: auto;
+                transform: translateX(100%);
+                transition: transform 0.3s ease;
+                font-family: var(--vscode-font-family, 'Segoe UI', sans-serif);
+                font-size: 13px;
+                line-height: 1.4;
+            `;
+            
+            // Add type-specific styling
+            if (type === 'success') {
+                toast.style.borderLeftColor = 'var(--vscode-statusBarItem-prominentBackground, #007acc)';
+                toast.style.borderLeftWidth = '4px';
+            } else if (type === 'error') {
+                toast.style.borderLeftColor = 'var(--vscode-errorForeground, #f85149)';
+                toast.style.borderLeftWidth = '4px';
+            } else if (type === 'warning') {
+                toast.style.borderLeftColor = 'var(--vscode-editorWarning-foreground, #ffcc02)';
+                toast.style.borderLeftWidth = '4px';
+            }
+            
+            // Set content
+            toast.innerHTML = `
+                <div style="font-weight: 600; margin-bottom: 4px;">${title}</div>
+                <div style="opacity: 0.9;">${message}</div>
+                <button style="
+                    position: absolute;
+                    top: 8px;
+                    right: 8px;
+                    background: none;
+                    border: none;
+                    color: inherit;
+                    cursor: pointer;
+                    font-size: 16px;
+                    padding: 0;
+                    width: 20px;
+                    height: 20px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    opacity: 0.7;
+                " onclick="this.parentElement.remove()">×</button>
+            `;
+            
+            // Add to container
+            toastContainer.appendChild(toast);
+            
+            // Animate in
+            setTimeout(() => {
+                toast.style.transform = 'translateX(0)';
+            }, 100);
+            
+            // Auto-remove after 4 seconds
+            setTimeout(() => {
+                if (toast.parentElement) {
+                    toast.style.transform = 'translateX(100%)';
+                    setTimeout(() => {
+                        if (toast.parentElement) {
+                            toast.remove();
+                        }
+                    }, 300);
+                }
+            }, 4000);
+            
+        } catch (error) {
+            console.warn('⚠️ Failed to create toast notification:', error);
+        }
+    }
+
+    /**
+     * Update connection status in the UI
+     */
+    _updateConnectionStatus(status, message) {
+        try {
+            // Update state manager with connection status
+            if (this.stateManager) {
+                this.stateManager.updateConnection({
+                    status: status,
+                    message: message,
+                    timestamp: new Date().toISOString()
+                });
+            }
+            
+            // Update UI elements if they exist
+            const statusDot = document.getElementById('statusDot');
+            const statusText = document.getElementById('statusText');
+            
+            if (statusDot) {
+                // Remove all status classes
+                statusDot.classList.remove('connected', 'connecting', 'disconnected');
+                // Add current status class
+                statusDot.classList.add(status);
+            }
+            
+            if (statusText) {
+                statusText.textContent = message || status;
+            }
+            
+            // Show notification for status changes
+            if (this.notificationService && message) {
+                const notificationType = status === 'connected' ? 'success' : 
+                                       status === 'connecting' ? 'info' : 'warning';
+                
+                this.notificationService.show({
+                    title: 'Connection Status',
+                    message: message,
+                    type: notificationType,
+                    duration: 3000
+                });
+            }
+            
+            console.log(`🔌 Connection status updated: ${status} - ${message}`);
+            
+        } catch (error) {
+            console.warn('⚠️ Failed to update connection status:', error);
         }
     }
 

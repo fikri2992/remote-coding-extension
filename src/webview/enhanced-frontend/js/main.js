@@ -12,6 +12,7 @@ import { KeyboardShortcutService } from './services/KeyboardShortcutService.js';
 import { ContextMenuService } from './services/ContextMenuService.js';
 import { DragDropService } from './services/DragDropService.js';
 import { AnimationService } from './services/AnimationService.js';
+import { globalPerformanceIntegration } from './utils/PerformanceIntegration.js';
 
 /**
  * Enhanced Web Application
@@ -31,6 +32,9 @@ class EnhancedWebApp {
         this.contextMenuService = new ContextMenuService(this.stateManager, this.notificationService);
         this.dragDropService = new DragDropService(this.stateManager, this.notificationService);
         this.webSocketClient = new WebSocketClient(this.stateManager, this.notificationService);
+        
+        // Performance integration
+        this.performanceIntegration = globalPerformanceIntegration;
         
         // Main app shell component
         this.appShell = null;
@@ -63,6 +67,9 @@ class EnhancedWebApp {
     async _performInitialization() {
         try {
             console.log('🚀 Initializing Enhanced Web Frontend...');
+            
+            // Initialize performance optimizations
+            await this._initializePerformanceOptimizations();
             
             // Initialize core services
             await this._initializeServices();
@@ -98,6 +105,27 @@ class EnhancedWebApp {
             this._showInitializationError(error);
             throw error;
         }
+    }
+
+    /**
+     * Initialize performance optimizations
+     */
+    async _initializePerformanceOptimizations() {
+        console.log('⚡ Initializing performance optimizations...');
+        
+        // Detect device type and optimize accordingly
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        
+        if (isMobile) {
+            this.performanceIntegration.optimizeForMobile();
+        } else {
+            this.performanceIntegration.optimizeForDesktop();
+        }
+        
+        // Initialize performance integration
+        await this.performanceIntegration.initialize();
+        
+        console.log('✅ Performance optimizations initialized');
     }
 
     /**
@@ -149,6 +177,9 @@ class EnhancedWebApp {
         });
         
         await this.appShell.initialize();
+        
+        // Register components with performance integration
+        this.performanceIntegration.registerComponent('appShell', this.appShell);
         
         console.log('✅ UI components initialized');
     }
@@ -552,8 +583,16 @@ class EnhancedWebApp {
             webSocketConnected: this.webSocketClient?.isConnected(),
             currentSection: this.stateManager?.getCurrentSection(),
             theme: this.themeManager?.getCurrentTheme(),
-            notifications: this.notificationService?.getActiveNotifications()
+            notifications: this.notificationService?.getActiveNotifications(),
+            performance: this.performanceIntegration?.getPerformanceReport()
         };
+    }
+
+    /**
+     * Get performance report
+     */
+    getPerformanceReport() {
+        return this.performanceIntegration?.getPerformanceReport();
     }
 
     /**
@@ -566,6 +605,9 @@ class EnhancedWebApp {
         document.removeEventListener('visibilitychange', this.handleVisibilityChange);
         window.removeEventListener('beforeunload', this.handleBeforeUnload);
         window.removeEventListener('resize', this.handleResize);
+        
+        // Cleanup performance integration first
+        this.performanceIntegration?.destroy();
         
         // Cleanup services
         this.webSocketClient?.destroy();

@@ -90,79 +90,99 @@ class EnhancedWebApp {
             document.body.appendChild(this.appElement);
         }
         
-        // Create basic enhanced UI structure
+        // Create basic enhanced UI structure with Tailwind CSS
         this.appElement.innerHTML = `
-            <div class="enhanced-app-shell">
-                <div class="enhanced-header">
-                    <h1>Enhanced VS Code Web Automation</h1>
-                    <div class="connection-status">
-                        <span class="status-indicator" id="enhancedStatusIndicator"></span>
-                        <span id="enhancedStatusText">Initializing...</span>
+            <div class="flex flex-col h-screen bg-white">
+                <!-- Mobile Header -->
+                <header class="flex items-center justify-between p-4 sm:p-6 bg-white border-b border-gray-200">
+                    <div class="flex items-center space-x-4">
+                        <button id="mobileMenuToggle" class="sm:hidden p-2 text-gray-600 hover:text-gray-800 focus:outline-none touch-target" aria-label="Toggle menu">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+                            </svg>
+                        </button>
+                        <h1 class="text-xl sm:text-2xl font-light text-gray-800">Enhanced VS Code Web Automation</h1>
                     </div>
-                </div>
+                    <div class="flex items-center space-x-2 px-3 py-1 bg-gray-50 border border-gray-200 rounded-full">
+                        <div class="status-indicator" id="enhancedStatusIndicator"></div>
+                        <span class="text-xs text-gray-600" id="enhancedStatusText">Initializing...</span>
+                    </div>
+                </header>
                 
-                <div class="enhanced-main">
-                    <div class="enhanced-sidebar">
-                        <nav class="enhanced-nav">
-                            <button class="nav-item active" data-view="dashboard">
-                                <span class="nav-icon">🏠</span>
-                                <span class="nav-text">Dashboard</span>
+                <!-- Main Content Area -->
+                <div class="flex flex-1 overflow-hidden">
+                    <!-- Mobile Overlay -->
+                    <div id="mobileOverlay" class="fixed inset-0 bg-black bg-opacity-50 z-20 hidden sm:hidden"></div>
+                    
+                    <!-- Sidebar -->
+                    <aside id="sidebar" class="fixed inset-y-0 left-0 z-30 w-64 bg-white border-r border-gray-200 transform -translate-x-full transition-transform duration-300 ease-in-out sm:relative sm:translate-x-0 sm:w-60 lg:w-64">
+                        <nav class="pt-6">
+                            <button class="nav-item" data-view="dashboard">
+                                <span class="text-lg mr-3">🏠</span>
+                                <span class="mobile-nav-hidden">Dashboard</span>
                             </button>
                             <button class="nav-item" data-view="commands">
-                                <span class="nav-icon">⚙️</span>
-                                <span class="nav-text">Commands</span>
+                                <span class="text-lg mr-3">⚙️</span>
+                                <span class="mobile-nav-hidden">Commands</span>
                             </button>
                             <button class="nav-item" data-view="workspace">
-                                <span class="nav-icon">📁</span>
-                                <span class="nav-text">Workspace</span>
+                                <span class="text-lg mr-3">📁</span>
+                                <span class="mobile-nav-hidden">Workspace</span>
                             </button>
                             <button class="nav-item" data-view="logs">
-                                <span class="nav-icon">📜</span>
-                                <span class="nav-text">Logs</span>
+                                <span class="text-lg mr-3">📜</span>
+                                <span class="mobile-nav-hidden">Logs</span>
                             </button>
                         </nav>
-                    </div>
+                    </aside>
                     
-                    <div class="enhanced-content">
-                        <div class="content-view active" id="dashboard-view">
-                            <h2>Enhanced Dashboard</h2>
-                            <div class="dashboard-grid">
+                    <!-- Content Area -->
+                    <main class="flex-1 overflow-hidden">
+                        <!-- Dashboard View -->
+                        <div class="content-view active p-4 sm:p-6 lg:p-8 h-full overflow-y-auto" id="dashboard-view">
+                            <h2 class="text-2xl sm:text-3xl font-light text-gray-800 mb-6">Enhanced Dashboard</h2>
+                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                                 <div class="dashboard-card">
-                                    <h3>Connection Status</h3>
-                                    <div id="enhancedConnectionInfo">Connecting...</div>
+                                    <h3 class="text-lg font-medium text-gray-800 mb-4">Connection Status</h3>
+                                    <div id="enhancedConnectionInfo" class="text-gray-600">Connecting...</div>
                                 </div>
                                 <div class="dashboard-card">
-                                    <h3>Quick Actions</h3>
-                                    <div class="quick-actions">
-                                        <button class="action-btn" data-command="workbench.action.files.newUntitledFile">New File</button>
-                                        <button class="action-btn" data-command="workbench.action.showCommands">Command Palette</button>
-                                        <button class="action-btn" data-command="workbench.action.terminal.toggleTerminal">Toggle Terminal</button>
+                                    <h3 class="text-lg font-medium text-gray-800 mb-4">Quick Actions</h3>
+                                    <div class="space-y-3">
+                                        <button class="action-btn w-full text-left" data-command="workbench.action.files.newUntitledFile">New File</button>
+                                        <button class="action-btn w-full text-left" data-command="workbench.action.showCommands">Command Palette</button>
+                                        <button class="action-btn w-full text-left" data-command="workbench.action.terminal.toggleTerminal">Toggle Terminal</button>
                                     </div>
                                 </div>
                             </div>
                         </div>
                         
-                        <div class="content-view" id="commands-view">
-                            <h2>Command Interface</h2>
-                            <div class="command-form">
-                                <input type="text" id="enhancedCommandInput" placeholder="Enter VS Code command...">
-                                <button id="enhancedExecuteButton">Execute</button>
+                        <!-- Commands View -->
+                        <div class="content-view p-4 sm:p-6 lg:p-8 h-full overflow-y-auto" id="commands-view">
+                            <h2 class="text-2xl sm:text-3xl font-light text-gray-800 mb-6">Command Interface</h2>
+                            <div class="max-w-2xl">
+                                <div class="flex flex-col sm:flex-row gap-3">
+                                    <input type="text" id="enhancedCommandInput" class="input-field flex-1" placeholder="Enter VS Code command...">
+                                    <button id="enhancedExecuteButton" class="primary-btn touch-target">Execute</button>
+                                </div>
                             </div>
                         </div>
                         
-                        <div class="content-view" id="workspace-view">
-                            <h2>Workspace Information</h2>
-                            <div id="enhancedWorkspaceInfo">Loading workspace information...</div>
+                        <!-- Workspace View -->
+                        <div class="content-view p-4 sm:p-6 lg:p-8 h-full overflow-y-auto" id="workspace-view">
+                            <h2 class="text-2xl sm:text-3xl font-light text-gray-800 mb-6">Workspace Information</h2>
+                            <div id="enhancedWorkspaceInfo" class="bg-gray-50 border border-gray-200 rounded-lg p-4 font-mono text-sm text-gray-700">Loading workspace information...</div>
                         </div>
                         
-                        <div class="content-view" id="logs-view">
-                            <h2>Activity Logs</h2>
-                            <div class="log-controls">
-                                <button id="enhancedClearLogButton">Clear Logs</button>
+                        <!-- Logs View -->
+                        <div class="content-view p-4 sm:p-6 lg:p-8 h-full overflow-y-auto" id="logs-view">
+                            <h2 class="text-2xl sm:text-3xl font-light text-gray-800 mb-6">Activity Logs</h2>
+                            <div class="mb-4">
+                                <button id="enhancedClearLogButton" class="px-4 py-2 text-red-600 border border-red-600 rounded-lg text-sm hover:bg-red-600 hover:text-white transition-colors touch-target">Clear Logs</button>
                             </div>
                             <div class="log-container" id="enhancedMessageLog"></div>
                         </div>
-                    </div>
+                    </main>
                 </div>
             </div>
         `;
@@ -176,11 +196,34 @@ class EnhancedWebApp {
     _setupBasicEventListeners() {
         console.log('🎬 Setting up event listeners...');
         
+        // Mobile menu toggle
+        const mobileMenuToggle = document.getElementById('mobileMenuToggle');
+        const sidebar = document.getElementById('sidebar');
+        const mobileOverlay = document.getElementById('mobileOverlay');
+        
+        if (mobileMenuToggle && sidebar && mobileOverlay) {
+            mobileMenuToggle.addEventListener('click', () => {
+                sidebar.classList.toggle('-translate-x-full');
+                mobileOverlay.classList.toggle('hidden');
+            });
+            
+            mobileOverlay.addEventListener('click', () => {
+                sidebar.classList.add('-translate-x-full');
+                mobileOverlay.classList.add('hidden');
+            });
+        }
+        
         // Navigation handling
         document.querySelectorAll('.nav-item').forEach(item => {
             item.addEventListener('click', (e) => {
                 const view = e.currentTarget.getAttribute('data-view');
                 this._switchView(view);
+                
+                // Close mobile menu after navigation
+                if (sidebar && mobileOverlay) {
+                    sidebar.classList.add('-translate-x-full');
+                    mobileOverlay.classList.add('hidden');
+                }
             });
         });
         
@@ -188,7 +231,9 @@ class EnhancedWebApp {
         document.querySelectorAll('.action-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 const command = e.currentTarget.getAttribute('data-command');
-                this._executeCommand(command);
+                if (command) {
+                    this._executeCommand(command);
+                }
             });
         });
         
@@ -224,12 +269,55 @@ class EnhancedWebApp {
             });
         }
         
+        // Touch gestures for mobile
+        this._setupTouchGestures();
+        
         // Global event listeners
         document.addEventListener('visibilitychange', this.handleVisibilityChange);
         window.addEventListener('beforeunload', this.handleBeforeUnload);
         window.addEventListener('resize', this.handleResize);
         
         console.log('✅ Event listeners set up');
+    }
+    
+    /**
+     * Set up touch gestures for mobile devices
+     */
+    _setupTouchGestures() {
+        let startX = 0;
+        let startY = 0;
+        
+        document.addEventListener('touchstart', (e) => {
+            startX = e.touches[0].clientX;
+            startY = e.touches[0].clientY;
+        }, { passive: true });
+        
+        document.addEventListener('touchend', (e) => {
+            const endX = e.changedTouches[0].clientX;
+            const endY = e.changedTouches[0].clientY;
+            const diffX = endX - startX;
+            const diffY = endY - startY;
+            
+            // Swipe right to open menu (from left edge)
+            if (diffX > 100 && Math.abs(diffY) < 100 && startX < 50) {
+                const sidebar = document.getElementById('sidebar');
+                const mobileOverlay = document.getElementById('mobileOverlay');
+                if (sidebar && mobileOverlay) {
+                    sidebar.classList.remove('-translate-x-full');
+                    mobileOverlay.classList.remove('hidden');
+                }
+            }
+            
+            // Swipe left to close menu
+            if (diffX < -100 && Math.abs(diffY) < 100) {
+                const sidebar = document.getElementById('sidebar');
+                const mobileOverlay = document.getElementById('mobileOverlay');
+                if (sidebar && mobileOverlay && !sidebar.classList.contains('-translate-x-full')) {
+                    sidebar.classList.add('-translate-x-full');
+                    mobileOverlay.classList.add('hidden');
+                }
+            }
+        }, { passive: true });
     }
 
     /**
@@ -240,20 +328,27 @@ class EnhancedWebApp {
             // Update navigation active state
             document.querySelectorAll('.nav-item').forEach(item => {
                 item.classList.remove('active');
+                item.classList.remove('bg-blue-50', 'text-primary-500', 'font-medium');
+                item.classList.add('text-gray-600');
+                
                 if (item.getAttribute('data-view') === viewId) {
                     item.classList.add('active');
+                    item.classList.add('bg-blue-50', 'text-primary-500', 'font-medium');
+                    item.classList.remove('text-gray-600');
                 }
             });
             
             // Hide all views
             document.querySelectorAll('.content-view').forEach(view => {
                 view.classList.remove('active');
+                view.style.display = 'none';
             });
             
             // Show selected view
             const selectedView = document.getElementById(`${viewId}-view`);
             if (selectedView) {
                 selectedView.classList.add('active');
+                selectedView.style.display = 'block';
             }
             
             // Log view switch

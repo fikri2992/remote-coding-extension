@@ -124,11 +124,14 @@
     "vscode:prepublish": "npm run build",
     "compile": "tsc -p ./",
     "compile:watch": "tsc -watch -p ./",
+    "build:css": "tailwindcss -i ./src/webview/frontend/styles/tailwind.css -o ./src/webview/frontend/styles/output.css --watch",
+    "build:css:prod": "tailwindcss -i ./src/webview/frontend/styles/tailwind.css -o ./src/webview/frontend/styles/output.css --minify",
     "copy-assets": "xcopy /E /I /Y \"src\\webview\\frontend\" \"out\\webview\\frontend\" && xcopy /Y \"src\\webview\\panel.html\" \"out\\webview\\\"",
     "pretest": "npm run build",
     "lint": "eslint src --ext ts",
     "clean": "rimraf out",
     "build": "npm run clean && npm run compile && npm run copy-assets",
+    "dev": "npm run build:css:prod && npm run build",
     "package": "npm run build && vsce package"
   },
   "devDependencies": {
@@ -136,8 +139,11 @@
     "@types/vscode": "^1.74.0",
     "@typescript-eslint/eslint-plugin": "^5.45.0",
     "@typescript-eslint/parser": "^5.45.0",
+    "autoprefixer": "^10.4.21",
     "eslint": "^8.28.0",
+    "postcss": "^8.5.6",
     "rimraf": "^3.0.2",
+    "tailwindcss": "^4.1.12",
     "typescript": "^4.9.4"
   },
   "dependencies": {

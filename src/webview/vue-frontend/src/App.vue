@@ -30,6 +30,9 @@
     
     <!-- Notifications -->
     <NotificationToast />
+    
+    <!-- Debug Panel (Development Only) -->
+    <DebugPanel v-if="isDevelopment" />
   </div>
 </template>
 
@@ -40,8 +43,13 @@ import AppHeader from './components/layout/AppHeader.vue'
 import AppSidebar from './components/layout/AppSidebar.vue'
 import AppFooter from './components/layout/AppFooter.vue'
 import NotificationToast from './components/common/NotificationToast.vue'
+import DebugPanel from './components/common/DebugPanel.vue'
+import { addBreadcrumb } from './services/error-handler'
 
 const uiStore = useUIStore()
+
+// Development mode detection
+const isDevelopment = computed(() => import.meta.env.DEV)
 
 // Responsive breakpoint detection
 const windowWidth = ref(window.innerWidth)
@@ -54,6 +62,7 @@ const updateWindowWidth = () => {
 onMounted(() => {
   // Initialize application
   console.log('Vue.js Frontend Application Initialized')
+  addBreadcrumb('app', 'Application component mounted', 'info')
   
   // Set up responsive behavior
   window.addEventListener('resize', updateWindowWidth)
@@ -61,23 +70,27 @@ onMounted(() => {
   // Auto-collapse sidebar on mobile
   if (isMobile.value) {
     uiStore.setSidebarCollapsed(true)
+    addBreadcrumb('ui', 'Sidebar auto-collapsed for mobile', 'info')
   }
   
   // Set initial active view based on current route
   const currentRoute = window.location.pathname
+  let activeView = 'automation' // default
+  
   if (currentRoute.includes('/automation')) {
-    uiStore.setActiveView('automation')
+    activeView = 'automation'
   } else if (currentRoute.includes('/files')) {
-    uiStore.setActiveView('files')
+    activeView = 'files'
   } else if (currentRoute.includes('/git')) {
-    uiStore.setActiveView('git')
+    activeView = 'git'
   } else if (currentRoute.includes('/terminal')) {
-    uiStore.setActiveView('terminal')
+    activeView = 'terminal'
   } else if (currentRoute.includes('/chat')) {
-    uiStore.setActiveView('chat')
-  } else {
-    uiStore.setActiveView('automation')
+    activeView = 'chat'
   }
+  
+  uiStore.setActiveView(activeView as any)
+  addBreadcrumb('navigation', `Initial view set to ${activeView}`, 'info', { route: currentRoute })
 })
 
 onUnmounted(() => {

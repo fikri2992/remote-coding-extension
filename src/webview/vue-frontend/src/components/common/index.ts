@@ -5,6 +5,7 @@ export { default as NotificationToast } from './NotificationToast.vue'
 export { default as Modal } from './Modal.vue'
 export { default as Dialog } from './Dialog.vue'
 export { default as ConfirmationDialog } from './ConfirmationDialog.vue'
+export { default as DebugPanel } from './DebugPanel.vue'
 
 // Type definitions for component props
 export interface LoadingSpinnerProps {

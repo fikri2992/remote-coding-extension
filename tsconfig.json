@@ -29,6 +29,7 @@
     "node_modules",
     ".vscode-test",
     "out",
-    "**/*.test.ts"
+    "**/*.test.ts",
+    "src/webview/vue-frontend/**/*"
   ]
 }

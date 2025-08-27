@@ -1,6 +1,7 @@
 /**
- * Build configuration for Vue frontend
+ * Build configuration for Vue.js frontend
  * This file provides build utilities and configuration for different environments
+ * Updated for Vue.js implementation - replaces legacy vanilla JavaScript build system
  */
 
 import { execSync } from 'child_process'
@@ -45,19 +46,22 @@ function executeCommand(command, description) {
 
 /**
  * Clean build directories
+ * Removes Vue.js build output and temporary files
  */
 export function clean() {
   const outDir = resolve(__dirname, '../../../out/webview/vue-frontend')
   const distDir = resolve(__dirname, 'dist')
   
+  // Clean Vue.js build output directory
   if (existsSync(outDir)) {
     rmSync(outDir, { recursive: true, force: true })
-    console.log('✅ Cleaned output directory')
+    console.log('✅ Cleaned Vue.js output directory')
   }
   
+  // Clean Vite dist directory
   if (existsSync(distDir)) {
     rmSync(distDir, { recursive: true, force: true })
-    console.log('✅ Cleaned dist directory')
+    console.log('✅ Cleaned Vite dist directory')
   }
 }
 
@@ -72,24 +76,26 @@ export function qualityCheck() {
 
 /**
  * Build for development
+ * Creates optimized development build with source maps and debugging features
  */
 export function buildDevelopment() {
-  console.log('🚀 Building Vue frontend for development...')
+  console.log('🚀 Building Vue.js frontend for development...')
   clean()
   qualityCheck()
-  executeCommand(COMMANDS.buildDev, 'Development build')
-  console.log('🎉 Development build completed!')
+  executeCommand(COMMANDS.buildDev, 'Vue.js development build')
+  console.log('🎉 Vue.js development build completed!')
 }
 
 /**
  * Build for production
+ * Creates optimized production build with minification and tree-shaking
  */
 export function buildProduction() {
-  console.log('🚀 Building Vue frontend for production...')
+  console.log('🚀 Building Vue.js frontend for production...')
   clean()
   qualityCheck()
-  executeCommand(COMMANDS.buildProd, 'Production build')
-  console.log('🎉 Production build completed!')
+  executeCommand(COMMANDS.buildProd, 'Vue.js production build')
+  console.log('🎉 Vue.js production build completed!')
 }
 
 /**

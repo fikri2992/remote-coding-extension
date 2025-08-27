@@ -1,9 +1,10 @@
 # Web Automation Tunnel - VS Code Extension
 
-A VS Code extension that provides a web automation tunnel with HTTP and WebSocket server capabilities for browser automation and testing workflows.
+A modern VS Code extension that provides a web automation tunnel with HTTP and WebSocket server capabilities for browser automation and testing workflows. Features a modern Vue.js frontend interface for enhanced user experience and maintainability.
 
 ## Features
 
+- **Modern Vue.js Frontend**: Responsive, component-based user interface built with Vue 3
 - **Activity Bar Integration**: Custom activity bar panel for easy access
 - **HTTP Server**: Configurable HTTP server for web automation endpoints
 - **WebSocket Server**: Real-time communication with browser automation tools
@@ -11,6 +12,10 @@ A VS Code extension that provides a web automation tunnel with HTTP and WebSocke
 - **Server Management**: Start/stop servers directly from VS Code
 - **Connection Recovery**: Automatic reconnection handling for WebSocket connections
 - **State Synchronization**: Real-time state sync between server and clients
+- **File Management**: Integrated file explorer with CRUD operations
+- **Git Integration**: Built-in Git operations and repository management
+- **Terminal Interface**: Multiple terminal sessions with command execution
+- **Chat & Messaging**: Real-time messaging with file sharing capabilities
 
 ## Installation
 
@@ -93,7 +98,7 @@ Or use the command palette:
 
 ### Prerequisites
 
-- Node.js 16.x or higher
+- Node.js 18.x or higher
 - VS Code 1.75.0 or higher
 - TypeScript 4.9.4 or higher
 
@@ -106,18 +111,55 @@ Or use the command palette:
    npm install
    ```
 
-2. Open in VS Code:
+2. Install Vue.js frontend dependencies:
+   ```bash
+   cd src/webview/vue-frontend
+   npm install
+   cd ../../..
+   ```
+
+3. Open in VS Code:
    ```bash
    code .
    ```
+
+### Vue.js Frontend Development
+
+The extension includes a modern Vue.js frontend located in `src/webview/vue-frontend/`. 
+
+#### Frontend Development Server
+```bash
+# Start Vue.js development server with hot reload
+npm run dev:vue
+
+# Build Vue.js frontend for development
+npm run build:vue:dev
+
+# Build Vue.js frontend for production
+npm run build:vue:prod
+```
+
+#### Frontend Architecture
+- **Framework**: Vue.js 3 with Composition API
+- **Build Tool**: Vite for fast development and optimized builds
+- **State Management**: Pinia for centralized state management
+- **Styling**: Tailwind CSS for utility-first styling
+- **UI Components**: PrimeVue for rich component library
+- **Language**: TypeScript for type safety
 
 ### Build Scripts
 
 - `npm run compile` - Compile TypeScript to JavaScript
 - `npm run compile:watch` - Watch mode compilation
-- `npm run build` - Clean and compile
-- `npm run lint` - Run ESLint
+- `npm run build` - Clean, compile, and build Vue.js frontend
+- `npm run build:vue` - Build Vue.js frontend only
+- `npm run build:vue:dev` - Build Vue.js frontend for development
+- `npm run build:vue:prod` - Build Vue.js frontend for production
+- `npm run dev:vue` - Start Vue.js development server
+- `npm run lint` - Run ESLint on TypeScript files
+- `npm run lint:vue` - Run ESLint on Vue.js frontend
 - `npm run clean` - Remove output directory
+- `npm run clean:vue` - Clean Vue.js build artifacts
 - `npm run package` - Create VSIX package
 
 ### Testing
@@ -196,9 +238,19 @@ npx ts-node src/server/integration-test.ts
 │   │   ├── ServerManager.ts
 │   │   ├── WebSocketServer.ts
 │   │   └── *.test.ts     # Test files
-│   ├── webview/          # Webview provider and UI
+│   ├── webview/          # Webview provider and Vue.js frontend
+│   │   ├── provider.ts   # Webview provider
+│   │   └── vue-frontend/ # Vue.js application
+│   │       ├── src/      # Vue.js source code
+│   │       ├── dist/     # Built Vue.js assets
+│   │       ├── package.json
+│   │       └── vite.config.ts
 │   └── extension.ts      # Main extension entry point
 ├── out/                  # Compiled JavaScript output
+├── docs/                 # Documentation
+│   ├── DEVELOPER_GUIDE.md
+│   ├── USER_GUIDE.md
+│   └── MIGRATION_GUIDE.md
 ├── package.json          # Extension manifest and dependencies
 ├── tsconfig.json         # TypeScript configuration
 └── README.md            # This file
@@ -297,8 +349,10 @@ const wsPort = config.getWebSocketPort();
 
 4. **Build Errors**:
    - Run `npm install` to ensure dependencies are installed
+   - Install Vue.js frontend dependencies: `cd src/webview/vue-frontend && npm install`
    - Check TypeScript version compatibility
    - Clear output directory: `npm run clean`
+   - Clear Vue.js build artifacts: `npm run clean:vue`
 
 ### Debug Mode
 
@@ -332,8 +386,19 @@ For issues and feature requests:
 ## Changelog
 
 ### 0.0.1
-- Initial release
-- Basic HTTP and WebSocket server functionality
+- Initial release with modern Vue.js frontend
+- Vue.js 3 with Composition API and TypeScript
+- Pinia state management and Vue Router
+- Tailwind CSS styling and PrimeVue components
+- HTTP and WebSocket server functionality
 - VS Code activity bar integration
 - Configuration management
 - Connection recovery and state synchronization
+- File management with integrated explorer
+- Git operations and repository management
+- Terminal interface with multiple sessions
+- Real-time chat and messaging capabilities
+- Responsive design for desktop, tablet, and mobile
+- Accessibility compliance (WCAG 2.1 AA)
+- Comprehensive error handling and debugging
+- Performance optimizations and monitoring

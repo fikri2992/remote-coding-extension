@@ -135,7 +135,7 @@
     "clean": "rimraf out",
     "clean:vue": "cd src/webview/vue-frontend && npm run clean",
     "build": "npm run clean && npm run compile && npm run copy-assets && npm run build:vue:prod",
-    "dev": "npm run build:css:prod && npm run compile && npm run copy-assets",
+    "dev": "npm run compile && npm run copy-assets && npm run build:vue:dev",
     "package": "npm run build && vsce package"
   },
   "devDependencies": {

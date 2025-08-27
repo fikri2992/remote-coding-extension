@@ -64,7 +64,7 @@ export function useWebSocket(): WebSocketComposable {
   // Message queue for offline/reconnection scenarios
   const messageQueue = ref<QueuedMessage[]>([])
   const queueSize = ref(0)
-  const pendingResponses = ref<Map<string, { resolve: Function; reject: Function; timeout: NodeJS.Timeout }>>(new Map())
+  const pendingResponses = ref<Map<string, { resolve: (value: any) => void; reject: (error: any) => void; timeout: NodeJS.Timeout }>>(new Map())
 
   // Health monitoring
   const health = ref<ConnectionHealth>({
@@ -139,7 +139,7 @@ export function useWebSocket(): WebSocketComposable {
             return
           }
 
-          const message = parsedMessage as WebSocketMessage
+          const message: WebSocketMessage = parsedMessage
           lastMessage.value = message
 
           // Handle ping/pong for health monitoring
@@ -198,9 +198,9 @@ export function useWebSocket(): WebSocketComposable {
         })
 
         // Attempt to reconnect if not manually disconnected and under retry limit
-        if (!event.wasClean && reconnectAttempts.value < (currentConfig.value?.maxReconnectAttempts || WS_MAX_RECONNECT_ATTEMPTS)) {
+        if (!event.wasClean && reconnectAttempts.value < (currentConfig.value?.maxReconnectAttempts ?? WS_MAX_RECONNECT_ATTEMPTS)) {
           attemptReconnect()
-        } else if (reconnectAttempts.value >= (currentConfig.value?.maxReconnectAttempts || WS_MAX_RECONNECT_ATTEMPTS)) {
+        } else if (reconnectAttempts.value >= (currentConfig.value?.maxReconnectAttempts ?? WS_MAX_RECONNECT_ATTEMPTS)) {
           connectionStatus.value = 'error'
           health.value.isHealthy = false
         }
@@ -236,7 +236,7 @@ export function useWebSocket(): WebSocketComposable {
     })
     pendingResponses.value.clear()
 
-    reconnectAttempts.value = currentConfig.value?.maxReconnectAttempts || WS_MAX_RECONNECT_ATTEMPTS // Prevent reconnection
+    reconnectAttempts.value = currentConfig.value?.maxReconnectAttempts ?? WS_MAX_RECONNECT_ATTEMPTS // Prevent reconnection
 
     if (socket.value) {
       socket.value.close(1000, 'Manual disconnect')
@@ -262,7 +262,7 @@ export function useWebSocket(): WebSocketComposable {
 
     if (!socket.value || socket.value.readyState !== WebSocket.OPEN) {
       // Queue message if not connected and queue has space
-      if (messageQueue.value.length < (currentConfig.value?.maxQueueSize || WS_MAX_QUEUE_SIZE)) {
+      if (messageQueue.value.length < (currentConfig.value?.maxQueueSize ?? WS_MAX_QUEUE_SIZE)) {
         const queuedMessage: QueuedMessage = {
           message,
           timestamp: Date.now(),
@@ -292,7 +292,7 @@ export function useWebSocket(): WebSocketComposable {
       message.id = messageId
 
       // Set up timeout
-      const timeoutMs = timeout || currentConfig.value?.messageTimeout || WS_MESSAGE_TIMEOUT
+      const timeoutMs = timeout ?? currentConfig.value?.messageTimeout ?? WS_MESSAGE_TIMEOUT
       const timeoutHandle = setTimeout(() => {
         pendingResponses.value.delete(messageId)
         reject(new Error(`Message timeout after ${timeoutMs}ms`))
@@ -322,7 +322,7 @@ export function useWebSocket(): WebSocketComposable {
 
   // Private helper functions
   const attemptReconnect = (): void => {
-    if (!currentUrl.value || reconnectAttempts.value >= (currentConfig.value?.maxReconnectAttempts || WS_MAX_RECONNECT_ATTEMPTS)) {
+    if (!currentUrl.value || reconnectAttempts.value >= (currentConfig.value?.maxReconnectAttempts ?? WS_MAX_RECONNECT_ATTEMPTS)) {
       connectionStatus.value = 'error'
       health.value.isHealthy = false
       triggerHealthCallbacks()
@@ -333,14 +333,14 @@ export function useWebSocket(): WebSocketComposable {
     connectionStatus.value = 'reconnecting'
 
     // Exponential backoff: base interval * (2 ^ attempts) with jitter
-    const baseInterval = currentConfig.value?.reconnectInterval || WS_RECONNECT_INTERVAL
+    const baseInterval = currentConfig.value?.reconnectInterval ?? WS_RECONNECT_INTERVAL
     const backoffMultiplier = Math.pow(2, Math.min(reconnectAttempts.value - 1, 5)) // Cap at 2^5 = 32
     const jitter = Math.random() * 0.3 + 0.85 // 85-115% of calculated time
     const delay = Math.min(baseInterval * backoffMultiplier * jitter, 30000) // Cap at 30 seconds
 
     reconnectTimer.value = setTimeout(() => {
       if (currentUrl.value) {
-        connect(currentUrl.value, currentConfig.value || undefined).catch(() => {
+        connect(currentUrl.value, currentConfig.value ?? undefined).catch(() => {
           // Connection failed, will try again if under limit
         })
       }
@@ -362,7 +362,7 @@ export function useWebSocket(): WebSocketComposable {
       } catch (error) {
         console.error('Failed to send queued message:', error)
         // Re-queue if there's space
-        if (messageQueue.value.length < (currentConfig.value?.maxQueueSize || WS_MAX_QUEUE_SIZE)) {
+        if (messageQueue.value.length < (currentConfig.value?.maxQueueSize ?? WS_MAX_QUEUE_SIZE)) {
           queuedMessage.retryCount++
           if (queuedMessage.retryCount < 3) { // Max 3 retries
             messageQueue.value.push(queuedMessage)
@@ -375,7 +375,7 @@ export function useWebSocket(): WebSocketComposable {
   }
 
   const startHealthMonitoring = (): void => {
-    const heartbeatInterval = currentConfig.value?.heartbeatInterval || WS_HEARTBEAT_INTERVAL
+    const heartbeatInterval = currentConfig.value?.heartbeatInterval ?? WS_HEARTBEAT_INTERVAL
 
     // Send periodic pings
     heartbeatTimer.value = setInterval(() => {

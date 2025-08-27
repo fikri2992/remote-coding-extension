@@ -153,35 +153,46 @@ app.config.warnHandler = (msg, instance, trace) => {
 }
 
 // Global event listeners for enhanced error handling
-window.addEventListener('app-error', (event: Event) => {
+window.addEventListener('app-error', async (event: Event) => {
   const customEvent = event as CustomEvent
   const { error } = customEvent.detail
   if (error instanceof AppError) {
     // Show user notification for AppErrors
-    const { useUIStore } = require('./stores/ui')
-    const uiStore = useUIStore()
-    
-    if (error.userFriendly) {
-      uiStore.addNotification({
-        type: 'error',
-        message: error.userFriendly.message,
-        duration: error.severity === 'critical' ? 0 : 5000 // Don't auto-close critical errors
-      })
+    try {
+      const { useUIStore } = await import('./stores/ui')
+      const uiStore = useUIStore()
+      
+      if (error.userFriendly) {
+        uiStore.addNotification(
+          error.userFriendly.message,
+          'error',
+          error.severity !== 'critical', // Don't auto-close critical errors
+          error.severity === 'critical' ? 0 : 5000
+        )
+      }
+    } catch (importError) {
+      console.error('Failed to import UI store for error notification:', importError)
     }
   }
 })
 
-window.addEventListener('app-notification', (event: Event) => {
+window.addEventListener('app-notification', async (event: Event) => {
   const customEvent = event as CustomEvent
   const { type, message, duration } = customEvent.detail
-  const { useUIStore } = require('./stores/ui')
-  const uiStore = useUIStore()
   
-  uiStore.addNotification({
-    type,
-    message,
-    duration: duration || 5000
-  })
+  try {
+    const { useUIStore } = await import('./stores/ui')
+    const uiStore = useUIStore()
+    
+    uiStore.addNotification(
+      message,
+      type,
+      true, // autoClose
+      duration || 5000
+    )
+  } catch (importError) {
+    console.error('Failed to import UI store for notification:', importError)
+  }
 })
 
 // Add breadcrumb for app initialization

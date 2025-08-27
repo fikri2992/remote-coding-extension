@@ -1,44 +1,100 @@
 <template>
+  <!-- Mobile Overlay -->
+  <div 
+    v-if="!uiStore.sidebarCollapsed && isMobile"
+    class="fixed inset-0 bg-black bg-opacity-50 z-30 lg:hidden"
+    @click="uiStore.setSidebarCollapsed(true)"
+  ></div>
+
+  <!-- Sidebar -->
   <aside 
-    class="fixed left-0 top-16 h-[calc(100vh-4rem)] bg-white border-r border-secondary-200 transition-all duration-300 z-40"
-    :class="{ 'w-64': !uiStore.sidebarCollapsed, 'w-16': uiStore.sidebarCollapsed }"
+    class="fixed left-0 top-14 sm:top-16 h-[calc(100vh-3.5rem)] sm:h-[calc(100vh-4rem)] bg-white border-r border-secondary-200 transition-all duration-300 z-40 shadow-lg lg:shadow-none"
+    :class="{
+      // Desktop behavior
+      'lg:w-64': !uiStore.sidebarCollapsed,
+      'lg:w-16': uiStore.sidebarCollapsed,
+      // Mobile behavior
+      'w-64': !uiStore.sidebarCollapsed && isMobile,
+      'w-0 -translate-x-full': uiStore.sidebarCollapsed && isMobile,
+      // Tablet behavior
+      'md:w-20': uiStore.sidebarCollapsed && !isMobile,
+      'md:w-64': !uiStore.sidebarCollapsed && !isMobile
+    }"
   >
-    <nav class="p-4 space-y-2">
+    <nav class="p-3 sm:p-4 space-y-1 sm:space-y-2 overflow-y-auto h-full">
       <!-- Navigation Items -->
       <router-link
         v-for="item in navigationItems"
         :key="item.name"
         :to="item.path"
-        class="nav-item"
+        class="nav-item group"
         :class="{ 'active': $route.name === item.name }"
-        @click="setActiveView(item.name.toLowerCase())"
+        @click="handleNavClick(item.name.toLowerCase())"
       >
         <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="getIconSvg(item.icon)" />
         </svg>
         <span 
-          v-if="!uiStore.sidebarCollapsed" 
-          class="transition-opacity duration-200"
+          v-if="!uiStore.sidebarCollapsed || isMobile" 
+          class="transition-opacity duration-200 text-sm sm:text-base"
         >
           {{ item.label }}
         </span>
+        <!-- Tooltip for collapsed desktop sidebar -->
+        <div 
+          v-if="uiStore.sidebarCollapsed && !isMobile"
+          class="absolute left-full ml-2 px-2 py-1 bg-secondary-800 text-white text-xs rounded opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-50"
+        >
+          {{ item.label }}
+        </div>
       </router-link>
     </nav>
 
     <!-- Sidebar Footer -->
     <div class="absolute bottom-4 left-4 right-4">
-      <div v-if="!uiStore.sidebarCollapsed" class="text-xs text-secondary-500 text-center">
-        <p>Vue.js Frontend</p>
-        <p>v1.0.0</p>
+      <div 
+        v-if="!uiStore.sidebarCollapsed || isMobile" 
+        class="text-xs text-secondary-500 text-center space-y-1"
+      >
+        <p class="font-medium">Vue.js Frontend</p>
+        <p class="text-secondary-400">v1.0.0</p>
+      </div>
+      <!-- Collapsed footer indicator -->
+      <div 
+        v-else-if="uiStore.sidebarCollapsed && !isMobile"
+        class="flex justify-center"
+      >
+        <div class="w-2 h-2 bg-primary-500 rounded-full"></div>
       </div>
     </div>
   </aside>
 </template>
 
 <script setup lang="ts">
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useUIStore } from '../../stores'
 
 const uiStore = useUIStore()
+
+// Responsive breakpoint detection
+const windowWidth = ref(window.innerWidth)
+const isMobile = computed(() => windowWidth.value < 1024) // lg breakpoint
+
+const updateWindowWidth = () => {
+  windowWidth.value = window.innerWidth
+}
+
+onMounted(() => {
+  window.addEventListener('resize', updateWindowWidth)
+  // Auto-collapse sidebar on mobile
+  if (isMobile.value) {
+    uiStore.setSidebarCollapsed(true)
+  }
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', updateWindowWidth)
+})
 
 const navigationItems = [
   {
@@ -73,10 +129,15 @@ const navigationItems = [
   }
 ]
 
-const setActiveView = (viewName: string) => {
-  const validViews = ['automation', 'files', 'git', 'terminal', 'chat']
-  if (validViews.includes(viewName)) {
-    uiStore.setActiveView(viewName as any)
+const handleNavClick = (viewName: string) => {
+  const validViews = ['automation', 'files', 'git', 'terminal', 'chat'] as const
+  if (validViews.includes(viewName as typeof validViews[number])) {
+    uiStore.setActiveView(viewName as typeof validViews[number])
+  }
+  
+  // Auto-close sidebar on mobile after navigation
+  if (isMobile.value) {
+    uiStore.setSidebarCollapsed(true)
   }
 }
 
@@ -95,7 +156,7 @@ const getIconSvg = (iconName: string) => {
 
 <style scoped>
 .nav-item {
-  @apply flex items-center gap-3 px-3 py-2 rounded-md text-secondary-700 hover:bg-secondary-100 hover:text-secondary-900 transition-colors duration-200;
+  @apply relative flex items-center gap-3 px-3 py-2 rounded-md text-secondary-700 hover:bg-secondary-100 hover:text-secondary-900 transition-colors duration-200;
 }
 
 .nav-item.active {
@@ -104,5 +165,19 @@ const getIconSvg = (iconName: string) => {
 
 .nav-item.active:hover {
   @apply bg-primary-200;
+}
+
+/* Mobile-specific styles */
+@media (max-width: 1023px) {
+  .nav-item {
+    @apply px-4 py-3;
+  }
+}
+
+/* Tablet-specific styles */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .nav-item {
+    @apply justify-center;
+  }
 }
 </style>

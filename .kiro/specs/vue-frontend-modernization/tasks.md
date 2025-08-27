@@ -65,7 +65,9 @@
   - _Git: `feat(frontend): implement Pinia state management stores`_
   - _Description: Establish centralized state management with Pinia stores for connection status, workspace data, UI preferences, and application settings with proper store composition and reactive state handling._
 
-- [-] 5. Create WebSocket service composable
+- [x] 5. Create WebSocket service composable
+
+
 
 
 
@@ -78,7 +80,10 @@
   - _Git: `feat(frontend): implement WebSocket service composable`_
   - _Description: Create robust WebSocket communication layer with connection management, message queuing, automatic retry logic, health monitoring, and comprehensive type definitions for real-time communication with VS Code extension._
 
-- [ ] 6. Implement VS Code command execution composable
+- [-] 6. Implement VS Code command execution composable
+
+
+
   - Create useCommands composable for command execution
   - Implement command validation and error handling
   - Add command history and caching functionality

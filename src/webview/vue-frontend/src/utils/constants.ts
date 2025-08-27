@@ -52,3 +52,22 @@ export const GIT_STATUS_COLORS = {
   '??': 'text-gray-600', // Untracked
   '!!': 'text-gray-400' // Ignored
 } as const
+
+// Command execution constants
+export const COMMAND_TIMEOUT = 30000 // 30 seconds
+export const COMMAND_CACHE_TTL = 300000 // 5 minutes
+export const COMMAND_MAX_HISTORY = 100
+export const COMMAND_MAX_RETRIES = 3
+export const COMMAND_RETRY_DELAY = 1000
+
+// Quick command categories
+export const COMMAND_CATEGORIES = {
+  FILE: 'File Operations',
+  EDITOR: 'Editor',
+  GIT: 'Git',
+  TERMINAL: 'Terminal',
+  WORKSPACE: 'Workspace',
+  DEBUG: 'Debug',
+  EXTENSION: 'Extensions',
+  CUSTOM: 'Custom'
+} as const

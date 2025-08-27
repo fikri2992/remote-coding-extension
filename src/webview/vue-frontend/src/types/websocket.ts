@@ -2,7 +2,7 @@ export interface WebSocketMessage {
   type: 'command' | 'response' | 'broadcast' | 'status' | 'ping' | 'pong'
   id?: string
   command?: string
-  args?: any[]
+  args?: any[] | undefined
   data?: any
   error?: string
   timestamp: number
@@ -11,7 +11,7 @@ export interface WebSocketMessage {
 export interface CommandMessage extends WebSocketMessage {
   type: 'command'
   command: string
-  args?: any[]
+  args?: any[] | undefined
 }
 
 export interface ResponseMessage extends WebSocketMessage {

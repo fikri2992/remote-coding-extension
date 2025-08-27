@@ -13,13 +13,13 @@
             <h3 class="text-xl font-semibold mb-4">Command Panel</h3>
             <div class="space-y-4">
               <div class="flex gap-2">
-                <input 
-                  v-model="commandInput" 
+                <input
+                  v-model="commandInput"
                   placeholder="Enter VS Code command..."
                   class="input-field flex-1"
                   @keyup.enter="executeCommand"
                 />
-                <button 
+                <button
                   class="btn-primary"
                   @click="executeCommand"
                   :disabled="!commandInput.trim()"
@@ -27,12 +27,12 @@
                   Execute
                 </button>
               </div>
-              
+
               <div class="text-sm text-secondary-600">
                 <p>Quick commands:</p>
                 <div class="flex flex-wrap gap-2 mt-2">
-                  <button 
-                    v-for="cmd in quickCommands" 
+                  <button
+                    v-for="cmd in quickCommands"
                     :key="cmd.command"
                     class="btn-secondary text-xs"
                     @click="executeQuickCommand(cmd.command)"
@@ -56,21 +56,21 @@
                   {{ connectionStore.connectionStatus }}
                 </span>
               </div>
-              
+
               <div class="flex items-center justify-between">
                 <span class="text-secondary-600">Latency:</span>
                 <span class="text-secondary-900">{{ connectionStore.latency }}ms</span>
               </div>
-              
+
               <div class="flex gap-2">
-                <button 
+                <button
                   class="btn-primary text-sm"
                   :disabled="connectionStore.isConnected"
                   @click="connect"
                 >
                   Connect
                 </button>
-                <button 
+                <button
                   class="btn-secondary text-sm"
                   :disabled="!connectionStore.isConnected"
                   @click="disconnect"
@@ -88,8 +88,8 @@
         <div class="card">
           <h3 class="text-xl font-semibold mb-4">Command History</h3>
           <div class="space-y-2 max-h-64 overflow-y-auto">
-            <div 
-              v-for="(cmd, index) in commandHistory" 
+            <div
+              v-for="(cmd, index) in commandHistory"
               :key="index"
               class="flex justify-between items-center p-2 bg-secondary-100 rounded"
             >
@@ -135,22 +135,24 @@ const connectionStatusClass = computed(() => {
 })
 
 const executeCommand = () => {
-  if (!commandInput.value.trim()) return
-  
+  if (!commandInput.value.trim()) {
+    return
+  }
+
   // Add to history
   commandHistory.value.unshift({
     command: commandInput.value,
     timestamp: new Date()
   })
-  
+
   // Keep only last 50 commands
   if (commandHistory.value.length > 50) {
     commandHistory.value = commandHistory.value.slice(0, 50)
   }
-  
+
   // TODO: Implement actual command execution via WebSocket
   uiStore.addNotification(`Executed: ${commandInput.value}`, 'info')
-  
+
   commandInput.value = ''
 }
 

@@ -7,7 +7,9 @@ export const useUIStore = defineStore('ui', () => {
   const activeView = ref('automation')
   const theme = ref<'light' | 'dark'>('light')
   const loading = ref(false)
-  const notifications = ref<Array<{ id: string; message: string; type: 'info' | 'success' | 'warning' | 'error' }>>([])
+  const notifications = ref<
+    Array<{ id: string; message: string; type: 'info' | 'success' | 'warning' | 'error' }>
+  >([])
 
   // Actions
   const toggleSidebar = () => {
@@ -26,10 +28,13 @@ export const useUIStore = defineStore('ui', () => {
     loading.value = isLoading
   }
 
-  const addNotification = (message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') => {
+  const addNotification = (
+    message: string,
+    type: 'info' | 'success' | 'warning' | 'error' = 'info'
+  ) => {
     const id = Date.now().toString()
     notifications.value.push({ id, message, type })
-    
+
     // Auto-remove after 5 seconds
     setTimeout(() => {
       removeNotification(id)

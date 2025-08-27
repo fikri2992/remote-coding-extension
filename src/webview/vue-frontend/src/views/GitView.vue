@@ -9,7 +9,7 @@
       <div class="card">
         <h3 class="text-xl font-semibold mb-4">Git Dashboard</h3>
         <p class="text-secondary-600">Git functionality will be implemented in future tasks.</p>
-        
+
         <div class="mt-4 space-y-2">
           <div class="flex justify-between items-center p-2 bg-secondary-100 rounded">
             <span class="text-secondary-600">Branch:</span>

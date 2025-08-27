@@ -7,12 +7,12 @@ export interface WebSocketComposable {
   isConnected: Ref<boolean>
   connectionStatus: Ref<ConnectionStatus>
   lastMessage: Ref<WebSocketMessage | null>
-  
+
   // Methods
   connect: (url: string) => Promise<void>
   disconnect: () => void
   sendMessage: (message: WebSocketMessage) => void
-  
+
   // Event handlers
   onMessage: (callback: (message: WebSocketMessage) => void) => void
   onConnect: (callback: () => void) => void
@@ -26,7 +26,7 @@ export function useWebSocket(): WebSocketComposable {
   const lastMessage = ref<WebSocketMessage | null>(null)
   const reconnectAttempts = ref(0)
   const reconnectTimer = ref<NodeJS.Timeout | null>(null)
-  
+
   // Event callbacks
   const messageCallbacks = ref<Array<(message: WebSocketMessage) => void>>([])
   const connectCallbacks = ref<Array<() => void>>([])
@@ -38,55 +38,54 @@ export function useWebSocket(): WebSocketComposable {
     }
 
     connectionStatus.value = 'connecting'
-    
+
     try {
       socket.value = new WebSocket(url)
-      
+
       socket.value.onopen = () => {
         isConnected.value = true
         connectionStatus.value = 'connected'
         reconnectAttempts.value = 0
-        
+
         // Clear any existing reconnect timer
         if (reconnectTimer.value) {
           clearTimeout(reconnectTimer.value)
           reconnectTimer.value = null
         }
-        
+
         // Trigger connect callbacks
         connectCallbacks.value.forEach(callback => callback())
       }
-      
-      socket.value.onmessage = (event) => {
+
+      socket.value.onmessage = event => {
         try {
           const message: WebSocketMessage = JSON.parse(event.data)
           lastMessage.value = message
-          
+
           // Trigger message callbacks
           messageCallbacks.value.forEach(callback => callback(message))
         } catch (error) {
           console.error('Failed to parse WebSocket message:', error)
         }
       }
-      
+
       socket.value.onclose = () => {
         isConnected.value = false
         connectionStatus.value = 'disconnected'
-        
+
         // Trigger disconnect callbacks
         disconnectCallbacks.value.forEach(callback => callback())
-        
+
         // Attempt to reconnect if not manually disconnected
         if (reconnectAttempts.value < WS_MAX_RECONNECT_ATTEMPTS) {
           attemptReconnect(url)
         }
       }
-      
-      socket.value.onerror = (error) => {
+
+      socket.value.onerror = error => {
         console.error('WebSocket error:', error)
         connectionStatus.value = 'error'
       }
-      
     } catch (error) {
       console.error('Failed to connect to WebSocket:', error)
       connectionStatus.value = 'error'
@@ -99,14 +98,14 @@ export function useWebSocket(): WebSocketComposable {
       clearTimeout(reconnectTimer.value)
       reconnectTimer.value = null
     }
-    
+
     reconnectAttempts.value = WS_MAX_RECONNECT_ATTEMPTS // Prevent reconnection
-    
+
     if (socket.value) {
       socket.value.close()
       socket.value = null
     }
-    
+
     isConnected.value = false
     connectionStatus.value = 'disconnected'
   }
@@ -116,7 +115,7 @@ export function useWebSocket(): WebSocketComposable {
       console.warn('WebSocket is not connected')
       return
     }
-    
+
     try {
       socket.value.send(JSON.stringify(message))
     } catch (error) {
@@ -129,10 +128,10 @@ export function useWebSocket(): WebSocketComposable {
       connectionStatus.value = 'error'
       return
     }
-    
+
     reconnectAttempts.value++
     connectionStatus.value = 'reconnecting'
-    
+
     reconnectTimer.value = setTimeout(() => {
       connect(url).catch(() => {
         // Connection failed, will try again if under limit
@@ -163,12 +162,12 @@ export function useWebSocket(): WebSocketComposable {
     isConnected,
     connectionStatus,
     lastMessage,
-    
+
     // Methods
     connect,
     disconnect,
     sendMessage,
-    
+
     // Event handlers
     onMessage,
     onConnect,

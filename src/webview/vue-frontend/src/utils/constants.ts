@@ -39,11 +39,11 @@ export const NOTIFICATION_DURATION = {
 // Git file status colors
 export const GIT_STATUS_COLORS = {
   M: 'text-yellow-600', // Modified
-  A: 'text-green-600',  // Added
-  D: 'text-red-600',    // Deleted
-  R: 'text-blue-600',   // Renamed
+  A: 'text-green-600', // Added
+  D: 'text-red-600', // Deleted
+  R: 'text-blue-600', // Renamed
   C: 'text-purple-600', // Copied
   U: 'text-orange-600', // Unmerged
   '??': 'text-gray-600', // Untracked
-  '!!': 'text-gray-400'  // Ignored
+  '!!': 'text-gray-400' // Ignored
 } as const

@@ -32,7 +32,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
   const setActiveEditor = (editor: EditorInfo) => {
     activeEditor.value = editor
-    
+
     // Add to recent files if not already present
     if (!recentFiles.value.includes(editor.path)) {
       recentFiles.value.unshift(editor.path)

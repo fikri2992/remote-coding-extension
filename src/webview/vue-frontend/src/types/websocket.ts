@@ -35,4 +35,9 @@ export interface StatusMessage extends WebSocketMessage {
   }
 }
 
-export type ConnectionStatus = 'connected' | 'connecting' | 'disconnected' | 'reconnecting' | 'error'
+export type ConnectionStatus =
+  | 'connected'
+  | 'connecting'
+  | 'disconnected'
+  | 'reconnecting'
+  | 'error'

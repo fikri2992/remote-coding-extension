@@ -33,8 +33,10 @@ export function isValidPort(port: number | string): boolean {
  */
 export function isValidFilePath(path: string): boolean {
   // Basic validation - no empty string, no invalid characters
-  if (!path || path.trim() === '') return false
-  
+  if (!path || path.trim() === '') {
+    return false
+  }
+
   // Check for invalid characters (Windows and Unix)
   // eslint-disable-next-line no-control-regex
   const invalidChars = /[<>:"|?*\x00-\x1f]/
@@ -45,18 +47,20 @@ export function isValidFilePath(path: string): boolean {
  * Validate Git branch name
  */
 export function isValidBranchName(name: string): boolean {
-  if (!name || name.trim() === '') return false
-  
+  if (!name || name.trim() === '') {
+    return false
+  }
+
   // Git branch name rules
   const invalidPatterns = [
-    /^\./,           // Cannot start with dot
-    /\.$/,           // Cannot end with dot
-    /\.\./,          // Cannot contain double dots
-    /[\s~^:?*[\\]/,  // Cannot contain certain characters
-    /\/$/,           // Cannot end with slash
-    /^\/|\/\//       // Cannot start with slash or contain double slashes
+    /^\./, // Cannot start with dot
+    /\.$/, // Cannot end with dot
+    /\.\./, // Cannot contain double dots
+    /[\s~^:?*[\\]/, // Cannot contain certain characters
+    /\/$/, // Cannot end with slash
+    /^\/|\/\// // Cannot start with slash or contain double slashes
   ]
-  
+
   return !invalidPatterns.some(pattern => pattern.test(name))
 }
 
@@ -64,8 +68,10 @@ export function isValidBranchName(name: string): boolean {
  * Validate commit message
  */
 export function isValidCommitMessage(message: string): boolean {
-  if (!message || message.trim() === '') return false
-  
+  if (!message || message.trim() === '') {
+    return false
+  }
+
   // Should be at least 3 characters and not too long
   const trimmed = message.trim()
   return trimmed.length >= 3 && trimmed.length <= 500
@@ -99,8 +105,10 @@ export function isValidJson(str: string): boolean {
  * Validate command string (basic validation)
  */
 export function isValidCommand(command: string): boolean {
-  if (!command || command.trim() === '') return false
-  
+  if (!command || command.trim() === '') {
+    return false
+  }
+
   // Should not contain dangerous characters
   const dangerousChars = /[;&|`$(){}]/
   return !dangerousChars.test(command)
@@ -117,9 +125,15 @@ export function isValidFileSize(size: number, maxSize: number = 10 * 1024 * 1024
  * Validate required field
  */
 export function isRequired(value: any): boolean {
-  if (value === null || value === undefined) return false
-  if (typeof value === 'string') return value.trim() !== ''
-  if (Array.isArray(value)) return value.length > 0
+  if (value === null || value === undefined) {
+    return false
+  }
+  if (typeof value === 'string') {
+    return value.trim() !== ''
+  }
+  if (Array.isArray(value)) {
+    return value.length > 0
+  }
   return true
 }
 
@@ -155,12 +169,15 @@ export interface ValidationResult {
 /**
  * Validate form data with multiple rules
  */
-export function validateForm(data: Record<string, any>, rules: Record<string, Array<(value: any) => string | null>>): ValidationResult {
+export function validateForm(
+  data: Record<string, any>,
+  rules: Record<string, Array<(value: any) => string | null>>
+): ValidationResult {
   const errors: string[] = []
-  
+
   for (const [field, fieldRules] of Object.entries(rules)) {
     const value = data[field]
-    
+
     for (const rule of fieldRules) {
       const error = rule(value)
       if (error) {
@@ -168,7 +185,7 @@ export function validateForm(data: Record<string, any>, rules: Record<string, Ar
       }
     }
   }
-  
+
   return {
     isValid: errors.length === 0,
     errors

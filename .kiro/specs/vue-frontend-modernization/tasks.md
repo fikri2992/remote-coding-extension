@@ -6,7 +6,9 @@
 - Commit every task with proper message and description on what we're doing
 - Setup every task with proper commit message and description
 
-- [-] 1. Initialize Vue.js project structure and development environment
+- [x] 1. Initialize Vue.js project structure and development environment
+
+
 
 
 
@@ -18,7 +20,10 @@
   - _Git: `feat(frontend): initialize Vue.js project with Vite and TypeScript`_
   - _Description: Set up modern Vue.js development environment with Vite build tool, TypeScript support, ESLint/Prettier configuration, Tailwind CSS styling framework, and PrimeVue component library integration._
 
-- [ ] 2. Set up build configuration and development tooling
+
+- [-] 2. Set up build configuration and development tooling
+
+
   - Configure Vite build settings with proper code splitting
   - Set up TypeScript configuration with strict mode
   - Configure ESLint with Vue and TypeScript rules

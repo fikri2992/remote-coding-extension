@@ -8,8 +8,10 @@
 
       <div class="card">
         <h3 class="text-xl font-semibold mb-4">File Explorer</h3>
-        <p class="text-secondary-600">File management functionality will be implemented in future tasks.</p>
-        
+        <p class="text-secondary-600">
+          File management functionality will be implemented in future tasks.
+        </p>
+
         <div class="mt-4 space-y-2">
           <div class="flex items-center gap-2 p-2 bg-secondary-100 rounded">
             <span class="text-2xl">📁</span>

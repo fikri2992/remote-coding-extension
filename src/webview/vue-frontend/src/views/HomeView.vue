@@ -2,9 +2,7 @@
   <div class="min-h-screen bg-secondary-50">
     <div class="container mx-auto px-4 py-8">
       <div class="text-center mb-8">
-        <h1 class="text-4xl font-bold text-secondary-900 mb-4">
-          Web Automation Tunnel
-        </h1>
+        <h1 class="text-4xl font-bold text-secondary-900 mb-4">Web Automation Tunnel</h1>
         <p class="text-lg text-secondary-600 max-w-2xl mx-auto">
           Modern Vue.js frontend for VS Code extension automation and remote development
         </p>
@@ -19,10 +17,7 @@
           <p class="text-secondary-600 mb-4">
             Execute VS Code commands and manage server operations
           </p>
-          <button 
-            class="btn-primary w-full"
-            @click="$router.push('/automation')"
-          >
+          <button class="btn-primary w-full" @click="$router.push('/automation')">
             Open Automation
           </button>
         </div>
@@ -32,15 +27,8 @@
             <span class="text-2xl">📁</span>
             <h3 class="text-xl font-semibold">Files</h3>
           </div>
-          <p class="text-secondary-600 mb-4">
-            Browse and manage workspace files and directories
-          </p>
-          <button 
-            class="btn-primary w-full"
-            @click="$router.push('/files')"
-          >
-            Open Files
-          </button>
+          <p class="text-secondary-600 mb-4">Browse and manage workspace files and directories</p>
+          <button class="btn-primary w-full" @click="$router.push('/files')">Open Files</button>
         </div>
 
         <div class="card hover:shadow-lg transition-shadow duration-200">
@@ -51,12 +39,7 @@
           <p class="text-secondary-600 mb-4">
             Version control operations and repository management
           </p>
-          <button 
-            class="btn-primary w-full"
-            @click="$router.push('/git')"
-          >
-            Open Git
-          </button>
+          <button class="btn-primary w-full" @click="$router.push('/git')">Open Git</button>
         </div>
 
         <div class="card hover:shadow-lg transition-shadow duration-200">
@@ -64,13 +47,8 @@
             <span class="text-2xl">💻</span>
             <h3 class="text-xl font-semibold">Terminal</h3>
           </div>
-          <p class="text-secondary-600 mb-4">
-            Interactive terminal access and command execution
-          </p>
-          <button 
-            class="btn-primary w-full"
-            @click="$router.push('/terminal')"
-          >
+          <p class="text-secondary-600 mb-4">Interactive terminal access and command execution</p>
+          <button class="btn-primary w-full" @click="$router.push('/terminal')">
             Open Terminal
           </button>
         </div>
@@ -80,15 +58,8 @@
             <span class="text-2xl">💬</span>
             <h3 class="text-xl font-semibold">Chat</h3>
           </div>
-          <p class="text-secondary-600 mb-4">
-            Real-time messaging and collaboration features
-          </p>
-          <button 
-            class="btn-primary w-full"
-            @click="$router.push('/chat')"
-          >
-            Open Chat
-          </button>
+          <p class="text-secondary-600 mb-4">Real-time messaging and collaboration features</p>
+          <button class="btn-primary w-full" @click="$router.push('/chat')">Open Chat</button>
         </div>
 
         <div class="card hover:shadow-lg transition-shadow duration-200">
@@ -103,7 +74,9 @@
             </div>
             <div class="flex justify-between">
               <span class="text-secondary-600">Server:</span>
-              <span class="text-secondary-900">{{ connectionStore.serverUrl || 'Not configured' }}</span>
+              <span class="text-secondary-900">{{
+                connectionStore.serverUrl || 'Not configured'
+              }}</span>
             </div>
           </div>
         </div>

@@ -9,11 +9,13 @@
       <div class="card">
         <h3 class="text-xl font-semibold mb-4">Chat Interface</h3>
         <p class="text-secondary-600">Chat functionality will be implemented in future tasks.</p>
-        
+
         <div class="mt-4 border rounded p-4 bg-secondary-100">
           <div class="space-y-2">
             <div class="flex gap-3">
-              <div class="w-8 h-8 bg-primary-500 rounded-full flex items-center justify-center text-white text-sm font-medium">
+              <div
+                class="w-8 h-8 bg-primary-500 rounded-full flex items-center justify-center text-white text-sm font-medium"
+              >
                 S
               </div>
               <div>
@@ -22,7 +24,9 @@
               </div>
             </div>
             <div class="flex gap-3">
-              <div class="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center text-white text-sm font-medium">
+              <div
+                class="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center text-white text-sm font-medium"
+              >
                 U
               </div>
               <div>
@@ -31,9 +35,9 @@
               </div>
             </div>
           </div>
-          
+
           <div class="mt-4 flex gap-2">
-            <input 
+            <input
               class="input-field flex-1"
               placeholder="Message input will be available in future tasks"
               disabled

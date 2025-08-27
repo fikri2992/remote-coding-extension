@@ -11,15 +11,54 @@
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "preserve",
+    
+    // Strict Type Checking
     "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "strictBindCallApply": true,
+    "strictPropertyInitialization": true,
+    "noImplicitThis": true,
+    "alwaysStrict": true,
+    
+    // Additional Checks
     "noUnusedLocals": true,
     "noUnusedParameters": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noPropertyAccessFromIndexSignature": true,
+    
+    // Module Resolution
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true,
+    
+    // Path Mapping
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["src/*"],
+      "@/components/*": ["src/components/*"],
+      "@/composables/*": ["src/composables/*"],
+      "@/stores/*": ["src/stores/*"],
+      "@/types/*": ["src/types/*"],
+      "@/utils/*": ["src/utils/*"],
+      "@/views/*": ["src/views/*"]
     }
   },
-  "include": ["src/**/*.ts", "src/**/*.vue"],
+  "include": [
+    "src/**/*.ts", 
+    "src/**/*.vue",
+    "src/**/*.d.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "**/*.test.ts",
+    "**/*.spec.ts"
+  ],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

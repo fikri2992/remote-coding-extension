@@ -385,20 +385,116 @@ For issues and feature requests:
 
 ## Changelog
 
-### 0.0.1
-- Initial release with modern Vue.js frontend
-- Vue.js 3 with Composition API and TypeScript
-- Pinia state management and Vue Router
-- Tailwind CSS styling and PrimeVue components
-- HTTP and WebSocket server functionality
-- VS Code activity bar integration
-- Configuration management
-- Connection recovery and state synchronization
-- File management with integrated explorer
-- Git operations and repository management
-- Terminal interface with multiple sessions
-- Real-time chat and messaging capabilities
-- Responsive design for desktop, tablet, and mobile
-- Accessibility compliance (WCAG 2.1 AA)
-- Comprehensive error handling and debugging
-- Performance optimizations and monitoring
+### 0.2.0 - Vue.js Frontend Modernization (Latest)
+**Released**: December 2024
+
+#### 🚀 Major Features
+- **Complete Vue.js Frontend Rewrite**: Migrated from vanilla JavaScript to Vue.js 3 with Composition API
+- **Modern Build System**: Integrated Vite for fast development and optimized production builds
+- **TypeScript Integration**: Full TypeScript support across frontend and backend
+- **Component Architecture**: Modular, reusable Vue components with proper separation of concerns
+
+#### 🎨 User Interface
+- **Responsive Design**: Mobile-first approach with Tailwind CSS styling framework
+- **PrimeVue Components**: Rich UI component library for enhanced user experience
+- **Layout System**: Flexible layout components (AppHeader, AppSidebar, AppFooter)
+- **Theme Support**: Light/dark theme switching with system preference detection
+
+#### 🔧 Core Functionality
+- **File Management**: Complete file explorer with CRUD operations and virtual scrolling
+- **Git Integration**: Built-in Git operations, branch management, and commit history
+- **Terminal Interface**: Multiple terminal sessions with command execution
+- **Chat & Messaging**: Real-time messaging with file sharing capabilities
+- **Command Execution**: VS Code command integration with favorites and history
+
+#### 🛠 Development Experience
+- **Hot Module Replacement**: Fast development with Vite HMR
+- **ESLint & Prettier**: Code quality and formatting tools
+- **Source Maps**: Full debugging support in development mode
+- **Build Optimization**: Code splitting and tree-shaking for production
+
+#### 🔒 Infrastructure
+- **Error Handling**: Comprehensive error boundaries and debugging infrastructure
+- **State Management**: Pinia stores for centralized state management
+- **WebSocket Service**: Robust real-time communication with connection recovery
+- **Performance Monitoring**: Built-in performance tracking and optimization
+
+#### 📚 Documentation
+- **Developer Guide**: Comprehensive development documentation
+- **User Guide**: End-user documentation with feature explanations
+- **Migration Guide**: Detailed migration information from legacy implementation
+
+#### 🐛 Bug Fixes
+- Fixed TypeScript compilation issues with proper module resolution
+- Resolved build configuration conflicts between extension and frontend
+- Fixed WebSocket connection handling and error recovery
+- Improved mobile responsiveness and touch interactions
+
+### 0.1.0 - Enhanced Web Frontend
+**Released**: November 2024
+
+#### 🚀 Features
+- **Enhanced UI Components**: Advanced web components with animations and accessibility
+- **Mobile-First Design**: Responsive design optimized for mobile devices
+- **Progressive Enhancement**: Graceful fallback mechanisms for different environments
+- **Performance Optimizations**: Virtual scrolling and lazy loading implementations
+
+#### 🔧 Infrastructure
+- **HTTP Server**: Configurable HTTP server with static file serving and CORS support
+- **WebSocket Server**: Real-time communication with connection management
+- **Configuration Management**: VS Code settings integration with validation
+- **Error Handling**: Comprehensive error recovery and reporting mechanisms
+
+#### 📱 User Experience
+- **Touch Optimization**: Mobile-friendly interactions and gestures
+- **Accessibility**: WCAG 2.1 AA compliance with screen reader support
+- **PWA Support**: Progressive Web App features for offline functionality
+- **Critical CSS**: Optimized CSS loading for faster initial page loads
+
+### 0.0.1 - Initial Release
+**Released**: October 2024
+
+#### 🚀 Core Features
+- **VS Code Extension**: Basic extension setup with activity bar integration
+- **Web Automation Tunnel**: HTTP and WebSocket server capabilities
+- **Command Interface**: Basic command execution and server management
+- **Configuration System**: Settings management through VS Code preferences
+
+#### 🔧 Technical Foundation
+- **TypeScript**: Full TypeScript implementation for type safety
+- **Node.js Backend**: Server infrastructure with Express-like functionality
+- **WebSocket Protocol**: Real-time bidirectional communication
+- **Extension API**: VS Code extension API integration
+
+#### 📦 Build System
+- **npm Scripts**: Comprehensive build and development scripts
+- **ESLint**: Code quality and linting configuration
+- **Package Management**: Dependency management and VSIX packaging
+
+---
+
+### Development Milestones
+
+#### Phase 1: Foundation (v0.0.1)
+- ✅ VS Code extension setup and configuration
+- ✅ Basic HTTP and WebSocket server implementation
+- ✅ Command handling and execution framework
+- ✅ Configuration management system
+
+#### Phase 2: Enhanced Frontend (v0.1.0)
+- ✅ Advanced web components and UI framework
+- ✅ Mobile-first responsive design
+- ✅ Performance optimizations and monitoring
+- ✅ Accessibility compliance and PWA features
+
+#### Phase 3: Vue.js Modernization (v0.2.0)
+- ✅ Complete frontend rewrite with Vue.js 3
+- ✅ Modern build system with Vite and TypeScript
+- ✅ Component-based architecture with Pinia state management
+- ✅ Comprehensive documentation and migration guides
+
+#### Phase 4: Future Enhancements (Planned)
+- 🔄 Advanced automation features and scripting
+- 🔄 Plugin system for extensibility
+- 🔄 Cloud synchronization and collaboration features
+- 🔄 Advanced debugging and profiling tools

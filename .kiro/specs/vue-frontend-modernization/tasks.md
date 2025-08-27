@@ -6,7 +6,10 @@
 - Commit every task with proper message and description on what we're doing
 - Setup every task with proper commit message and description
 
-- [ ] 1. Initialize Vue.js project structure and development environment
+- [-] 1. Initialize Vue.js project structure and development environment
+
+
+
   - Create new Vue 3 project with Vite and TypeScript
   - Configure ESLint, Prettier, and development tools
   - Set up Tailwind CSS and PrimeVue integration

@@ -36,6 +36,8 @@ export interface WorkspaceInfo {
   openEditors?: string[]
 }
 
+import type { GitFile, GitCommit } from './git'
+
 export interface GitStatus {
   branch: string
   ahead: number
@@ -46,16 +48,5 @@ export interface GitStatus {
   hasChanges: boolean
 }
 
-export interface GitFile {
-  path: string
-  status: 'M' | 'A' | 'D' | 'R' | 'C'
-  staged: boolean
-}
-
-export interface CommitInfo {
-  hash: string
-  message: string
-  author: string
-  date: Date
-  files: GitFile[]
-}
+// Re-export for backward compatibility
+export type { GitFile, GitCommit as CommitInfo }

@@ -53,7 +53,7 @@ export function createPersistencePlugin(options: {
 export function createDebugPlugin() {
   return ({ store }: PiniaPluginContext) => {
     // Only enable in development
-    if (process.env['NODE_ENV'] === 'development') {
+    if (import.meta.env.DEV) {
       // Log store actions in development
       store.$onAction(({ name, args, after, onError }) => {
         const startTime = Date.now()

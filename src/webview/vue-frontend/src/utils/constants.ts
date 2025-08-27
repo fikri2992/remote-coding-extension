@@ -71,3 +71,90 @@ export const COMMAND_CATEGORIES = {
   EXTENSION: 'Extensions',
   CUSTOM: 'Custom'
 } as const
+
+// File system constants
+export const FILE_OPERATION_TIMEOUT = 15000 // 15 seconds
+export const FILE_SEARCH_MAX_RESULTS = 1000
+export const FILE_WATCH_DEBOUNCE = 500 // 500ms
+export const FILE_MAX_SIZE_DISPLAY = 50 * 1024 * 1024 // 50MB
+export const FILE_TREE_MAX_DEPTH = 10
+
+// File type icons mapping
+export const FILE_TYPE_ICONS = {
+  // Programming languages
+  js: 'pi-file-code',
+  ts: 'pi-file-code',
+  jsx: 'pi-file-code',
+  tsx: 'pi-file-code',
+  vue: 'pi-file-code',
+  html: 'pi-file-code',
+  css: 'pi-file-code',
+  scss: 'pi-file-code',
+  sass: 'pi-file-code',
+  less: 'pi-file-code',
+  json: 'pi-file-code',
+  xml: 'pi-file-code',
+  yaml: 'pi-file-code',
+  yml: 'pi-file-code',
+  
+  // Documents
+  md: 'pi-file-text',
+  txt: 'pi-file-text',
+  pdf: 'pi-file-pdf',
+  doc: 'pi-file-word',
+  docx: 'pi-file-word',
+  
+  // Images
+  png: 'pi-image',
+  jpg: 'pi-image',
+  jpeg: 'pi-image',
+  gif: 'pi-image',
+  svg: 'pi-image',
+  webp: 'pi-image',
+  
+  // Archives
+  zip: 'pi-file-archive',
+  rar: 'pi-file-archive',
+  tar: 'pi-file-archive',
+  gz: 'pi-file-archive',
+  
+  // Default
+  default: 'pi-file'
+} as const
+
+// Git operation constants
+export const GIT_COMMAND_TIMEOUT = 30000 // 30 seconds
+export const GIT_STATUS_REFRESH_INTERVAL = 5000 // 5 seconds
+export const GIT_MAX_COMMIT_HISTORY = 50
+export const GIT_DIFF_CONTEXT_LINES = 3
+export const GIT_MAX_DIFF_SIZE = 1024 * 1024 // 1MB
+
+// Terminal constants
+export const TERMINAL_DEFAULT_SHELL = process.platform === 'win32' ? 'cmd.exe' : '/bin/bash'
+export const TERMINAL_MAX_SESSIONS = 10
+export const TERMINAL_MAX_OUTPUT_LINES = 10000
+export const TERMINAL_MAX_HISTORY_SIZE = 1000
+export const TERMINAL_RECONNECT_INTERVAL = 2000
+export const TERMINAL_HEARTBEAT_INTERVAL = 30000
+export const TERMINAL_INPUT_TIMEOUT = 5000
+export const TERMINAL_RESIZE_DEBOUNCE = 300
+export const TERMINAL_SCROLL_SENSITIVITY = 3
+
+// Terminal default settings
+export const TERMINAL_DEFAULT_SETTINGS = {
+  fontSize: 14,
+  fontFamily: 'JetBrains Mono, Consolas, Monaco, monospace',
+  theme: 'dark' as const,
+  cursorStyle: 'block' as const,
+  cursorBlink: true,
+  scrollback: 1000,
+  bellSound: false,
+  copyOnSelect: false,
+  pasteOnRightClick: true,
+  wordSeparator: ' ()[]{}\'"`',
+  allowTransparency: false,
+  macOptionIsMeta: false,
+  rightClickSelectsWord: true,
+  fastScrollModifier: 'alt' as const,
+  fastScrollSensitivity: 5
+} as const

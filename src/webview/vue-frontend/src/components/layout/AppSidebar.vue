@@ -11,7 +11,7 @@
         :to="item.path"
         class="nav-item"
         :class="{ 'active': $route.name === item.name }"
-        @click="uiStore.setActiveView(item.name.toLowerCase())"
+        @click="setActiveView(item.name.toLowerCase())"
       >
         <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="getIconSvg(item.icon)" />
@@ -41,12 +41,6 @@ import { useUIStore } from '../../stores'
 const uiStore = useUIStore()
 
 const navigationItems = [
-  {
-    name: 'Home',
-    label: 'Home',
-    path: '/',
-    icon: 'home'
-  },
   {
     name: 'Automation',
     label: 'Automation',
@@ -78,6 +72,13 @@ const navigationItems = [
     icon: 'chat'
   }
 ]
+
+const setActiveView = (viewName: string) => {
+  const validViews = ['automation', 'files', 'git', 'terminal', 'chat']
+  if (validViews.includes(viewName)) {
+    uiStore.setActiveView(viewName as any)
+  }
+}
 
 const getIconSvg = (iconName: string) => {
   const icons = {

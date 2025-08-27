@@ -75,7 +75,7 @@ router.beforeEach((to, _from, next) => {
   if (to.meta?.['title']) {
     document.title = `${to.meta['title']} - Web Automation Tunnel`
   }
-  
+
   next()
 })
 

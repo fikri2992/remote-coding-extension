@@ -49,7 +49,7 @@ onMounted(() => {
   } else if (currentRoute.includes('/chat')) {
     uiStore.setActiveView('chat')
   } else {
-    uiStore.setActiveView('home')
+    uiStore.setActiveView('automation')
   }
 })
 </script>

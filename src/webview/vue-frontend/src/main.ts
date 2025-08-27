@@ -42,4 +42,36 @@ pinia.use(createInitializationPlugin({
 app.use(pinia)
 app.use(router)
 
+// Global error handler for unhandled errors
+app.config.errorHandler = (err, instance, info) => {
+  console.error('Global Vue error:', err)
+  console.error('Component instance:', instance?.$options.name || 'Unknown')
+  console.error('Error info:', info)
+  
+  // Report to error tracking service if available
+  if ((window as any).errorReporter) {
+    (window as any).errorReporter.captureException(err, {
+      tags: { 
+        component: instance?.$options.name || 'Unknown',
+        errorInfo: info 
+      }
+    })
+  }
+  
+  // Show user-friendly error notification
+  const { useUIStore } = require('./stores/ui')
+  const uiStore = useUIStore()
+  uiStore.addNotification({
+    type: 'error',
+    message: 'An unexpected error occurred. Please try refreshing the page.',
+    duration: 5000
+  })
+}
+
+// Global warning handler
+app.config.warnHandler = (msg, _instance, trace) => {
+  console.warn('Vue warning:', msg)
+  console.warn('Component trace:', trace)
+}
+
 app.mount('#app')

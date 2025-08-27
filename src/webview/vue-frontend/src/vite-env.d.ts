@@ -11,3 +11,18 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv
 }
+
+// Global error reporter interface
+interface ErrorReporter {
+  captureException(error: Error, context?: {
+    tags?: Record<string, string>
+    extra?: Record<string, any>
+  }): void
+}
+
+// Extend Window interface
+declare global {
+  interface Window {
+    errorReporter?: ErrorReporter
+  }
+}

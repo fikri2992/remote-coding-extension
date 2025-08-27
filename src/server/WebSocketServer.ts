@@ -306,6 +306,16 @@ export class WebSocketServer {
     }
 
     /**
+     * Handle incoming WebSocket message with error handling wrapper
+     */
+    private handleMessageWithErrorHandling(ws: WebSocket, clientId: string, data: Buffer | ArrayBuffer | Buffer[]): void {
+        this.handleMessage(ws, clientId, data).catch(error => {
+            console.error(`Error handling message from client ${clientId}:`, error);
+            this.sendError(clientId, 'Internal server error processing message');
+        });
+    }
+
+    /**
      * Handle incoming WebSocket message
      */
     private async handleMessage(ws: WebSocket, clientId: string, data: Buffer | ArrayBuffer | Buffer[]): Promise<void> {
@@ -386,7 +396,7 @@ export class WebSocketServer {
     private async routeMessage(clientId: string, message: WebSocketMessage): Promise<void> {
         switch (message.type) {
             case 'command':
-                await this.handleCommandMessageWithErrorHandling(clientId, message);
+                await this.handleCommandMessage(clientId, message);
                 break;
 
             case 'status':
@@ -429,18 +439,20 @@ export class WebSocketServer {
         }
 
         try {
-            // Execute command through CommandHandler
-            const result = await this._commandHandler.executeCommand(message.command, message.args);
+            let result: any;
+
+            // Handle special workspace commands that need custom implementation
+            if (message.command.startsWith('vscode.workspace.')) {
+                result = await this.handleWorkspaceCommand(message.command, message.args || []);
+            } else {
+                // Execute command through CommandHandler
+                result = await this._commandHandler.executeCommand(message.command, message.args);
+            }
             
             // Send response back to client
             const response: WebSocketMessage = {
                 type: 'response',
-                data: {
-                    command: message.command,
-                    success: result.success,
-                    result: result.data,
-                    error: result.error
-                }
+                data: result
             };
 
             if (message.id) {
@@ -457,6 +469,471 @@ export class WebSocketServer {
         } catch (error) {
             console.error(`Error handling command message from ${clientId}:`, error);
             this.sendError(clientId, 'Internal error executing command', message.id);
+        }
+    }
+
+    /**
+     * Handle VS Code workspace commands
+     */
+    private async handleWorkspaceCommand(command: string, args: any[]): Promise<any> {
+        const vscode = await import('vscode');
+        const path = await import('path');
+        const fs = await import('fs').then(m => m.promises);
+
+        try {
+            switch (command) {
+                case 'vscode.workspace.getFileTree':
+                    return {
+                        success: true,
+                        data: await this.getFileTree(args[0] || '.')
+                    };
+
+                case 'vscode.workspace.refreshFileTree':
+                    return {
+                        success: true,
+                        data: await this.getFileTree(args[0] || '.')
+                    };
+
+                case 'vscode.workspace.getDirectoryContents':
+                    return {
+                        success: true,
+                        data: await this.getDirectoryContents(args[0])
+                    };
+
+                case 'vscode.workspace.createFile':
+                    return await this.createFile(args[0], args[1] || '');
+
+                case 'vscode.workspace.createDirectory':
+                    return await this.createDirectory(args[0]);
+
+                case 'vscode.workspace.deleteFile':
+                    return await this.deleteFile(args[0]);
+
+                case 'vscode.workspace.deleteDirectory':
+                    return await this.deleteDirectory(args[0], args[1]?.recursive || false);
+
+                case 'vscode.workspace.renameFile':
+                    return await this.renameFile(args[0], args[1]);
+
+                case 'vscode.workspace.moveFile':
+                    return await this.moveFile(args[0], args[1]);
+
+                case 'vscode.workspace.copyFile':
+                    return await this.copyFile(args[0], args[1]);
+
+                case 'vscode.workspace.readFile':
+                    return await this.readFile(args[0]);
+
+                case 'vscode.workspace.writeFile':
+                    return await this.writeFile(args[0], args[1], args[2]);
+
+                case 'vscode.workspace.getFileStats':
+                    return await this.getFileStats(args[0]);
+
+                case 'vscode.workspace.searchFiles':
+                    return {
+                        success: true,
+                        data: await this.searchFiles(args[0]?.query || '', args[0]?.path || '.')
+                    };
+
+                case 'vscode.workspace.getWorkspaceInfo':
+                    return {
+                        success: true,
+                        data: {
+                            workspaceFolders: vscode.workspace.workspaceFolders?.map(f => f.uri.fsPath) || []
+                        }
+                    };
+
+                case 'vscode.getCommands':
+                    return {
+                        success: true,
+                        data: this._commandHandler.getAllowedCommands()
+                    };
+
+                default:
+                    return {
+                        success: false,
+                        error: `Unsupported workspace command: ${command}`
+                    };
+            }
+        } catch (error) {
+            return {
+                success: false,
+                error: error instanceof Error ? error.message : 'Unknown error'
+            };
+        }
+    }
+
+    /**
+     * Get directory contents
+     */
+    private async getDirectoryContents(dirPath: string): Promise<any[]> {
+        const vscode = await import('vscode');
+        const path = await import('path');
+        const fs = await import('fs').then(m => m.promises);
+
+        try {
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+            if (!workspaceFolders || workspaceFolders.length === 0) {
+                throw new Error('No workspace folder available');
+            }
+
+            const workspaceRoot = workspaceFolders[0]!.uri.fsPath;
+            const fullPath = path.resolve(workspaceRoot, dirPath);
+            const entries = await fs.readdir(fullPath, { withFileTypes: true });
+            
+            const contents = [];
+            for (const entry of entries) {
+                const itemPath = path.join(fullPath, entry.name);
+                const stats = await fs.stat(itemPath);
+                
+                contents.push({
+                    name: entry.name,
+                    path: path.join(dirPath, entry.name).replace(/\\/g, '/'),
+                    type: entry.isDirectory() ? 'directory' : 'file',
+                    size: entry.isFile() ? stats.size : undefined,
+                    modified: stats.mtime,
+                    created: stats.birthtime
+                });
+            }
+
+            return contents.sort((a, b) => {
+                if (a.type !== b.type) {
+                    return a.type === 'directory' ? -1 : 1;
+                }
+                return a.name.localeCompare(b.name);
+            });
+
+        } catch (error) {
+            throw new Error(`Failed to get directory contents: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+    }
+
+    /**
+     * Create a new file
+     */
+    private async createFile(filePath: string, content: string = ''): Promise<any> {
+        const vscode = await import('vscode');
+        const path = await import('path');
+
+        try {
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+            if (!workspaceFolders || workspaceFolders.length === 0) {
+                throw new Error('No workspace folder available');
+            }
+
+            const workspaceRoot = workspaceFolders[0]!.uri.fsPath;
+            const fullPath = path.resolve(workspaceRoot, filePath);
+            const fileUri = vscode.Uri.file(fullPath);
+
+            // Create the file
+            const encoder = new TextEncoder();
+            await vscode.workspace.fs.writeFile(fileUri, encoder.encode(content));
+
+            return {
+                success: true,
+                data: { path: filePath, created: true }
+            };
+
+        } catch (error) {
+            return {
+                success: false,
+                error: `Failed to create file: ${error instanceof Error ? error.message : 'Unknown error'}`
+            };
+        }
+    }
+
+    /**
+     * Create a new directory
+     */
+    private async createDirectory(dirPath: string): Promise<any> {
+        const vscode = await import('vscode');
+        const path = await import('path');
+
+        try {
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+            if (!workspaceFolders || workspaceFolders.length === 0) {
+                throw new Error('No workspace folder available');
+            }
+
+            const workspaceRoot = workspaceFolders[0]!.uri.fsPath;
+            const fullPath = path.resolve(workspaceRoot, dirPath);
+            const dirUri = vscode.Uri.file(fullPath);
+
+            // Create the directory
+            await vscode.workspace.fs.createDirectory(dirUri);
+
+            return {
+                success: true,
+                data: { path: dirPath, created: true }
+            };
+
+        } catch (error) {
+            return {
+                success: false,
+                error: `Failed to create directory: ${error instanceof Error ? error.message : 'Unknown error'}`
+            };
+        }
+    }
+
+    /**
+     * Delete a file
+     */
+    private async deleteFile(filePath: string): Promise<any> {
+        const vscode = await import('vscode');
+        const path = await import('path');
+
+        try {
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+            if (!workspaceFolders || workspaceFolders.length === 0) {
+                throw new Error('No workspace folder available');
+            }
+
+            const workspaceRoot = workspaceFolders[0]!.uri.fsPath;
+            const fullPath = path.resolve(workspaceRoot, filePath);
+            const fileUri = vscode.Uri.file(fullPath);
+
+            // Delete the file
+            await vscode.workspace.fs.delete(fileUri);
+
+            return {
+                success: true,
+                data: { path: filePath, deleted: true }
+            };
+
+        } catch (error) {
+            return {
+                success: false,
+                error: `Failed to delete file: ${error instanceof Error ? error.message : 'Unknown error'}`
+            };
+        }
+    }
+
+    /**
+     * Delete a directory
+     */
+    private async deleteDirectory(dirPath: string, recursive: boolean = false): Promise<any> {
+        const vscode = await import('vscode');
+        const path = await import('path');
+
+        try {
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+            if (!workspaceFolders || workspaceFolders.length === 0) {
+                throw new Error('No workspace folder available');
+            }
+
+            const workspaceRoot = workspaceFolders[0]!.uri.fsPath;
+            const fullPath = path.resolve(workspaceRoot, dirPath);
+            const dirUri = vscode.Uri.file(fullPath);
+
+            // Delete the directory
+            await vscode.workspace.fs.delete(dirUri, { recursive, useTrash: false });
+
+            return {
+                success: true,
+                data: { path: dirPath, deleted: true }
+            };
+
+        } catch (error) {
+            return {
+                success: false,
+                error: `Failed to delete directory: ${error instanceof Error ? error.message : 'Unknown error'}`
+            };
+        }
+    }
+
+    /**
+     * Rename a file or directory
+     */
+    private async renameFile(oldPath: string, newPath: string): Promise<any> {
+        const vscode = await import('vscode');
+        const path = await import('path');
+
+        try {
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+            if (!workspaceFolders || workspaceFolders.length === 0) {
+                throw new Error('No workspace folder available');
+            }
+
+            const workspaceRoot = workspaceFolders[0]!.uri.fsPath;
+            const oldFullPath = path.resolve(workspaceRoot, oldPath);
+            const newFullPath = path.resolve(workspaceRoot, newPath);
+            const oldUri = vscode.Uri.file(oldFullPath);
+            const newUri = vscode.Uri.file(newFullPath);
+
+            // Rename the file/directory
+            await vscode.workspace.fs.rename(oldUri, newUri);
+
+            return {
+                success: true,
+                data: { oldPath, newPath, renamed: true }
+            };
+
+        } catch (error) {
+            return {
+                success: false,
+                error: `Failed to rename: ${error instanceof Error ? error.message : 'Unknown error'}`
+            };
+        }
+    }
+
+    /**
+     * Move a file or directory
+     */
+    private async moveFile(sourcePath: string, targetPath: string): Promise<any> {
+        return this.renameFile(sourcePath, targetPath);
+    }
+
+    /**
+     * Copy a file or directory
+     */
+    private async copyFile(sourcePath: string, targetPath: string): Promise<any> {
+        const vscode = await import('vscode');
+        const path = await import('path');
+
+        try {
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+            if (!workspaceFolders || workspaceFolders.length === 0) {
+                throw new Error('No workspace folder available');
+            }
+
+            const workspaceRoot = workspaceFolders[0]!.uri.fsPath;
+            const sourceFullPath = path.resolve(workspaceRoot, sourcePath);
+            const targetFullPath = path.resolve(workspaceRoot, targetPath);
+            const sourceUri = vscode.Uri.file(sourceFullPath);
+            const targetUri = vscode.Uri.file(targetFullPath);
+
+            // Copy the file/directory
+            await vscode.workspace.fs.copy(sourceUri, targetUri);
+
+            return {
+                success: true,
+                data: { sourcePath, targetPath, copied: true }
+            };
+
+        } catch (error) {
+            return {
+                success: false,
+                error: `Failed to copy: ${error instanceof Error ? error.message : 'Unknown error'}`
+            };
+        }
+    }
+
+    /**
+     * Read file contents
+     */
+    private async readFile(filePath: string): Promise<any> {
+        const vscode = await import('vscode');
+        const path = await import('path');
+
+        try {
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+            if (!workspaceFolders || workspaceFolders.length === 0) {
+                throw new Error('No workspace folder available');
+            }
+
+            const workspaceRoot = workspaceFolders[0]!.uri.fsPath;
+            const fullPath = path.resolve(workspaceRoot, filePath);
+            const fileUri = vscode.Uri.file(fullPath);
+
+            // Read the file
+            const fileData = await vscode.workspace.fs.readFile(fileUri);
+            const decoder = new TextDecoder();
+            const content = decoder.decode(fileData);
+
+            // Get file stats
+            const stats = await vscode.workspace.fs.stat(fileUri);
+
+            return {
+                success: true,
+                data: {
+                    path: filePath,
+                    content,
+                    encoding: 'utf8',
+                    size: stats.size,
+                    modified: new Date(stats.mtime)
+                }
+            };
+
+        } catch (error) {
+            return {
+                success: false,
+                error: `Failed to read file: ${error instanceof Error ? error.message : 'Unknown error'}`
+            };
+        }
+    }
+
+    /**
+     * Write file contents
+     */
+    private async writeFile(filePath: string, content: string, encoding: string = 'utf8'): Promise<any> {
+        const vscode = await import('vscode');
+        const path = await import('path');
+
+        try {
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+            if (!workspaceFolders || workspaceFolders.length === 0) {
+                throw new Error('No workspace folder available');
+            }
+
+            const workspaceRoot = workspaceFolders[0]!.uri.fsPath;
+            const fullPath = path.resolve(workspaceRoot, filePath);
+            const fileUri = vscode.Uri.file(fullPath);
+
+            // Write the file
+            const encoder = new TextEncoder();
+            await vscode.workspace.fs.writeFile(fileUri, encoder.encode(content));
+
+            return {
+                success: true,
+                data: { path: filePath, written: true }
+            };
+
+        } catch (error) {
+            return {
+                success: false,
+                error: `Failed to write file: ${error instanceof Error ? error.message : 'Unknown error'}`
+            };
+        }
+    }
+
+    /**
+     * Get file statistics
+     */
+    private async getFileStats(filePath: string): Promise<any> {
+        const vscode = await import('vscode');
+        const path = await import('path');
+
+        try {
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+            if (!workspaceFolders || workspaceFolders.length === 0) {
+                throw new Error('No workspace folder available');
+            }
+
+            const workspaceRoot = workspaceFolders[0]!.uri.fsPath;
+            const fullPath = path.resolve(workspaceRoot, filePath);
+            const fileUri = vscode.Uri.file(fullPath);
+
+            // Get file stats
+            const stats = await vscode.workspace.fs.stat(fileUri);
+
+            return {
+                success: true,
+                data: {
+                    path: filePath,
+                    name: path.basename(filePath),
+                    type: stats.type === vscode.FileType.Directory ? 'directory' : 'file',
+                    size: stats.size,
+                    modified: new Date(stats.mtime),
+                    created: new Date(stats.ctime)
+                }
+            };
+
+        } catch (error) {
+            return {
+                success: false,
+                error: `Failed to get file stats: ${error instanceof Error ? error.message : 'Unknown error'}`
+            };
         }
     }
 
@@ -1376,29 +1853,7 @@ export class WebSocketServer {
         this.cleanupClient(clientId);
     }
 
-    /**
-     * Enhanced message handling with error recovery
-     */
-    private async handleMessageWithErrorHandling(ws: WebSocket, clientId: string, data: Buffer | ArrayBuffer | Buffer[]): Promise<void> {
-        try {
-            await this.handleMessage(ws, clientId, data);
-        } catch (error) {
-            console.error(`Error handling message from client ${clientId}:`, error);
-            
-            const errorInfo = this._errorHandler.createError(
-                'MESSAGE_HANDLING_ERROR',
-                `Failed to handle message from client ${clientId}: ${error instanceof Error ? error.message : 'Unknown error'}`,
-                ErrorCategory.COMMAND_EXECUTION,
-                ErrorSeverity.LOW,
-                { clientId, error: error instanceof Error ? error.message : 'Unknown error' }
-            );
 
-            await this._errorHandler.handleError(errorInfo, null, false);
-            
-            // Send error response to client
-            this.sendError(clientId, 'Internal server error while processing message');
-        }
-    }
 
     /**
      * Enhanced command execution with comprehensive error handling
@@ -1479,6 +1934,8 @@ export class WebSocketServer {
     get errorHandler(): ErrorHandler {
         return this._errorHandler;
     }
+
+
 
     /**
      * Get the CommandHandler instance

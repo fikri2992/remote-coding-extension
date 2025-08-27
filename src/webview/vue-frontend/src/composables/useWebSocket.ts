@@ -288,7 +288,7 @@ export function useWebSocket(): WebSocketComposable {
   const sendMessageWithResponse = async (message: WebSocketMessage, timeout?: number): Promise<any> => {
     return new Promise((resolve, reject) => {
       // Generate unique ID for the message
-      const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+      const messageId = `msg_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
       message.id = messageId
 
       // Set up timeout

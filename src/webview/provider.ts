@@ -87,8 +87,8 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
     }
 
     private _getHtmlForWebview(webview: vscode.Webview): string {
-        // Use simple panel HTML for VS Code webview - the main app is served via HTTP at localhost:8080
-        return this._getPanelHtmlForWebview(webview);
+        // Use Vue frontend for VS Code webview - modern unified interface
+        return this._getUnifiedHtmlForWebview(webview);
     }
 
     private _getPanelHtmlForWebview(webview: vscode.Webview): string {
@@ -127,8 +127,8 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
             );
             
             // Replace relative paths with webview URIs
-            html = html.replace(/href="\.\/assets\//g, 'href="' + frontendUri + '/assets/');
-            html = html.replace(/src="\.\/assets\//g, 'src="' + frontendUri + '/assets/');
+            html = html.replace(/href="\/assets\//g, 'href="' + frontendUri + '/assets/');
+            html = html.replace(/src="\/assets\//g, 'src="' + frontendUri + '/assets/');
             
             // Debug logging to verify path replacement
             console.log('Vue Frontend URI:', frontendUri.toString());

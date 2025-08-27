@@ -187,7 +187,7 @@ export function useTerminal(): TerminalComposable {
       command: 'terminal.create',
       args: [{
         name: options.name || `Terminal ${sessions.value.length + 1}`,
-        cwd: options.cwd || process.cwd(),
+        cwd: options.cwd || '.',
         shell: options.shell || TERMINAL_DEFAULT_SHELL,
         env: options.env || {}
       }],

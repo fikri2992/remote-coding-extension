@@ -13,8 +13,7 @@ import type {
   FileFilterOptions
 } from '../types/filesystem'
 
-import { useWebSocket } from './useWebSocket'
-import { useCommands } from './useCommands'
+import { connectionService } from '../services/connection'
 import {
   FILE_OPERATION_TIMEOUT,
   FILE_SEARCH_MAX_RESULTS,
@@ -85,8 +84,7 @@ export interface FileSystemComposable {
 }
 
 export function useFileSystem(): FileSystemComposable {
-  const webSocket = useWebSocket()
-  const commands = useCommands()
+  const webSocket = connectionService.getWebSocket()
 
   // State
   const fileTree = ref<FileTreeState>({
@@ -119,13 +117,20 @@ export function useFileSystem(): FileSystemComposable {
     isLoading.value = true
     
     try {
-      const path = rootPath || await getCurrentWorkspacePath()
-      if (!path) {
-        throw new Error('No workspace path available')
+      const path = rootPath || '.'
+      
+      const result = await webSocket.sendMessageWithResponse({
+        type: 'command',
+        command: 'vscode.workspace.getFileTree',
+        args: [path],
+        timestamp: Date.now()
+      })
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to load file tree')
       }
-
-      const result = await commands.executeCommand('vscode.workspace.getFileTree', [path])
-      const nodes = Array.isArray(result) ? result : [result]
+      
+      const nodes = Array.isArray(result.data) ? result.data : [result.data]
       
       // Clear existing tree if loading new root
       if (rootPath) {
@@ -152,14 +157,23 @@ export function useFileSystem(): FileSystemComposable {
   }
 
   const refreshFileTree = async (path?: string): Promise<void> => {
-    const targetPath = path || currentPath.value
-    if (!targetPath) return
+    const targetPath = path || currentPath.value || '.'
 
     fileTree.value.loadingPaths.add(targetPath)
     
     try {
-      const result = await commands.executeCommand('vscode.workspace.refreshFileTree', [targetPath])
-      const nodes = Array.isArray(result) ? result : [result]
+      const result = await webSocket.sendMessageWithResponse({
+        type: 'command',
+        command: 'vscode.workspace.refreshFileTree',
+        args: [targetPath],
+        timestamp: Date.now()
+      })
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to refresh file tree')
+      }
+      
+      const nodes = Array.isArray(result.data) ? result.data : [result.data]
       
       await processFileNodes(nodes, targetPath)
       updateStats()
@@ -178,8 +192,18 @@ export function useFileSystem(): FileSystemComposable {
     fileTree.value.loadingPaths.add(path)
     
     try {
-      const result = await commands.executeCommand('vscode.workspace.getDirectoryContents', [path])
-      const children = Array.isArray(result) ? result : []
+      const result = await webSocket.sendMessageWithResponse({
+        type: 'command',
+        command: 'vscode.workspace.getDirectoryContents',
+        args: [path],
+        timestamp: Date.now()
+      })
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to expand directory')
+      }
+      
+      const children = Array.isArray(result.data) ? result.data : []
       
       const processedChildren = await processFileNodes(children, path)
       
@@ -349,15 +373,26 @@ export function useFileSystem(): FileSystemComposable {
   // File content operations
   const readFile = async (path: string): Promise<FileContent> => {
     try {
-      const result = await commands.executeCommand('vscode.workspace.readFile', [normalizePath(path)])
+      const result = await webSocket.sendMessageWithResponse({
+        type: 'command',
+        command: 'vscode.workspace.readFile',
+        args: [normalizePath(path)],
+        timestamp: Date.now()
+      })
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to read file')
+      }
+      
+      const data = result.data
       
       return {
         path: normalizePath(path),
-        content: result.content || '',
-        encoding: result.encoding || 'utf8',
-        language: result.language,
-        size: result.size || 0,
-        modified: new Date(result.modified || Date.now())
+        content: data.content || '',
+        encoding: data.encoding || 'utf8',
+        language: data.language,
+        size: data.size || 0,
+        modified: new Date(data.modified || Date.now())
       }
     } catch (error) {
       console.error('Failed to read file:', error)
@@ -405,8 +440,19 @@ export function useFileSystem(): FileSystemComposable {
         maxResults: options.maxResults || FILE_SEARCH_MAX_RESULTS
       }
 
-      const result = await commands.executeCommand('vscode.workspace.searchFiles', [searchOptions])
-      return Array.isArray(result) ? result : []
+      const result = await webSocket.sendMessageWithResponse({
+        type: 'command',
+        command: 'vscode.workspace.searchFiles',
+        args: [searchOptions],
+        timestamp: Date.now()
+      })
+      
+      if (!result.success) {
+        console.error('Search failed:', result.error)
+        return []
+      }
+      
+      return Array.isArray(result.data) ? result.data : []
     } catch (error) {
       console.error('Failed to search files:', error)
       return []
@@ -491,7 +537,17 @@ export function useFileSystem(): FileSystemComposable {
   // File watching
   const watchPath = async (path: string, options: FileWatchOptions = {}): Promise<void> => {
     try {
-      await commands.executeCommand('vscode.workspace.watchPath', [normalizePath(path), options])
+      const result = await webSocket.sendMessageWithResponse({
+        type: 'command',
+        command: 'vscode.workspace.watchPath',
+        args: [normalizePath(path), options],
+        timestamp: Date.now()
+      })
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to watch path')
+      }
+      
       watchedPaths.value.add(normalizePath(path))
     } catch (error) {
       console.error('Failed to watch path:', error)
@@ -501,7 +557,17 @@ export function useFileSystem(): FileSystemComposable {
 
   const unwatchPath = async (path: string): Promise<void> => {
     try {
-      await commands.executeCommand('vscode.workspace.unwatchPath', [normalizePath(path)])
+      const result = await webSocket.sendMessageWithResponse({
+        type: 'command',
+        command: 'vscode.workspace.unwatchPath',
+        args: [normalizePath(path)],
+        timestamp: Date.now()
+      })
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to unwatch path')
+      }
+      
       watchedPaths.value.delete(normalizePath(path))
     } catch (error) {
       console.error('Failed to unwatch path:', error)
@@ -516,8 +582,18 @@ export function useFileSystem(): FileSystemComposable {
   // Utilities
   const getFileStats = async (path: string): Promise<FileSystemNode> => {
     try {
-      const result = await commands.executeCommand('vscode.workspace.getFileStats', [normalizePath(path)])
-      return result as FileSystemNode
+      const result = await webSocket.sendMessageWithResponse({
+        type: 'command',
+        command: 'vscode.workspace.getFileStats',
+        args: [normalizePath(path)],
+        timestamp: Date.now()
+      })
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to get file stats')
+      }
+      
+      return result.data as FileSystemNode
     } catch (error) {
       console.error('Failed to get file stats:', error)
       throw error
@@ -599,7 +675,16 @@ export function useFileSystem(): FileSystemComposable {
         args.push(options)
       }
 
-      await commands.executeCommand(command, args, { timeout: FILE_OPERATION_TIMEOUT })
+      const result = await webSocket.sendMessageWithResponse({
+        type: 'command',
+        command,
+        args,
+        timestamp: Date.now()
+      }, FILE_OPERATION_TIMEOUT)
+
+      if (!result.success) {
+        throw new Error(result.error || 'File operation failed')
+      }
 
       // Update file tree after successful operation
       await refreshFileTree(getParentPath(operation.path))
@@ -608,22 +693,22 @@ export function useFileSystem(): FileSystemComposable {
         await refreshFileTree(getParentPath(operation.newPath))
       }
 
-      const result: FileOperationResult = {
+      const operationResult: FileOperationResult = {
         success: true,
         operation,
         timestamp: new Date()
       }
 
-      return result
+      return operationResult
     } catch (error) {
-      const result: FileOperationResult = {
+      const operationResult: FileOperationResult = {
         success: false,
         operation,
         error: error instanceof Error ? error.message : 'Unknown error',
         timestamp: new Date()
       }
 
-      return result
+      return operationResult
     }
   }
 
@@ -651,14 +736,7 @@ export function useFileSystem(): FileSystemComposable {
     return processedNodes
   }
 
-  const getCurrentWorkspacePath = async (): Promise<string | null> => {
-    try {
-      const workspaceInfo = await commands.executeCommand('vscode.workspace.getWorkspaceInfo')
-      return workspaceInfo?.workspaceFolders?.[0] || null
-    } catch {
-      return null
-    }
-  }
+
 
   const updateStats = (): void => {
     const allNodes = Array.from(fileTree.value.nodes.values())

@@ -24,7 +24,10 @@ export default defineConfig(({ command, mode }) => {
     },
     define: {
       __VUE_OPTIONS_API__: true,
-      __VUE_PROD_DEVTOOLS__: isDev
+      __VUE_PROD_DEVTOOLS__: isDev,
+      // Define globals for webview environment
+      global: 'globalThis',
+      'process.env': {}
     },
     build: {
       outDir: '../../../out/webview/vue-frontend',

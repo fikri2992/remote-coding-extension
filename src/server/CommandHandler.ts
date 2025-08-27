@@ -71,6 +71,27 @@ export class CommandHandler {
             'workbench.action.closeActiveEditor',
             'workbench.action.closeAllEditors',
             
+            // File system operations
+            'vscode.open',
+            'vscode.workspace.getFileTree',
+            'vscode.workspace.refreshFileTree',
+            'vscode.workspace.getDirectoryContents',
+            'vscode.workspace.createFile',
+            'vscode.workspace.createDirectory',
+            'vscode.workspace.deleteFile',
+            'vscode.workspace.deleteDirectory',
+            'vscode.workspace.renameFile',
+            'vscode.workspace.moveFile',
+            'vscode.workspace.copyFile',
+            'vscode.workspace.readFile',
+            'vscode.workspace.writeFile',
+            'vscode.workspace.getFileStats',
+            'vscode.workspace.searchFiles',
+            'vscode.workspace.watchPath',
+            'vscode.workspace.unwatchPath',
+            'vscode.workspace.getWorkspaceInfo',
+            'vscode.getCommands',
+            
             // Editor operations
             'editor.action.selectAll',
             'editor.action.copyLinesDownAction',

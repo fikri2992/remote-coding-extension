@@ -133,7 +133,9 @@ export const GIT_DIFF_CONTEXT_LINES = 3
 export const GIT_MAX_DIFF_SIZE = 1024 * 1024 // 1MB
 
 // Terminal constants
-export const TERMINAL_DEFAULT_SHELL = process.platform === 'win32' ? 'cmd.exe' : '/bin/bash'
+// Note: In webview context, we can't access process.platform directly
+// The shell will be determined by the VS Code extension backend
+export const TERMINAL_DEFAULT_SHELL = 'default'
 export const TERMINAL_MAX_SESSIONS = 10
 export const TERMINAL_MAX_OUTPUT_LINES = 10000
 export const TERMINAL_MAX_HISTORY_SIZE = 1000

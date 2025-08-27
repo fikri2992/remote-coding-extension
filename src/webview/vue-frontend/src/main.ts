@@ -194,3 +194,20 @@ app.mount('#app')
 
 // Add breadcrumb for successful mount
 addBreadcrumb('initialization', 'Vue application mounted successfully', 'info')
+
+// Initialize connection service after app is mounted
+import('./services/connection').then(({ connectionService }) => {
+  connectionService.initialize().catch(error => {
+    captureError(createAppError(
+      'Failed to initialize connection service',
+      'websocket',
+      'high',
+      { errorInfo: error.message },
+      {
+        title: 'Connection Service Error',
+        message: 'Failed to initialize the connection to VS Code extension. Some features may not work.',
+        reportable: true
+      }
+    ))
+  })
+})

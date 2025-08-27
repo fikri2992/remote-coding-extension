@@ -117,68 +117,27 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
 
     private _getUnifiedHtmlForWebview(webview: vscode.Webview): string {
         try {
-            // Read the unified frontend HTML from the built output directory
-            const htmlPath = path.join(this._extensionUri.fsPath, 'out', 'webview', 'frontend', 'index.html');
+            // Read the Vue frontend HTML from the built output directory
+            const htmlPath = path.join(this._extensionUri.fsPath, 'out', 'webview', 'vue-frontend', 'index.html');
             let html = fs.readFileSync(htmlPath, 'utf8');
             
             // Convert local resource paths to webview URIs
             const frontendUri = webview.asWebviewUri(
-                vscode.Uri.joinPath(this._extensionUri, 'out', 'webview', 'frontend')
+                vscode.Uri.joinPath(this._extensionUri, 'out', 'webview', 'vue-frontend')
             );
             
             // Replace relative paths with webview URIs
-            html = html.replace(/href="styles\//g, 'href="' + frontendUri + '/styles/');
-            html = html.replace(/src="js\//g, 'src="' + frontendUri + '/js/');
-            html = html.replace(/src="\.\/js\//g, 'src="' + frontendUri + '/js/');
-            
-            // Also replace JavaScript string literals for loadScript calls
-            html = html.replace(/loadScript\('\.\/js\//g, "loadScript('" + frontendUri + '/js/');
-            html = html.replace(/loadScript\("\.\/js\//g, 'loadScript("' + frontendUri + '/js/');
+            html = html.replace(/href="\.\/assets\//g, 'href="' + frontendUri + '/assets/');
+            html = html.replace(/src="\.\/assets\//g, 'src="' + frontendUri + '/assets/');
             
             // Debug logging to verify path replacement
-            console.log('Frontend URI:', frontendUri.toString());
-            if (html.includes('./js/')) {
-                console.warn('Warning: HTML still contains unresolved ./js/ paths');
-            }
+            console.log('Vue Frontend URI:', frontendUri.toString());
             
-            // Get UI preference and inject it
-            const config = vscode.workspace.getConfiguration('webAutomationTunnel');
-            const useEnhancedUI = config.get<boolean>('useEnhancedUI', true);
-            const uiMode = useEnhancedUI ? 'enhanced' : 'basic';
-            
-            // Add UI mode to the URL
-            const uiModeScript = [
-                '                // Set UI mode from VS Code configuration',
-                '                window.webAutomationConfig.useEnhancedUI = ' + useEnhancedUI + ';',
-                '                // Add UI mode to URL for consistency',
-                '                if (window.location.search.indexOf("ui=") === -1) {',
-                '                    const separator = window.location.search ? "&" : "?";',
-                '                    window.history.replaceState({}, "", window.location.pathname + window.location.search + separator + "ui=' + uiMode + '");',
-                '                }'
-            ].join('\n');
-            html = html.replace('</script>', '\n' + uiModeScript + '\n            </script>');
-            
-            // Add VS Code webview API script
+            // Add VS Code webview API script for Vue frontend
             const vscodeApiScript = 
                 '<script>' +
-                '    // Make VS Code API available to unified frontend' +
+                '    // Make VS Code API available to Vue frontend' +
                 '    window.vscode = acquireVsCodeApi();' +
-                '    ' +
-                '    // Enhanced message handling for backward compatibility' +
-                '    window.addEventListener("message", function(event) {' +
-                '        var message = event.data;' +
-                '        ' +
-                '        // Forward to active UI instance' +
-                '        if (window.webAutomationConfig.useEnhancedUI && window.enhancedApp) {' +
-                '            if (window.enhancedApp.handleMessage) {' +
-                '                window.enhancedApp.handleMessage(message);' +
-                '            }' +
-                '        } else if (window.basicApp) {' +
-                '            if (window.basicApp.handleMessage) {' +
-                '                window.basicApp.handleMessage(message);' +
-                '            }' +
-                '        }' +
-                '    });' +
                 '</script>';
             
             // Insert the VS Code API script before the closing body tag
@@ -187,12 +146,12 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
             return html;
             
         } catch (error) {
-            console.error('Failed to load unified frontend HTML:', error);
+            console.error('Failed to load Vue frontend HTML:', error);
             return this._getFallbackHtml(webview);
         }
     }
     /**
-     * Fallback HTML when unified frontend fails to load
+     * Fallback HTML when Vue frontend fails to load
      */
     private _getFallbackHtml(webview: vscode.Webview): string {
         return [

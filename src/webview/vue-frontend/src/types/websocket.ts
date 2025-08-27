@@ -1,5 +1,5 @@
 export interface WebSocketMessage {
-  type: 'command' | 'response' | 'broadcast' | 'status'
+  type: 'command' | 'response' | 'broadcast' | 'status' | 'ping' | 'pong'
   id?: string
   command?: string
   args?: any[]
@@ -41,3 +41,38 @@ export type ConnectionStatus =
   | 'disconnected'
   | 'reconnecting'
   | 'error'
+
+export interface QueuedMessage {
+  message: WebSocketMessage
+  timestamp: number
+  retryCount: number
+  resolve?: (value: any) => void
+  reject?: (error: any) => void
+}
+
+export interface ConnectionHealth {
+  latency: number
+  lastPingTime: number
+  lastPongTime: number
+  isHealthy: boolean
+  consecutiveFailures: number
+}
+
+export interface WebSocketConfig {
+  url: string
+  maxReconnectAttempts: number
+  reconnectInterval: number
+  heartbeatInterval: number
+  messageTimeout: number
+  maxQueueSize: number
+}
+
+export interface PingMessage extends WebSocketMessage {
+  type: 'ping'
+  timestamp: number
+}
+
+export interface PongMessage extends WebSocketMessage {
+  type: 'pong'
+  timestamp: number
+}

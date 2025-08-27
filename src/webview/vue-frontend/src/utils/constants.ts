@@ -6,6 +6,11 @@ export const APP_VERSION = '1.0.0'
 export const WS_RECONNECT_INTERVAL = 3000
 export const WS_MAX_RECONNECT_ATTEMPTS = 5
 export const WS_HEARTBEAT_INTERVAL = 30000
+export const WS_MESSAGE_TIMEOUT = 10000
+export const WS_MAX_QUEUE_SIZE = 100
+export const WS_PING_TIMEOUT = 5000
+export const WS_HEALTH_CHECK_INTERVAL = 10000
+export const WS_MAX_CONSECUTIVE_FAILURES = 3
 
 // API endpoints
 export const API_BASE_URL = '/api'

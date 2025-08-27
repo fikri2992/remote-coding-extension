@@ -50,7 +50,9 @@
   - _Git: `feat(frontend): implement core application structure and routing`_
   - _Description: Create foundational Vue.js application architecture with main entry point, root component, Vue Router configuration, view components for automation/files/git/terminal/chat sections, and navigation framework._
 
-- [-] 4. Implement Pinia state management stores
+- [x] 4. Implement Pinia state management stores
+
+
 
 
 
@@ -63,7 +65,10 @@
   - _Git: `feat(frontend): implement Pinia state management stores`_
   - _Description: Establish centralized state management with Pinia stores for connection status, workspace data, UI preferences, and application settings with proper store composition and reactive state handling._
 
-- [ ] 5. Create WebSocket service composable
+- [-] 5. Create WebSocket service composable
+
+
+
   - Implement useWebSocket composable with connection management
   - Create WebSocket message handling and queuing
   - Implement connection retry logic with exponential backoff

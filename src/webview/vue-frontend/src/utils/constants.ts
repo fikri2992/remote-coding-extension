@@ -21,7 +21,10 @@ export const STORAGE_KEYS = {
   SETTINGS: 'app-settings',
   THEME: 'app-theme',
   SIDEBAR_STATE: 'sidebar-collapsed',
-  RECENT_FILES: 'recent-files'
+  RECENT_FILES: 'recent-files',
+  CHAT_DRAFTS: 'chat-drafts',
+  CHAT_SETTINGS: 'chat-settings',
+  CHAT_HISTORY: 'chat-history'
 } as const
 
 // File size limits
@@ -158,3 +161,18 @@ export const TERMINAL_DEFAULT_SETTINGS = {
   fastScrollModifier: 'alt' as const,
   fastScrollSensitivity: 5
 } as const
+
+// Chat constants
+export const CHAT_MESSAGE_TIMEOUT = 10000 // 10 seconds
+export const CHAT_TYPING_TIMEOUT = 3000 // 3 seconds
+export const CHAT_MAX_MESSAGE_LENGTH = 4000 // 4000 characters
+export const CHAT_MAX_ATTACHMENTS = 5
+export const CHAT_HISTORY_PAGE_SIZE = 50
+export const CHAT_PRESENCE_UPDATE_INTERVAL = 30000 // 30 seconds
+export const CHAT_TYPING_DEBOUNCE = 1000 // 1 second
+export const CHAT_MAX_ROOMS = 50
+export const CHAT_MAX_NOTIFICATIONS = 100
+export const CHAT_SEARCH_DEBOUNCE = 300 // 300ms
+export const CHAT_RECONNECT_DELAY = 2000 // 2 seconds
+export const CHAT_MAX_DRAFT_AGE = 7 * 24 * 60 * 60 * 1000 // 7 days
+export const CHAT_MAX_HISTORY_CACHE = 1000 // messages per room

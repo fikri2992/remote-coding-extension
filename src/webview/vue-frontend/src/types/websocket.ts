@@ -1,11 +1,17 @@
 export interface WebSocketMessage {
-  type: 'command' | 'response' | 'broadcast' | 'status' | 'ping' | 'pong'
+  type: 'command' | 'response' | 'broadcast' | 'status' | 'ping' | 'pong' | 
+        'chat_message' | 'chat_typing' | 'chat_presence' | 'chat_reaction' | 
+        'chat_join_room' | 'chat_leave_room' | 'chat_create_room' | 
+        'chat_edit_message' | 'chat_delete_message' | 'chat_add_reaction' | 
+        'chat_remove_reaction' | 'chat_load_history' | 'chat_search' | 'chat_mark_read'
   id?: string
   command?: string
   args?: any[] | undefined
   data?: any
   error?: string
   timestamp: number
+  roomId?: string
+  userId?: string
 }
 
 export interface CommandMessage extends WebSocketMessage {

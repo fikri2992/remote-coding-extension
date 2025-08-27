@@ -7,7 +7,7 @@ import type {
   GitDiff,
   GitFileStatus
 } from '../types/git'
-import { useWebSocket } from './useWebSocket'
+
 import { useCommands } from './useCommands'
 import { 
   GIT_COMMAND_TIMEOUT,

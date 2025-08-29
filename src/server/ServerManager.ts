@@ -138,6 +138,33 @@ export class ServerManager {
                 this._httpServer = null;
             }
 
+            // Stop all recovery attempts
+            if (this._recoveryManager) {
+                this._recoveryManager.dispose();
+                // Recreate recovery manager for next startup
+                this._recoveryManager = new ConnectionRecoveryManager(
+                    {
+                        maxRetries: 5,
+                        initialDelay: 1000,
+                        maxDelay: 30000,
+                        backoffMultiplier: 2,
+                        jitterEnabled: true,
+                        healthCheckInterval: 30000
+                    },
+                    {
+                        onStateChange: (clientId, oldState, newState) => {
+                            console.log(`Client ${clientId} state changed: ${oldState} -> ${newState}`);
+                        },
+                        onRecoverySuccess: (clientId, attempts) => {
+                            vscode.window.showInformationMessage(`Client ${clientId} reconnected after ${attempts} attempts`);
+                        },
+                        onRecoveryFailed: (clientId, error) => {
+                            vscode.window.showWarningMessage(`Failed to reconnect client ${clientId}: ${error.message}`);
+                        }
+                    }
+                );
+            }
+
             this._isRunning = false;
             this._startTime = null;
             this._connectedClients.clear();

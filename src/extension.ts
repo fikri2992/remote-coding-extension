@@ -7,14 +7,22 @@ import { registerIntegrationTestCommand } from './integration-test';
 export function activate(context: vscode.ExtensionContext) {
     console.log('Basic VSCode Extension is now active!');
 
-    // Register webview provider for extension view
-    const webviewProvider = new WebviewProvider(context.extensionUri);
-    context.subscriptions.push(
-        vscode.window.registerWebviewViewProvider(
-            WebviewProvider.viewType,
-            webviewProvider
-        )
-    );
+    let webviewProvider: WebviewProvider;
+    
+    try {
+        // Register webview provider for extension view
+        webviewProvider = new WebviewProvider(context.extensionUri);
+        context.subscriptions.push(
+            vscode.window.registerWebviewViewProvider(
+                WebviewProvider.viewType,
+                webviewProvider
+            )
+        );
+    } catch (error) {
+        console.error('Failed to register webview provider:', error);
+        vscode.window.showErrorMessage('Failed to initialize Web Automation Tunnel extension');
+        return;
+    }
 
     // Register commands for button functionality
     registerButtonCommands(context);
@@ -95,6 +103,34 @@ export function activate(context: vscode.ExtensionContext) {
 
     // Register integration test command
     registerIntegrationTestCommand(context);
+
+    // Register diagnostic command
+    const diagnosticCommand = vscode.commands.registerCommand('webAutomationTunnel.runDiagnostic', async () => {
+        try {
+            const status = webviewProvider.serverManager.getServerStatus();
+            const clients = webviewProvider.serverManager.getConnectedClients();
+            
+            const diagnosticInfo = [
+                `Extension Status: Active`,
+                `Server Running: ${status.isRunning}`,
+                `Connected Clients: ${status.connectedClients}`,
+                `Last Error: ${status.lastError || 'None'}`,
+                `HTTP Port: ${status.httpPort || 'Not set'}`,
+                `WebSocket Port: ${status.websocketPort || 'Not set'}`,
+                `Uptime: ${status.uptime ? Math.floor(status.uptime / 1000) + 's' : 'Not running'}`
+            ].join('\n');
+            
+            vscode.window.showInformationMessage('Web Automation Tunnel Diagnostic', {
+                modal: true,
+                detail: diagnosticInfo
+            });
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            vscode.window.showErrorMessage(`Diagnostic failed: ${errorMessage}`);
+        }
+    });
+
+    context.subscriptions.push(diagnosticCommand);
 
     console.log('Basic VSCode Extension registration complete');
 }

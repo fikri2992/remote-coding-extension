@@ -147,6 +147,17 @@ export class ConnectionRecoveryManager {
         client.health.lastSeen = new Date();
         client.health.isHealthy = false;
 
+        // Check if this is a normal disconnection (no error) or if we've exceeded max attempts
+        const isNormalDisconnection = !error;
+        const hasExceededMaxAttempts = client.health.reconnectAttempts >= this.config.maxRetries;
+        
+        if (isNormalDisconnection || hasExceededMaxAttempts) {
+            console.log(`Client ${clientId} disconnected normally or exceeded max reconnection attempts. Cleaning up.`);
+            this.cleanupClient(client);
+            this.clients.delete(clientId);
+            return;
+        }
+
         // Log the disconnection
         const errorInfo = this.errorHandler.createError(
             'CLIENT_DISCONNECTED',
@@ -180,7 +191,10 @@ export class ConnectionRecoveryManager {
 
         this.updateClientState(client, ConnectionState.RECONNECTING);
         
-        console.log(`Scheduling reconnection for client ${client.id}, attempt ${attempt}/${this.config.maxRetries} in ${delay}ms`);
+        // Only log first and every 3rd attempt to reduce spam
+        if (attempt === 1 || attempt % 3 === 0) {
+            console.log(`Scheduling reconnection for client ${client.id}, attempt ${attempt}/${this.config.maxRetries} in ${delay}ms`);
+        }
         
         this.callbacks.onRecoveryAttempt?.(client.id, attempt, this.config.maxRetries);
 
@@ -222,7 +236,7 @@ export class ConnectionRecoveryManager {
             // In practice, this would involve creating a new WebSocket connection
             // For now, we'll simulate the reconnection process
             
-            console.log(`Attempting reconnection for client ${client.id}`);
+            // Reduced logging for reconnection attempts
             
             // Simulate connection attempt (in real implementation, this would create new WebSocket)
             const reconnected = await this.simulateReconnection(client);
@@ -413,7 +427,10 @@ export class ConnectionRecoveryManager {
         const healthyClients = Array.from(this.clients.values()).filter(c => c.health.isHealthy).length;
         const reconnectingClients = Array.from(this.clients.values()).filter(c => c.state === ConnectionState.RECONNECTING).length;
         
-        console.log(`Global health check: ${healthyClients}/${totalClients} healthy, ${reconnectingClients} reconnecting`);
+        // Only log if there are issues
+        if (reconnectingClients > 0 || healthyClients < totalClients) {
+            console.log(`Global health check: ${healthyClients}/${totalClients} healthy, ${reconnectingClients} reconnecting`);
+        }
         
         // Check for system-wide issues
         if (totalClients > 0 && healthyClients / totalClients < 0.5) {

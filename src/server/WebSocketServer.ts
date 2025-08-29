@@ -252,8 +252,13 @@ export class WebSocketServer {
         ws.on('close', (code, reason) => {
             console.log(`WebSocket client disconnected: ${clientId} (code: ${code}, reason: ${reason}) (${this._clients.size - 1} remaining)`);
             
+            // Only treat as error if it's an abnormal closure
+            // Normal closure codes: 1000 (normal), 1001 (going away), 1005 (no status)
+            const isNormalClosure = code === 1000 || code === 1001 || code === 1005;
+            const error = isNormalClosure ? undefined : new Error(`Connection closed with code ${code}: ${reason}`);
+            
             // Notify recovery manager about disconnection
-            this._recoveryManager.handleDisconnection(clientId, new Error(`Connection closed with code ${code}: ${reason}`));
+            this._recoveryManager.handleDisconnection(clientId, error);
             
             this.cleanupClient(clientId);
         });

@@ -71,6 +71,11 @@
         "command": "webAutomationTunnel.runIntegrationTest",
         "title": "Run Enhanced UI Integration Test",
         "category": "Web Automation Tunnel"
+      },
+      {
+        "command": "webAutomationTunnel.runDiagnostic",
+        "title": "Run Diagnostic",
+        "category": "Web Automation Tunnel"
       }
     ],
     "configuration": {

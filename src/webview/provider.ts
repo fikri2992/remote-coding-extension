@@ -12,7 +12,12 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
     private _statusUpdateInterval?: NodeJS.Timeout;
 
     constructor(private readonly _extensionUri: vscode.Uri) {
-        this._serverManager = new ServerManager();
+        try {
+            this._serverManager = new ServerManager();
+        } catch (error) {
+            console.error('Failed to initialize WebviewProvider:', error);
+            throw error;
+        }
     }
 
     public resolveWebviewView(
@@ -87,14 +92,19 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
     }
 
     private _getHtmlForWebview(webview: vscode.Webview): string {
-        // Use Vue frontend for VS Code webview - modern unified interface
-        return this._getUnifiedHtmlForWebview(webview);
+        // Use simple panel HTML for VS Code webview
+        return this._getPanelHtmlForWebview(webview);
     }
 
     private _getPanelHtmlForWebview(webview: vscode.Webview): string {
         try {
             // Read the simple panel HTML from the built output directory
             const htmlPath = path.join(this._extensionUri.fsPath, 'out', 'webview', 'panel.html');
+            if (!fs.existsSync(htmlPath)) {
+                console.error('Panel HTML file does not exist at:', htmlPath);
+                return this._getFallbackHtml(webview);
+            }
+            
             let html = fs.readFileSync(htmlPath, 'utf8');
             
             // Add VS Code webview API script
@@ -272,7 +282,9 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
      * Send current server status to webview
      */
     private _sendServerStatus(): void {
-        if (!this._view) return;
+        if (!this._view) {
+            return;
+        }
 
         const status = this._serverManager.getServerStatus();
         const connectedClients = this._serverManager.getConnectedClients();

@@ -35,7 +35,10 @@ const server = http.createServer((req, res) => {
   }
 
   let filePath = req.url === '/' ? '/index.html' : req.url;
-  filePath = path.join(STATIC_DIR, filePath);
+  
+  // Remove query parameters for file path resolution
+  const urlWithoutQuery = filePath.split('?')[0];
+  filePath = path.join(STATIC_DIR, urlWithoutQuery);
 
   // Security check
   if (!filePath.startsWith(STATIC_DIR)) {
@@ -44,9 +47,34 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // Check if it's a static asset (has file extension)
+  const hasExtension = path.extname(urlWithoutQuery) !== '';
+  
   fs.readFile(filePath, (err, data) => {
     if (err) {
       console.error('Error reading file:', err.code, filePath);
+      
+      // If it's not a static asset and file not found, serve index.html for SPA routing
+      if (err.code === 'ENOENT' && !hasExtension) {
+        console.log(`SPA Route detected: ${req.url} -> serving index.html`);
+        const indexPath = path.join(STATIC_DIR, 'index.html');
+        
+        fs.readFile(indexPath, (indexErr, indexData) => {
+          if (indexErr) {
+            console.error('Error reading index.html:', indexErr);
+            res.writeHead(500);
+            res.end('Internal Server Error');
+            return;
+          }
+          
+          res.setHeader('Content-Type', 'text/html');
+          res.writeHead(200);
+          res.end(indexData);
+        });
+        return;
+      }
+      
+      // For static assets or other errors, return 404
       res.writeHead(404);
       res.end('File not found');
       return;

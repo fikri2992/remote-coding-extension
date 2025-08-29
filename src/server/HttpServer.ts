@@ -126,7 +126,7 @@ export class HttpServer {
                 pathname = '/index.html';
             }
 
-            // Serve static files with enhanced error handling
+            // Serve static files with enhanced error handling and SPA routing support
             this.serveStaticFileWithErrorHandling(pathname, res, req);
 
         } catch (error) {
@@ -205,6 +205,12 @@ export class HttpServer {
             
             if (err) {
                 if (err.code === 'ENOENT') {
+                    // Check if this might be a SPA route
+                    if (this.shouldServeSpaRoute(pathname)) {
+                        console.log(`SPA Route detected: ${pathname} -> serving index.html`);
+                        this.serveSpaRoute(res, req);
+                        return;
+                    }
                     this.sendErrorResponse(res, 404, 'File Not Found');
                 } else if (err.code === 'EACCES') {
                     this.sendErrorResponse(res, 403, 'Access Denied');
@@ -507,5 +513,43 @@ export class HttpServer {
      */
     get isRunning(): boolean {
         return this.server !== null && this.server.listening;
+    }
+
+    /**
+     * Check if a pathname should be handled as a SPA route
+     */
+    private shouldServeSpaRoute(pathname: string): boolean {
+        // Don't serve SPA routes for files with extensions (static assets)
+        if (path.extname(pathname)) {
+            return false;
+        }
+
+        // Known SPA routes
+        const spaRoutes = ['/automation', '/files', '/git', '/terminal', '/chat'];
+        
+        // Check if pathname starts with any SPA route
+        return spaRoutes.some(route => pathname.startsWith(route));
+    }
+
+    /**
+     * Serve the index.html file for SPA routes
+     */
+    private serveSpaRoute(res: http.ServerResponse, req: http.IncomingMessage): void {
+        const indexPath = path.join(this.webAssetsPath, 'index.html');
+        
+        fs.readFile(indexPath, (err, data) => {
+            if (err) {
+                console.error('Error reading index.html for SPA route:', err);
+                this.sendErrorResponse(res, 500, 'Error serving SPA route');
+                return;
+            }
+
+            res.setHeader('Content-Type', 'text/html; charset=utf-8');
+            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+            res.setHeader('Pragma', 'no-cache');
+            res.setHeader('Expires', '0');
+            res.writeHead(200);
+            res.end(data);
+        });
     }
 }

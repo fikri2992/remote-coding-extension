@@ -83,12 +83,24 @@
         </label>
       </div>
 
-      <button
-        @click="showFilters = !showFilters"
-        class="mt-2 text-sm text-blue-600 dark:text-blue-400 hover:underline"
-      >
-        {{ showFilters ? 'Hide Filters' : 'Show Filters' }}
-      </button>
+      <div class="flex items-center justify-between mt-2">
+        <button
+          @click="showFilters = !showFilters"
+          class="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+        >
+          {{ showFilters ? 'Hide Filters' : 'Show Filters' }}
+        </button>
+        
+        <!-- Debug button -->
+        <button
+          @click="testConnection"
+          :disabled="isLoading"
+          class="text-xs px-2 py-1 bg-yellow-500 text-white rounded hover:bg-yellow-600 disabled:opacity-50"
+          title="Test WebSocket Connection"
+        >
+          🔧 Debug
+        </button>
+      </div>
     </div>
 
     <!-- File tree -->
@@ -224,12 +236,15 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { useFileSystem } from '../../composables/useFileSystem'
+import { connectionService } from '../../services/connection'
+import { useConnectionStore } from '../../stores/connection'
 import type { FileSystemNode, FileFilterOptions } from '../../types/filesystem'
 import FileTree from './FileTree.vue'
 import NotificationToast from '../common/NotificationToast.vue'
 
 // Composables
 const fileSystem = useFileSystem()
+const connectionStore = useConnectionStore()
 
 // State
 const searchQuery = ref('')
@@ -420,6 +435,54 @@ const showNotification = (message: string, type: 'info' | 'success' | 'error' | 
   setTimeout(() => {
     notification.value.show = false
   }, 3000)
+}
+
+const testConnection = async () => {
+  console.log('🔧 Debug: Testing WebSocket connection...')
+  
+  // Log connection status
+  console.log('Connection Status:', {
+    isConnected: connectionService.isConnected,
+    connectionStatus: connectionStore.connectionStatus,
+    serverUrl: connectionStore.serverUrl,
+    lastError: connectionStore.lastError
+  })
+  
+  // Test WebSocket directly
+  const webSocket = connectionService.getWebSocket()
+  console.log('WebSocket State:', {
+    isConnected: webSocket.isConnected.value,
+    connectionStatus: webSocket.connectionStatus.value,
+    health: webSocket.health.value,
+    queueSize: webSocket.queueSize.value
+  })
+  
+  // Try to send a simple test message
+  try {
+    console.log('🧪 Sending test message...')
+    const result = await webSocket.sendMessageWithResponse({
+      type: 'command',
+      command: 'test.ping',
+      args: [],
+      timestamp: Date.now()
+    }, 5000)
+    
+    console.log('✅ Test message response:', result)
+    showNotification('WebSocket connection test successful', 'success')
+  } catch (error) {
+    console.error('❌ Test message failed:', error)
+    showNotification(`WebSocket test failed: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error')
+  }
+  
+  // Try to load file tree with detailed logging
+  try {
+    console.log('📁 Testing file tree loading...')
+    await fileSystem.loadFileTree('.')
+    showNotification('File tree test successful', 'success')
+  } catch (error) {
+    console.error('❌ File tree test failed:', error)
+    showNotification(`File tree test failed: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error')
+  }
 }
 
 // Watchers

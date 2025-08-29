@@ -43,12 +43,12 @@
 import { onMounted, ref, computed, onUnmounted, watch } from 'vue'
 import { useUIStore, useConnectionStore } from './stores'
 import { useTheme } from './stores/composables'
+import { connectionService } from './services/connection'
 import AppHeader from './components/layout/AppHeader.vue'
 import AppSidebar from './components/layout/AppSidebar.vue'
 import AppFooter from './components/layout/AppFooter.vue'
 import NotificationToast from './components/common/NotificationToast.vue'
 import DebugPanel from './components/common/DebugPanel.vue'
-// import { addBreadcrumb } from './services/error-handler'
 
 const uiStore = useUIStore()
 const connectionStore = useConnectionStore()
@@ -70,7 +70,7 @@ watch(() => uiStore.theme, (newTheme) => {
   setTheme(newTheme)
 }, { immediate: true })
 
-onMounted(() => {
+onMounted(async () => {
   // Initialize application
   console.log('🎉 Vue.js Frontend Application Initialized')
   
@@ -86,10 +86,16 @@ onMounted(() => {
     console.log('📱 Sidebar auto-collapsed for mobile')
   }
   
-  // Initialize connection store with mock data for testing
-  connectionStore.setConnectionStatus('connected')
-  connectionStore.serverUrl = 'ws://localhost:3001'
-  connectionStore.updateLatency(45)
+  // Initialize connection service
+  try {
+    console.log('🔌 Initializing connection service...')
+    await connectionService.initialize()
+    console.log('✅ Connection service initialized successfully')
+  } catch (error) {
+    console.error('❌ Failed to initialize connection service:', error)
+    // Set connection status to error
+    connectionStore.setConnectionStatus('error', error instanceof Error ? error.message : 'Connection failed')
+  }
   
   // Set initial active view based on current route
   const currentRoute = window.location.pathname
@@ -113,6 +119,8 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('resize', updateWindowWidth)
+  // Disconnect from WebSocket when app unmounts
+  connectionService.disconnect()
 })
 </script>
 

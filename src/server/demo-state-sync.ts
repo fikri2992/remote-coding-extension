@@ -78,7 +78,7 @@ export class StateSynchronizationDemo {
         console.log(`👥 Enhanced Client Info: ${clientInfo.length} clients`);
         
         if (clientInfo.length > 0) {
-            clientInfo.forEach((client, index) => {
+            clientInfo.forEach((client: any, index: number) => {
                 console.log(`   Client ${index + 1}:`);
                 console.log(`     ID: ${client.id}`);
                 console.log(`     Connected: ${client.connectedAt.toISOString()}`);

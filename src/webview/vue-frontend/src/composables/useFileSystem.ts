@@ -119,12 +119,27 @@ export function useFileSystem(): FileSystemComposable {
     try {
       const path = rootPath || '.'
       
+      // Check WebSocket connection status
+      if (!webSocket.isConnected.value) {
+        console.warn('⚠️ WebSocket not connected, attempting to load file tree anyway...')
+        // Try to wait a bit for connection
+        await new Promise(resolve => setTimeout(resolve, 1000))
+        
+        if (!webSocket.isConnected.value) {
+          throw new Error('WebSocket connection not available. Please check if the VS Code extension is running.')
+        }
+      }
+      
+      console.log(`📁 Loading file tree for path: ${path}`)
+      
       const result = await webSocket.sendMessageWithResponse({
         type: 'command',
         command: 'vscode.workspace.getFileTree',
         args: [path],
         timestamp: Date.now()
-      })
+      }, 15000) // Increase timeout to 15 seconds
+      
+      console.log('📁 File tree response received:', result)
       
       if (!result.success) {
         throw new Error(result.error || 'Failed to load file tree')
@@ -147,9 +162,20 @@ export function useFileSystem(): FileSystemComposable {
       }
 
       updateStats()
+      console.log(`✅ File tree loaded successfully: ${processedNodes.length} nodes`)
       return processedNodes
     } catch (error) {
-      console.error('Failed to load file tree:', error)
+      console.error('❌ Failed to load file tree:', error)
+      
+      // Provide more specific error information
+      if (error instanceof Error) {
+        if (error.message.includes('timeout')) {
+          console.error('🕐 Timeout error - the VS Code extension may not be responding')
+        } else if (error.message.includes('WebSocket')) {
+          console.error('🔌 WebSocket connection error - check if the extension is running')
+        }
+      }
+      
       throw error
     } finally {
       isLoading.value = false

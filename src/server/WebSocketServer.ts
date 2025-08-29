@@ -10,6 +10,7 @@ import { ErrorHandler, ErrorCategory, ErrorSeverity } from './ErrorHandler';
 import { ConnectionRecoveryManager } from './ConnectionRecoveryManager';
 import { GitService } from './GitService';
 import { RemoteRCService } from './RemoteRCService';
+import { GitIgnoreService } from './GitIgnoreService';
 
 /**
  * Enhanced client connection with state tracking
@@ -41,6 +42,7 @@ export class WebSocketServer {
     private _recoveryManager: ConnectionRecoveryManager;
     private _gitService: GitService;
     private _remoteRCService: RemoteRCService;
+    private _gitIgnoreService: GitIgnoreService;
 
     constructor(config: ServerConfig) {
         this._config = config;
@@ -49,6 +51,7 @@ export class WebSocketServer {
         this._errorHandler = ErrorHandler.getInstance();
         this._gitService = new GitService();
         this._remoteRCService = new RemoteRCService();
+        this._gitIgnoreService = new GitIgnoreService();
         this._recoveryManager = new ConnectionRecoveryManager(
             {
                 maxRetries: 5,
@@ -570,7 +573,7 @@ export class WebSocketServer {
     }
 
     /**
-     * Get directory contents
+     * Get directory contents with .gitignore filtering
      */
     private async getDirectoryContents(dirPath: string): Promise<any[]> {
         const vscode = await import('vscode');
@@ -585,11 +588,26 @@ export class WebSocketServer {
 
             const workspaceRoot = workspaceFolders[0]!.uri.fsPath;
             const fullPath = path.resolve(workspaceRoot, dirPath);
+            
+            // Load .gitignore patterns for the workspace
+            await this._gitIgnoreService.loadAllGitignorePatterns(workspaceRoot);
+            
             const entries = await fs.readdir(fullPath, { withFileTypes: true });
             
             const contents = [];
             for (const entry of entries) {
                 const itemPath = path.join(fullPath, entry.name);
+                
+                // Check if file/directory should be ignored according to .gitignore
+                if (this._gitIgnoreService.isIgnored(itemPath, workspaceRoot)) {
+                    continue;
+                }
+
+                // Additional skip for common patterns not covered by .gitignore
+                if (entry.name.startsWith('.') && !entry.name.match(/^\.(git|vscode|env|github)$/)) {
+                    continue;
+                }
+                
                 const stats = await fs.stat(itemPath);
                 
                 contents.push({
@@ -1022,7 +1040,7 @@ export class WebSocketServer {
     }
 
     /**
-     * Get file tree structure
+     * Get file tree structure with .gitignore filtering
      */
     private async getFileTree(rootPath: string): Promise<any[]> {
         const vscode = await import('vscode');
@@ -1039,7 +1057,10 @@ export class WebSocketServer {
             const workspaceRoot = workspaceFolders[0]!.uri.fsPath;
             const targetPath = path.resolve(workspaceRoot, rootPath);
 
-            // Build file tree recursively
+            // Load .gitignore patterns for the workspace
+            await this._gitIgnoreService.loadAllGitignorePatterns(workspaceRoot);
+
+            // Build file tree recursively with .gitignore filtering
             const buildTree = async (dirPath: string, relativePath: string = ''): Promise<any[]> => {
                 const items: any[] = [];
                 
@@ -1047,25 +1068,30 @@ export class WebSocketServer {
                     const entries = await fs.readdir(dirPath, { withFileTypes: true });
                     
                     for (const entry of entries) {
-                        // Skip hidden files and common ignore patterns
-                        if (entry.name.startsWith('.') && !entry.name.match(/^\.(git|vscode|env)$/)) {
-                            continue;
-                        }
-                        if (entry.name === 'node_modules' || entry.name === 'dist' || entry.name === 'build') {
-                            continue;
-                        }
-
                         const fullPath = path.join(dirPath, entry.name);
                         const itemRelativePath = path.join(relativePath, entry.name).replace(/\\/g, '/');
                         
+                        // Check if file/directory should be ignored according to .gitignore
+                        if (this._gitIgnoreService.isIgnored(fullPath, workspaceRoot)) {
+                            continue;
+                        }
+
+                        // Additional skip for common patterns not covered by .gitignore
+                        if (entry.name.startsWith('.') && !entry.name.match(/^\.(git|vscode|env|github)$/)) {
+                            continue;
+                        }
+                        
                         if (entry.isDirectory()) {
                             const children = await buildTree(fullPath, itemRelativePath);
-                            items.push({
-                                name: entry.name,
-                                path: itemRelativePath,
-                                type: 'directory',
-                                children: children
-                            });
+                            // Only include directory if it has children or is explicitly not ignored
+                            if (children.length > 0) {
+                                items.push({
+                                    name: entry.name,
+                                    path: itemRelativePath,
+                                    type: 'directory',
+                                    children: children
+                                });
+                            }
                         } else {
                             const stats = await fs.stat(fullPath);
                             items.push({
@@ -1128,7 +1154,7 @@ export class WebSocketServer {
     }
 
     /**
-     * Search files in workspace
+     * Search files in workspace with .gitignore filtering
      */
     private async searchFiles(query: string, rootPath: string): Promise<any[]> {
         const vscode = await import('vscode');
@@ -1150,22 +1176,27 @@ export class WebSocketServer {
             const searchRegex = new RegExp(query, 'i');
             const results: any[] = [];
 
-            // Recursive search function
+            // Load .gitignore patterns for the workspace
+            await this._gitIgnoreService.loadAllGitignorePatterns(workspaceRoot);
+
+            // Recursive search function with .gitignore filtering
             const searchInDirectory = async (dirPath: string, relativePath: string = ''): Promise<void> => {
                 try {
                     const entries = await fs.readdir(dirPath, { withFileTypes: true });
                     
                     for (const entry of entries) {
-                        // Skip hidden files and common ignore patterns
-                        if (entry.name.startsWith('.') && !entry.name.match(/^\.(git|vscode|env)$/)) {
-                            continue;
-                        }
-                        if (entry.name === 'node_modules' || entry.name === 'dist' || entry.name === 'build') {
+                        const fullPath = path.join(dirPath, entry.name);
+                        const itemRelativePath = path.join(relativePath, entry.name).replace(/\\/g, '/');
+                        
+                        // Check if file/directory should be ignored according to .gitignore
+                        if (this._gitIgnoreService.isIgnored(fullPath, workspaceRoot)) {
                             continue;
                         }
 
-                        const fullPath = path.join(dirPath, entry.name);
-                        const itemRelativePath = path.join(relativePath, entry.name).replace(/\\/g, '/');
+                        // Additional skip for common patterns not covered by .gitignore
+                        if (entry.name.startsWith('.') && !entry.name.match(/^\.(git|vscode|env|github)$/)) {
+                            continue;
+                        }
                         
                         // Check if name matches search query
                         if (searchRegex.test(entry.name)) {

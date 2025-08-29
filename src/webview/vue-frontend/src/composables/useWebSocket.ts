@@ -160,12 +160,18 @@ export function useWebSocket(): WebSocketComposable {
               clearTimeout(pending.timeout)
               pendingResponses.value.delete(message.id)
               
+              console.log(`📥 Received response for message ${message.id}:`, message)
+              
               if (message.error) {
+                console.error(`❌ Response error for ${message.id}:`, message.error)
                 pending.reject(new Error(message.error))
               } else {
+                console.log(`✅ Response success for ${message.id}`)
                 pending.resolve(message.data)
               }
               return
+            } else {
+              console.warn(`⚠️ Received response for unknown message ID: ${message.id}`)
             }
           }
 
@@ -287,6 +293,12 @@ export function useWebSocket(): WebSocketComposable {
 
   const sendMessageWithResponse = async (message: WebSocketMessage, timeout?: number): Promise<any> => {
     return new Promise((resolve, reject) => {
+      // Check connection status first
+      if (!socket.value || socket.value.readyState !== WebSocket.OPEN) {
+        reject(new Error('WebSocket is not connected. Please check your connection and try again.'))
+        return
+      }
+
       // Generate unique ID for the message
       const messageId = `msg_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
       message.id = messageId
@@ -295,16 +307,19 @@ export function useWebSocket(): WebSocketComposable {
       const timeoutMs = timeout ?? currentConfig.value?.messageTimeout ?? WS_MESSAGE_TIMEOUT
       const timeoutHandle = setTimeout(() => {
         pendingResponses.value.delete(messageId)
-        reject(new Error(`Message timeout after ${timeoutMs}ms`))
+        console.error(`⏰ Message timeout after ${timeoutMs}ms for command: ${message.type}`, message)
+        reject(new Error(`Message timeout after ${timeoutMs}ms. The VS Code extension may not be responding.`))
       }, timeoutMs)
 
       // Store pending response
       pendingResponses.value.set(messageId, { resolve, reject, timeout: timeoutHandle })
 
       // Send message
+      console.log(`📤 Sending message with ID ${messageId}:`, message)
       sendMessage(message).catch(error => {
         clearTimeout(timeoutHandle)
         pendingResponses.value.delete(messageId)
+        console.error(`❌ Failed to send message ${messageId}:`, error)
         reject(error)
       })
     })

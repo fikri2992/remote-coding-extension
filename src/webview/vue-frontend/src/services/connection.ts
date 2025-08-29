@@ -43,7 +43,7 @@ export class ConnectionService {
         maxReconnectAttempts: 10,
         reconnectInterval: 2000,
         heartbeatInterval: 30000,
-        messageTimeout: 10000
+        messageTimeout: 15000 // Increase timeout to 15 seconds
       })
 
       addBreadcrumb('connection', 'WebSocket connection established', 'info')
@@ -106,6 +106,7 @@ export class ConnectionService {
       // In VS Code webview, try to connect to localhost
       // The extension should be running the WebSocket server
       const defaultPort = 8081 // Default WebSocket port (HTTP port + 1)
+      console.log(`🔌 VS Code webview detected, connecting to ws://localhost:${defaultPort}`)
       return `ws://localhost:${defaultPort}`
     }
 
@@ -114,7 +115,9 @@ export class ConnectionService {
     const host = window.location.hostname
     const port = parseInt(window.location.port) + 1 // WebSocket port is typically HTTP port + 1
     
-    return `${protocol}//${host}:${port}`
+    const url = `${protocol}//${host}:${port}`
+    console.log(`🔌 Standalone mode detected, connecting to ${url}`)
+    return url
   }
 
   /**

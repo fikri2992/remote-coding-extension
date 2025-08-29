@@ -1,16 +1,16 @@
 <template>
-  <div class="min-h-screen bg-secondary-50 p-6">
+  <div class="min-h-screen bg-secondary-50 dark:bg-secondary-900 p-6">
     <div class="max-w-7xl mx-auto">
       <div class="mb-6">
-        <h1 class="text-3xl font-bold text-secondary-900 mb-2">Chat</h1>
-        <p class="text-secondary-600">Real-time messaging and collaboration features</p>
+        <h1 class="text-3xl font-bold text-secondary-900 dark:text-secondary-100 mb-2">Chat</h1>
+        <p class="text-secondary-600 dark:text-secondary-400">Real-time messaging and collaboration features</p>
       </div>
 
       <div class="card">
-        <h3 class="text-xl font-semibold mb-4">Chat Interface</h3>
-        <p class="text-secondary-600">Chat functionality will be implemented in future tasks.</p>
+        <h3 class="text-xl font-semibold mb-4 text-secondary-900 dark:text-secondary-100">Chat Interface</h3>
+        <p class="text-secondary-600 dark:text-secondary-400">Chat functionality will be implemented in future tasks.</p>
 
-        <div class="mt-4 border rounded p-4 bg-secondary-100">
+        <div class="mt-4 border border-secondary-200 dark:border-secondary-700 rounded p-4 bg-secondary-100 dark:bg-secondary-800">
           <div class="space-y-2">
             <div class="flex gap-3">
               <div
@@ -19,8 +19,8 @@
                 S
               </div>
               <div>
-                <div class="font-medium">System</div>
-                <div class="text-secondary-700">Welcome to the chat interface!</div>
+                <div class="font-medium text-secondary-900 dark:text-secondary-100">System</div>
+                <div class="text-secondary-700 dark:text-secondary-300">Welcome to the chat interface!</div>
               </div>
             </div>
             <div class="flex gap-3">
@@ -30,8 +30,8 @@
                 U
               </div>
               <div>
-                <div class="font-medium">User</div>
-                <div class="text-secondary-700">Chat functionality will be available soon.</div>
+                <div class="font-medium text-secondary-900 dark:text-secondary-100">User</div>
+                <div class="text-secondary-700 dark:text-secondary-300">Chat functionality will be available soon.</div>
               </div>
             </div>
           </div>

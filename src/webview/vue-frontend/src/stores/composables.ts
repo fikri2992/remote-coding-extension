@@ -161,25 +161,54 @@ export function useTheme() {
   const applyTheme = (theme: 'light' | 'dark' | 'auto') => {
     ui.setTheme(theme)
     
-    // Apply CSS custom properties based on theme
+    // Apply CSS classes based on theme
     const root = document.documentElement
+    
     if (theme === 'dark') {
       root.classList.add('dark')
       root.classList.remove('light')
     } else if (theme === 'light') {
-      root.classList.add('light')
       root.classList.remove('dark')
+      root.classList.add('light')
     } else {
       // Auto theme - detect system preference
       const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
       root.classList.toggle('dark', prefersDark)
       root.classList.toggle('light', !prefersDark)
+      
+      // Listen for system theme changes
+      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
+      const handleChange = (e: MediaQueryListEvent) => {
+        if (ui.theme === 'auto') {
+          root.classList.toggle('dark', e.matches)
+          root.classList.toggle('light', !e.matches)
+        }
+      }
+      
+      // Remove existing listener if any
+      mediaQuery.removeEventListener('change', handleChange)
+      mediaQuery.addEventListener('change', handleChange)
+    }
+    
+    // Store theme preference in localStorage
+    localStorage.setItem('theme', theme)
+  }
+
+  // Load theme from localStorage on initialization
+  const loadStoredTheme = () => {
+    const storedTheme = localStorage.getItem('theme') as 'light' | 'dark' | 'auto' | null
+    if (storedTheme && ['light', 'dark', 'auto'].includes(storedTheme)) {
+      applyTheme(storedTheme)
+    } else {
+      // Default to auto if no preference stored
+      applyTheme('auto')
     }
   }
 
   return {
     currentTheme: ui.theme,
     setTheme: applyTheme,
-    toggleTheme: ui.toggleTheme
+    toggleTheme: ui.toggleTheme,
+    loadStoredTheme
   }
 }

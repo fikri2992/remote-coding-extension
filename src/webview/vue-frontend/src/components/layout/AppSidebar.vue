@@ -1,67 +1,71 @@
 <template>
   <!-- Mobile Overlay -->
   <div 
-    v-if="!uiStore.sidebarCollapsed && isMobile"
+    v-if="!uiStore.sidebarCollapsed && (isMobile || isTablet)"
     class="fixed inset-0 bg-black bg-opacity-50 z-30 lg:hidden"
     @click="uiStore.setSidebarCollapsed(true)"
   ></div>
 
   <!-- Sidebar -->
   <aside 
-    class="fixed left-0 top-14 sm:top-16 h-[calc(100vh-3.5rem)] sm:h-[calc(100vh-4rem)] bg-white border-r border-secondary-200 transition-all duration-300 z-40 shadow-lg lg:shadow-none"
+    class="fixed left-0 top-14 sm:top-16 h-[calc(100vh-3.5rem)] sm:h-[calc(100vh-4rem)] bg-white dark:bg-secondary-800 border-r border-secondary-200 dark:border-secondary-700 transition-all duration-300 z-40 shadow-lg lg:shadow-none"
     :class="{
-      // Desktop behavior
-      'lg:w-64': !uiStore.sidebarCollapsed,
-      'lg:w-16': uiStore.sidebarCollapsed,
-      // Mobile behavior
-      'w-64': !uiStore.sidebarCollapsed && isMobile,
-      'w-0 -translate-x-full': uiStore.sidebarCollapsed && isMobile,
-      // Tablet behavior
-      'md:w-20': uiStore.sidebarCollapsed && !isMobile,
-      'md:w-64': !uiStore.sidebarCollapsed && !isMobile
+      // Mobile behavior (< 768px)
+      'w-64': !uiStore.sidebarCollapsed && windowWidth < 768,
+      'w-0 -translate-x-full': uiStore.sidebarCollapsed && windowWidth < 768,
+      // Tablet behavior (768px - 1023px)
+      'md:w-20': uiStore.sidebarCollapsed && windowWidth >= 768 && windowWidth < 1024,
+      'md:w-64': !uiStore.sidebarCollapsed && windowWidth >= 768 && windowWidth < 1024,
+      // Desktop behavior (>= 1024px)
+      'lg:w-64': !uiStore.sidebarCollapsed && windowWidth >= 1024,
+      'lg:w-16': uiStore.sidebarCollapsed && windowWidth >= 1024
     }"
   >
-    <nav class="p-3 sm:p-4 space-y-1 sm:space-y-2 overflow-y-auto h-full">
-      <!-- Navigation Items -->
-      <router-link
-        v-for="item in navigationItems"
-        :key="item.name"
-        :to="item.path"
-        class="nav-item group"
-        :class="{ 'active': $route.name === item.name }"
-        @click="handleNavClick(item.name.toLowerCase())"
-      >
-        <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="getIconSvg(item.icon)" />
-        </svg>
-        <span 
-          v-if="!uiStore.sidebarCollapsed || isMobile" 
-          class="transition-opacity duration-200 text-sm sm:text-base"
+    <nav class="flex flex-col h-full overflow-y-auto">
+      <!-- Navigation Items Container -->
+      <div class="flex-1 px-4 py-6 space-y-1">
+        <router-link
+          v-for="item in navigationItems"
+          :key="item.name"
+          :to="item.path"
+          class="nav-item group"
+          :class="{ 'active': $route.name === item.name }"
+          @click="handleNavClick(item.name.toLowerCase())"
         >
-          {{ item.label }}
-        </span>
-        <!-- Tooltip for collapsed desktop sidebar -->
-        <div 
-          v-if="uiStore.sidebarCollapsed && !isMobile"
-          class="absolute left-full ml-2 px-2 py-1 bg-secondary-800 text-white text-xs rounded opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-50"
-        >
-          {{ item.label }}
-        </div>
-      </router-link>
+          <div class="flex items-center w-full">
+            <svg class="nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="getIconSvg(item.icon)" />
+            </svg>
+            <span 
+              v-if="!uiStore.sidebarCollapsed || isMobile" 
+              class="nav-label"
+            >
+              {{ item.label }}
+            </span>
+          </div>
+          <!-- Tooltip for collapsed sidebar (tablet and desktop) -->
+          <div 
+            v-if="uiStore.sidebarCollapsed && (isTablet || isDesktop)"
+            class="nav-tooltip"
+          >
+            {{ item.label }}
+          </div>
+        </router-link>
+      </div>
     </nav>
 
     <!-- Sidebar Footer -->
-    <div class="absolute bottom-4 left-4 right-4">
+    <div class="px-4 py-4 border-t border-secondary-200 dark:border-secondary-700">
       <div 
         v-if="!uiStore.sidebarCollapsed || isMobile" 
-        class="text-xs text-secondary-500 text-center space-y-1"
+        class="text-center space-y-1"
       >
-        <p class="font-medium">Vue.js Frontend</p>
-        <p class="text-secondary-400">v1.0.0</p>
+        <p class="text-xs font-medium text-secondary-600 dark:text-secondary-400">Vue.js Frontend</p>
+        <p class="text-xs text-secondary-500 dark:text-secondary-500">v1.0.0</p>
       </div>
       <!-- Collapsed footer indicator -->
       <div 
-        v-else-if="uiStore.sidebarCollapsed && !isMobile"
+        v-else-if="uiStore.sidebarCollapsed && (isTablet || isDesktop)"
         class="flex justify-center"
       >
         <div class="w-2 h-2 bg-primary-500 rounded-full"></div>
@@ -78,7 +82,9 @@ const uiStore = useUIStore()
 
 // Responsive breakpoint detection
 const windowWidth = ref(window.innerWidth)
-const isMobile = computed(() => windowWidth.value < 1024) // lg breakpoint
+const isMobile = computed(() => windowWidth.value < 768) // md breakpoint
+const isTablet = computed(() => windowWidth.value >= 768 && windowWidth.value < 1024)
+const isDesktop = computed(() => windowWidth.value >= 1024)
 
 const updateWindowWidth = () => {
   windowWidth.value = window.innerWidth
@@ -86,8 +92,8 @@ const updateWindowWidth = () => {
 
 onMounted(() => {
   window.addEventListener('resize', updateWindowWidth)
-  // Auto-collapse sidebar on mobile
-  if (isMobile.value) {
+  // Auto-collapse sidebar on mobile and tablet
+  if (isMobile.value || isTablet.value) {
     uiStore.setSidebarCollapsed(true)
   }
 })
@@ -135,8 +141,8 @@ const handleNavClick = (viewName: string) => {
     uiStore.setActiveView(viewName as typeof validViews[number])
   }
   
-  // Auto-close sidebar on mobile after navigation
-  if (isMobile.value) {
+  // Auto-close sidebar on mobile and tablet after navigation
+  if (isMobile.value || isTablet.value) {
     uiStore.setSidebarCollapsed(true)
   }
 }
@@ -155,29 +161,65 @@ const getIconSvg = (iconName: string) => {
 </script>
 
 <style scoped>
+/* Navigation Item Base Styles */
 .nav-item {
-  @apply relative flex items-center gap-3 px-3 py-2 rounded-md text-secondary-700 hover:bg-secondary-100 hover:text-secondary-900 transition-colors duration-200;
+  @apply relative flex items-center w-full px-3 py-3 rounded-lg text-secondary-700 dark:text-secondary-300 hover:bg-secondary-100 dark:hover:bg-secondary-700 transition-all duration-200 cursor-pointer;
+  min-height: 48px; /* Ensure consistent height */
 }
 
+.nav-item:focus {
+  @apply outline-none ring-2 ring-primary-500 ring-offset-2 ring-offset-white dark:ring-offset-secondary-800;
+}
+
+/* Active State */
 .nav-item.active {
-  @apply bg-primary-100 text-primary-700 font-medium;
+  @apply bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-400 font-medium;
 }
 
 .nav-item.active:hover {
-  @apply bg-primary-200;
+  @apply bg-primary-100 dark:bg-primary-900/30;
 }
 
-/* Mobile-specific styles */
-@media (max-width: 1023px) {
-  .nav-item {
-    @apply px-4 py-3;
-  }
+/* Icon Styles */
+.nav-icon {
+  @apply w-5 h-5 flex-shrink-0 mr-3;
 }
 
-/* Tablet-specific styles */
-@media (min-width: 768px) and (max-width: 1023px) {
+/* Label Styles */
+.nav-label {
+  @apply text-sm font-medium transition-opacity duration-200 truncate;
+}
+
+/* Tooltip Styles */
+.nav-tooltip {
+  @apply absolute left-full ml-2 px-2 py-1 bg-secondary-900 dark:bg-secondary-700 text-white dark:text-secondary-100 text-xs rounded-md opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-50 shadow-lg;
+}
+
+/* Collapsed Sidebar Adjustments */
+@media (min-width: 768px) {
   .nav-item {
     @apply justify-center;
   }
+}
+
+/* Desktop Specific */
+@media (min-width: 1024px) {
+  .nav-item {
+    @apply justify-start;
+  }
+  
+  /* When sidebar is collapsed on desktop */
+  aside.lg\:w-16 .nav-item {
+    @apply justify-center px-2;
+  }
+  
+  aside.lg\:w-16 .nav-icon {
+    @apply mr-0;
+  }
+}
+
+/* Smooth transitions for responsive behavior */
+.nav-item, .nav-icon, .nav-label {
+  transition: all 0.2s ease-in-out;
 }
 </style>

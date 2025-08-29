@@ -1,5 +1,5 @@
 <template>
-  <div id="app" class="min-h-screen bg-secondary-50 flex flex-col">
+  <div id="app" class="min-h-screen bg-secondary-50 dark:bg-secondary-900 flex flex-col">
     <!-- App Header -->
     <AppHeader />
     
@@ -12,11 +12,14 @@
       <main 
         class="flex-1 transition-all duration-300 min-h-0"
         :class="{
-          // Desktop sidebar spacing
-          'lg:ml-64': !uiStore.sidebarCollapsed,
-          'lg:ml-16': uiStore.sidebarCollapsed,
-          // Mobile: no margin when sidebar is collapsed (overlay mode)
-          'ml-0': isMobile
+          // Mobile: no margin (overlay mode)
+          'ml-0': windowWidth < 768,
+          // Tablet: adjust for sidebar width
+          'md:ml-20': uiStore.sidebarCollapsed && windowWidth >= 768 && windowWidth < 1024,
+          'md:ml-64': !uiStore.sidebarCollapsed && windowWidth >= 768 && windowWidth < 1024,
+          // Desktop: adjust for sidebar width
+          'lg:ml-16': uiStore.sidebarCollapsed && windowWidth >= 1024,
+          'lg:ml-64': !uiStore.sidebarCollapsed && windowWidth >= 1024
         }"
       >
         <div class="h-full overflow-auto">
@@ -37,16 +40,19 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, computed, onUnmounted } from 'vue'
-import { useUIStore } from './stores'
+import { onMounted, ref, computed, onUnmounted, watch } from 'vue'
+import { useUIStore, useConnectionStore } from './stores'
+import { useTheme } from './stores/composables'
 import AppHeader from './components/layout/AppHeader.vue'
 import AppSidebar from './components/layout/AppSidebar.vue'
 import AppFooter from './components/layout/AppFooter.vue'
 import NotificationToast from './components/common/NotificationToast.vue'
 import DebugPanel from './components/common/DebugPanel.vue'
-import { addBreadcrumb } from './services/error-handler'
+// import { addBreadcrumb } from './services/error-handler'
 
 const uiStore = useUIStore()
+const connectionStore = useConnectionStore()
+const { setTheme, loadStoredTheme } = useTheme()
 
 // Development mode detection
 const isDevelopment = computed(() => import.meta.env.DEV)
@@ -59,10 +65,17 @@ const updateWindowWidth = () => {
   windowWidth.value = window.innerWidth
 }
 
+// Watch for theme changes and apply them
+watch(() => uiStore.theme, (newTheme) => {
+  setTheme(newTheme)
+}, { immediate: true })
+
 onMounted(() => {
   // Initialize application
-  console.log('Vue.js Frontend Application Initialized')
-  addBreadcrumb('app', 'Application component mounted', 'info')
+  console.log('🎉 Vue.js Frontend Application Initialized')
+  
+  // Load and apply stored theme
+  loadStoredTheme()
   
   // Set up responsive behavior
   window.addEventListener('resize', updateWindowWidth)
@@ -70,8 +83,13 @@ onMounted(() => {
   // Auto-collapse sidebar on mobile
   if (isMobile.value) {
     uiStore.setSidebarCollapsed(true)
-    addBreadcrumb('ui', 'Sidebar auto-collapsed for mobile', 'info')
+    console.log('📱 Sidebar auto-collapsed for mobile')
   }
+  
+  // Initialize connection store with mock data for testing
+  connectionStore.setConnectionStatus('connected')
+  connectionStore.serverUrl = 'ws://localhost:3001'
+  connectionStore.updateLatency(45)
   
   // Set initial active view based on current route
   const currentRoute = window.location.pathname
@@ -89,8 +107,8 @@ onMounted(() => {
     activeView = 'chat'
   }
   
-  uiStore.setActiveView(activeView as any)
-  addBreadcrumb('navigation', `Initial view set to ${activeView}`, 'info', { route: currentRoute })
+  uiStore.setActiveView(activeView as 'automation' | 'files' | 'git' | 'terminal' | 'chat')
+  console.log(`🧭 Initial view set to ${activeView}`, { route: currentRoute })
 })
 
 onUnmounted(() => {

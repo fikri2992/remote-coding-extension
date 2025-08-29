@@ -51,18 +51,18 @@ export default defineConfig(({ command, mode }) => {
       assetsInlineLimit: 4096
     },
     server: {
-      port: 5173,
+      port: 8080,
       host: true,
       open: false,
       cors: true,
       proxy: {
         '/api': {
-          target: env.VITE_API_BASE_URL || 'http://localhost:8080',
+          target: env.VITE_API_BASE_URL || 'http://localhost:3001',
           changeOrigin: true,
           secure: false
         },
         '/ws': {
-          target: env.VITE_WS_BASE_URL || 'ws://localhost:8081',
+          target: env.VITE_WS_BASE_URL || 'ws://localhost:3001',
           ws: true,
           changeOrigin: true
         }

@@ -1,6 +1,6 @@
 <template>
-  <footer class="bg-white border-t border-secondary-200 px-4 sm:px-6 py-2 sm:py-3 mt-auto">
-    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0 text-xs sm:text-sm text-secondary-600">
+  <footer class="bg-white dark:bg-secondary-800 border-t border-secondary-200 dark:border-secondary-700 px-4 sm:px-6 py-2 sm:py-3 mt-auto">
+    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0 text-xs sm:text-sm text-secondary-600 dark:text-secondary-400">
       <!-- Status info -->
       <div class="flex flex-wrap items-center gap-3 sm:gap-6">
         <!-- Server Status -->
@@ -31,7 +31,7 @@
       <div class="flex flex-col sm:flex-row items-start sm:items-center gap-1 sm:gap-4 text-xs">
         <span class="font-medium">Vue.js Frontend v1.0.0</span>
         <span class="hidden sm:inline">•</span>
-        <span class="text-secondary-500">{{ new Date().getFullYear() }} Web Automation Tunnel</span>
+        <span class="text-secondary-500 dark:text-secondary-500">{{ new Date().getFullYear() }} Web Automation Tunnel</span>
       </div>
     </div>
   </footer>

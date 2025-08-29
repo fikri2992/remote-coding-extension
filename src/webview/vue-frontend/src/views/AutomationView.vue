@@ -1,16 +1,16 @@
 <template>
-  <div class="min-h-screen bg-secondary-50 p-6">
+  <div class="min-h-screen bg-secondary-50 dark:bg-secondary-900 p-6">
     <div class="max-w-7xl mx-auto">
       <div class="mb-6">
-        <h1 class="text-3xl font-bold text-secondary-900 mb-2">Automation</h1>
-        <p class="text-secondary-600">Execute VS Code commands and manage server operations</p>
+        <h1 class="text-3xl font-bold text-secondary-900 dark:text-secondary-100 mb-2">Automation</h1>
+        <p class="text-secondary-600 dark:text-secondary-400">Execute VS Code commands and manage server operations</p>
       </div>
 
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <!-- Command Panel -->
         <div class="lg:col-span-2">
           <div class="card">
-            <h3 class="text-xl font-semibold mb-4">Command Panel</h3>
+            <h3 class="text-xl font-semibold mb-4 text-secondary-900 dark:text-secondary-100">Command Panel</h3>
             <div class="space-y-4">
               <div class="flex gap-2">
                 <input
@@ -28,7 +28,7 @@
                 </button>
               </div>
 
-              <div class="text-sm text-secondary-600">
+              <div class="text-sm text-secondary-600 dark:text-secondary-400">
                 <p>Quick commands:</p>
                 <div class="flex flex-wrap gap-2 mt-2">
                   <button
@@ -48,18 +48,18 @@
         <!-- Server Status -->
         <div>
           <div class="card">
-            <h3 class="text-xl font-semibold mb-4">Server Status</h3>
+            <h3 class="text-xl font-semibold mb-4 text-secondary-900 dark:text-secondary-100">Server Status</h3>
             <div class="space-y-4">
               <div class="flex items-center justify-between">
-                <span class="text-secondary-600">Connection:</span>
+                <span class="text-secondary-600 dark:text-secondary-400">Connection:</span>
                 <span :class="connectionStatusClass">
                   {{ connectionStore.connectionStatus }}
                 </span>
               </div>
 
               <div class="flex items-center justify-between">
-                <span class="text-secondary-600">Latency:</span>
-                <span class="text-secondary-900">{{ connectionStore.latency }}ms</span>
+                <span class="text-secondary-600 dark:text-secondary-400">Latency:</span>
+                <span class="text-secondary-900 dark:text-secondary-100">{{ connectionStore.latency }}ms</span>
               </div>
 
               <div class="flex gap-2">
@@ -86,17 +86,17 @@
       <!-- Command History -->
       <div class="mt-6">
         <div class="card">
-          <h3 class="text-xl font-semibold mb-4">Command History</h3>
+          <h3 class="text-xl font-semibold mb-4 text-secondary-900 dark:text-secondary-100">Command History</h3>
           <div class="space-y-2 max-h-64 overflow-y-auto">
             <div
               v-for="(cmd, index) in commandHistory"
               :key="index"
-              class="flex justify-between items-center p-2 bg-secondary-100 rounded"
+              class="flex justify-between items-center p-2 bg-secondary-100 dark:bg-secondary-700 rounded"
             >
-              <span class="font-mono text-sm">{{ cmd.command }}</span>
-              <span class="text-xs text-secondary-500">{{ formatTime(cmd.timestamp) }}</span>
+              <span class="font-mono text-sm text-secondary-900 dark:text-secondary-100">{{ cmd.command }}</span>
+              <span class="text-xs text-secondary-500 dark:text-secondary-400">{{ formatTime(cmd.timestamp) }}</span>
             </div>
-            <div v-if="commandHistory.length === 0" class="text-center text-secondary-500 py-4">
+            <div v-if="commandHistory.length === 0" class="text-center text-secondary-500 dark:text-secondary-400 py-4">
               No commands executed yet
             </div>
           </div>

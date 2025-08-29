@@ -1,12 +1,12 @@
 <template>
-  <header class="bg-white border-b border-secondary-200 px-4 sm:px-6 py-3 sm:py-4 sticky top-0 z-50 shadow-sm">
+  <header class="bg-white dark:bg-secondary-800 border-b border-secondary-200 dark:border-secondary-700 px-4 sm:px-6 py-3 sm:py-4 sticky top-0 z-50 shadow-sm">
     <div class="flex items-center justify-between">
       <!-- Left side - Logo and Title -->
       <div class="flex items-center gap-2 sm:gap-4">
         <!-- Mobile Menu Button (visible on mobile) -->
         <button
           @click="uiStore.toggleSidebar"
-          class="p-2 rounded-md hover:bg-secondary-100 transition-colors lg:hidden"
+          class="p-2 rounded-md hover:bg-secondary-100 dark:hover:bg-secondary-700 transition-colors lg:hidden"
           title="Toggle Menu"
           aria-label="Toggle navigation menu"
         >
@@ -18,7 +18,7 @@
         <!-- Desktop Sidebar Toggle (visible on desktop) -->
         <button
           @click="uiStore.toggleSidebar"
-          class="hidden lg:flex p-2 rounded-md hover:bg-secondary-100 transition-colors"
+          class="hidden lg:flex p-2 rounded-md hover:bg-secondary-100 dark:hover:bg-secondary-700 transition-colors"
           title="Toggle Sidebar"
           aria-label="Toggle sidebar"
         >
@@ -32,12 +32,12 @@
             <span class="text-white font-bold text-xs sm:text-sm">W</span>
           </div>
           <div class="hidden sm:block">
-            <h1 class="text-base sm:text-lg font-semibold text-secondary-900">Web Automation Tunnel</h1>
-            <p class="text-xs text-secondary-500">Vue.js Frontend</p>
+            <h1 class="text-base sm:text-lg font-semibold text-secondary-900 dark:text-secondary-100">Web Automation Tunnel</h1>
+            <p class="text-xs text-secondary-500 dark:text-secondary-400">Vue.js Frontend</p>
           </div>
           <!-- Mobile title (shorter) -->
           <div class="block sm:hidden">
-            <h1 class="text-sm font-semibold text-secondary-900">WAT</h1>
+            <h1 class="text-sm font-semibold text-secondary-900 dark:text-secondary-100">WAT</h1>
           </div>
         </div>
       </div>
@@ -55,7 +55,7 @@
             }"
             :title="`Connection status: ${connectionStore.connectionStatus}`"
           ></div>
-          <span class="hidden sm:inline text-sm text-secondary-600 capitalize">
+          <span class="hidden sm:inline text-sm text-secondary-600 dark:text-secondary-400 capitalize">
             {{ connectionStore.connectionStatus }}
           </span>
         </div>
@@ -63,7 +63,7 @@
         <!-- Theme Toggle -->
         <button
           @click="uiStore.toggleTheme"
-          class="p-2 rounded-md hover:bg-secondary-100 transition-colors"
+          class="p-2 rounded-md hover:bg-secondary-100 dark:hover:bg-secondary-700 transition-colors"
           :title="`Switch to ${uiStore.theme === 'light' ? 'dark' : 'light'} theme`"
           aria-label="Toggle theme"
         >
@@ -77,7 +77,7 @@
 
         <!-- Settings (hidden on mobile) -->
         <button
-          class="hidden sm:flex p-2 rounded-md hover:bg-secondary-100 transition-colors"
+          class="hidden sm:flex p-2 rounded-md hover:bg-secondary-100 dark:hover:bg-secondary-700 transition-colors"
           title="Settings"
           aria-label="Open settings"
         >

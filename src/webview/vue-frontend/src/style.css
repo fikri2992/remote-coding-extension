@@ -10,7 +10,7 @@
   }
 
   body {
-    @apply bg-secondary-50 text-secondary-900;
+    @apply bg-secondary-50 text-secondary-900 dark:bg-secondary-900 dark:text-secondary-100;
   }
 
   /* Responsive text sizing */
@@ -48,7 +48,7 @@
   }
 
   .btn-secondary {
-    @apply bg-secondary-200 hover:bg-secondary-300 text-secondary-800 font-medium py-2 px-4 rounded-md transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply bg-secondary-200 dark:bg-secondary-700 hover:bg-secondary-300 dark:hover:bg-secondary-600 text-secondary-800 dark:text-secondary-200 font-medium py-2 px-4 rounded-md transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed;
   }
 
   .btn-mobile {
@@ -56,7 +56,7 @@
   }
 
   .card {
-    @apply bg-white rounded-lg shadow-sm border border-secondary-200 p-4 sm:p-6;
+    @apply bg-white dark:bg-secondary-800 rounded-lg shadow-sm border border-secondary-200 dark:border-secondary-700 p-4 sm:p-6;
   }
 
   .card-mobile {
@@ -64,19 +64,19 @@
   }
 
   .input-field {
-    @apply w-full px-3 py-2 border border-secondary-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:bg-secondary-100 disabled:cursor-not-allowed;
+    @apply w-full px-3 py-2 border border-secondary-300 dark:border-secondary-600 rounded-md bg-white dark:bg-secondary-800 text-secondary-900 dark:text-secondary-100 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:bg-secondary-100 dark:disabled:bg-secondary-700 disabled:cursor-not-allowed;
   }
 
   .nav-item {
-    @apply flex items-center gap-3 px-3 py-2 rounded-md text-secondary-700 hover:bg-secondary-100 hover:text-secondary-900 transition-colors duration-200;
+    @apply flex items-center gap-3 px-3 py-2 rounded-md text-secondary-700 dark:text-secondary-300 hover:bg-secondary-100 dark:hover:bg-secondary-700 hover:text-secondary-900 dark:hover:text-secondary-100 transition-colors duration-200;
   }
 
   .nav-item.active {
-    @apply bg-primary-100 text-primary-700 font-medium;
+    @apply bg-primary-100 dark:bg-primary-900 text-primary-700 dark:text-primary-300 font-medium;
   }
 
   .nav-item.active:hover {
-    @apply bg-primary-200;
+    @apply bg-primary-200 dark:bg-primary-800;
   }
 
   /* Responsive container */

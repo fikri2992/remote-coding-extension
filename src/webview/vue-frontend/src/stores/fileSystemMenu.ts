@@ -1,16 +1,18 @@
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref, computed, watch, onUnmounted } from 'vue'
 import type { 
   FileSystemMenuState, 
   FilePreviewContent, 
   FileMetadata,
   ContextMenuState,
   ClipboardOperation,
-  VSCodeFileOperation
+  VSCodeFileOperation,
+  FileSystemEvent
 } from '../components/file-system-menu/types'
-import type { FileSystemNode } from '../types/filesystem'
+import type { FileSystemNode, FileWatchEvent } from '../types/filesystem'
 import { useFileSystem } from '../composables/useFileSystem'
 import { useConnectionStore } from './connection'
+import { connectionService } from '../services/connection'
 
 export const useFileSystemMenuStore = defineStore('fileSystemMenu', () => {
   // Composables
@@ -27,6 +29,8 @@ export const useFileSystemMenuStore = defineStore('fileSystemMenu', () => {
   const searchQuery = ref('')
   const searchResults = ref<FileSystemNode[]>([])
   const isSearchActive = ref(false)
+  const searchLoading = ref(false)
+  const searchError = ref<string | null>(null)
   
   // Preview state
   const previewContent = ref<FilePreviewContent | null>(null)
@@ -43,10 +47,17 @@ export const useFileSystemMenuStore = defineStore('fileSystemMenu', () => {
     node: null
   })
   
-  // Connection state
+  // Connection state integration
   const isConnected = computed(() => connectionStore.isConnected)
+  const connectionStatus = computed(() => connectionStore.connectionStatus)
   const isLoading = ref(false)
   const lastSync = ref<Date | null>(null)
+  const reconnectAttempts = computed(() => connectionStore.reconnectAttempts)
+  
+  // File watching state
+  const watchedPaths = ref<Set<string>>(new Set())
+  const fileChangeEvents = ref<FileSystemEvent[]>([])
+  const maxEventHistory = 100
 
   // Getters
   const state = computed((): FileSystemMenuState => ({
@@ -68,13 +79,37 @@ export const useFileSystemMenuStore = defineStore('fileSystemMenu', () => {
     lastSync: lastSync.value
   }))
 
+  const filteredFileTree = computed(() => {
+    if (!isSearchActive.value || !searchQuery.value.trim()) {
+      return Array.from(fileTree.value.values())
+    }
+    return searchResults.value
+  })
+
+  const selectedNode = computed(() => {
+    return selectedPath.value ? fileTree.value.get(selectedPath.value) : null
+  })
+
+  const canReconnect = computed(() => {
+    return !isConnected.value && connectionStore.canReconnect
+  })
+
   // Actions
   const initialize = async (initialPath?: string) => {
     try {
       isLoading.value = true
       
+      // Wait for connection if not connected
+      if (!isConnected.value) {
+        console.log('Waiting for WebSocket connection...')
+        await waitForConnection()
+      }
+      
       // Load persisted state
       loadPersistedState()
+      
+      // Set up file change event handling
+      setupFileWatching()
       
       // Load file tree
       const nodes = await fileSystem.loadFileTree(initialPath)
@@ -88,6 +123,11 @@ export const useFileSystemMenuStore = defineStore('fileSystemMenu', () => {
           addChildrenToMap(node.children)
         }
       })
+      
+      // Start watching the root path
+      if (initialPath) {
+        await startWatchingPath(initialPath)
+      }
       
       lastSync.value = new Date()
     } catch (error) {
@@ -163,6 +203,7 @@ export const useFileSystemMenuStore = defineStore('fileSystemMenu', () => {
   const setSearchQuery = (query: string) => {
     searchQuery.value = query
     isSearchActive.value = query.trim().length > 0
+    searchError.value = null
     
     if (isSearchActive.value) {
       performSearch(query)
@@ -172,7 +213,15 @@ export const useFileSystemMenuStore = defineStore('fileSystemMenu', () => {
   }
 
   const performSearch = async (query: string) => {
+    if (!isConnected.value) {
+      searchError.value = 'Not connected to server'
+      return
+    }
+
     try {
+      searchLoading.value = true
+      searchError.value = null
+      
       const results = await fileSystem.searchFiles({
         query,
         includeFiles: true,
@@ -197,8 +246,18 @@ export const useFileSystemMenuStore = defineStore('fileSystemMenu', () => {
       })
     } catch (error) {
       console.error('Search failed:', error)
+      searchError.value = error instanceof Error ? error.message : 'Search failed'
       searchResults.value = []
+    } finally {
+      searchLoading.value = false
     }
+  }
+
+  const clearSearch = () => {
+    searchQuery.value = ''
+    searchResults.value = []
+    isSearchActive.value = false
+    searchError.value = null
   }
 
   const loadPreviewContent = async (path: string) => {
@@ -373,8 +432,11 @@ export const useFileSystemMenuStore = defineStore('fileSystemMenu', () => {
   }
 
   const openInEditor = async (path: string) => {
+    if (!isConnected.value) {
+      throw new Error('Not connected to VS Code')
+    }
+
     try {
-      // This would send a command to VS Code to open the file
       const operation: VSCodeFileOperation = {
         type: 'open',
         path,
@@ -383,9 +445,19 @@ export const useFileSystemMenuStore = defineStore('fileSystemMenu', () => {
         }
       }
       
-      // Send command via WebSocket (implementation would depend on the WebSocket protocol)
-      // await connectionStore.sendCommand('vscode.openFile', operation)
-      console.log('Opening file in editor:', operation)
+      // Send command via WebSocket using the connection service
+      const result = await connectionService.getWebSocket().sendMessageWithResponse({
+        type: 'command',
+        command: 'vscode.window.showTextDocument',
+        args: [path, { preview: false }],
+        timestamp: Date.now()
+      })
+
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to open file in editor')
+      }
+
+      console.log('File opened in editor:', path)
     } catch (error) {
       console.error('Failed to open file in editor:', error)
       throw error
@@ -393,16 +465,29 @@ export const useFileSystemMenuStore = defineStore('fileSystemMenu', () => {
   }
 
   const revealInExplorer = async (path: string) => {
+    if (!isConnected.value) {
+      throw new Error('Not connected to VS Code')
+    }
+
     try {
-      // This would send a command to VS Code to reveal the file in explorer
       const operation: VSCodeFileOperation = {
         type: 'reveal',
         path
       }
       
-      // Send command via WebSocket (implementation would depend on the WebSocket protocol)
-      // await connectionStore.sendCommand('vscode.revealInExplorer', operation)
-      console.log('Revealing file in explorer:', operation)
+      // Send command via WebSocket using the connection service
+      const result = await connectionService.getWebSocket().sendMessageWithResponse({
+        type: 'command',
+        command: 'vscode.commands.executeCommand',
+        args: ['revealInExplorer', path],
+        timestamp: Date.now()
+      })
+
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to reveal file in explorer')
+      }
+
+      console.log('File revealed in explorer:', path)
     } catch (error) {
       console.error('Failed to reveal file in explorer:', error)
       throw error
@@ -410,6 +495,10 @@ export const useFileSystemMenuStore = defineStore('fileSystemMenu', () => {
   }
 
   const refreshFileTree = async () => {
+    if (!isConnected.value) {
+      throw new Error('Not connected to server')
+    }
+
     try {
       isLoading.value = true
       await fileSystem.refreshFileTree()
@@ -427,6 +516,148 @@ export const useFileSystemMenuStore = defineStore('fileSystemMenu', () => {
       throw error
     } finally {
       isLoading.value = false
+    }
+  }
+
+  // WebSocket integration methods
+  const waitForConnection = async (timeout = 10000): Promise<void> => {
+    return new Promise((resolve, reject) => {
+      if (isConnected.value) {
+        resolve()
+        return
+      }
+
+      const timeoutId = setTimeout(() => {
+        reject(new Error('Connection timeout'))
+      }, timeout)
+
+      const unwatch = watch(isConnected, (connected) => {
+        if (connected) {
+          clearTimeout(timeoutId)
+          unwatch()
+          resolve()
+        }
+      })
+    })
+  }
+
+  const handleConnectionChange = async (connected: boolean) => {
+    if (connected) {
+      // Reconnected - refresh file tree
+      try {
+        await refreshFileTree()
+        // Re-establish file watching
+        for (const path of watchedPaths.value) {
+          await fileSystem.watchPath(path)
+        }
+      } catch (error) {
+        console.error('Failed to refresh after reconnection:', error)
+      }
+    } else {
+      // Disconnected - clear loading states
+      isLoading.value = false
+      searchLoading.value = false
+      previewLoading.value = false
+      loadingPaths.value.clear()
+    }
+  }
+
+  const setupFileWatching = () => {
+    // Set up file change event handling
+    fileSystem.onFileChange(handleFileChangeEvent)
+  }
+
+  const startWatchingPath = async (path: string) => {
+    try {
+      await fileSystem.watchPath(path, {
+        recursive: true,
+        includeSubdirectories: true
+      })
+      watchedPaths.value.add(path)
+    } catch (error) {
+      console.error('Failed to start watching path:', error)
+    }
+  }
+
+  const stopWatchingPath = async (path: string) => {
+    try {
+      await fileSystem.unwatchPath(path)
+      watchedPaths.value.delete(path)
+    } catch (error) {
+      console.error('Failed to stop watching path:', error)
+    }
+  }
+
+  const handleFileChangeEvent = (event: FileWatchEvent) => {
+    // Convert FileWatchEvent to FileSystemEvent
+    const fileSystemEvent: FileSystemEvent = {
+      type: event.type === 'created' ? 'file-created' :
+            event.type === 'modified' ? 'file-changed' :
+            event.type === 'deleted' ? 'file-deleted' :
+            event.type === 'renamed' ? 'file-renamed' : 'file-changed',
+      path: event.path,
+      oldPath: event.oldPath,
+      timestamp: new Date(),
+      metadata: event.metadata
+    }
+
+    // Add to event history
+    fileChangeEvents.value.unshift(fileSystemEvent)
+    if (fileChangeEvents.value.length > maxEventHistory) {
+      fileChangeEvents.value = fileChangeEvents.value.slice(0, maxEventHistory)
+    }
+
+    // Update file tree based on event
+    switch (fileSystemEvent.type) {
+      case 'file-created':
+        // Refresh parent directory
+        refreshParentDirectory(fileSystemEvent.path)
+        break
+      case 'file-deleted':
+        // Remove from file tree
+        fileTree.value.delete(fileSystemEvent.path)
+        // Clear selection if deleted file was selected
+        if (selectedPath.value === fileSystemEvent.path) {
+          selectedPath.value = null
+          previewContent.value = null
+        }
+        break
+      case 'file-changed':
+        // Refresh file metadata and preview if selected
+        if (selectedPath.value === fileSystemEvent.path) {
+          loadPreviewContent(fileSystemEvent.path)
+        }
+        break
+      case 'file-renamed':
+        // Handle rename
+        if (fileSystemEvent.oldPath) {
+          const oldNode = fileTree.value.get(fileSystemEvent.oldPath)
+          if (oldNode) {
+            fileTree.value.delete(fileSystemEvent.oldPath)
+            oldNode.path = fileSystemEvent.path
+            oldNode.name = fileSystem.getFileName(fileSystemEvent.path)
+            fileTree.value.set(fileSystemEvent.path, oldNode)
+            
+            // Update selection if renamed file was selected
+            if (selectedPath.value === fileSystemEvent.oldPath) {
+              selectedPath.value = fileSystemEvent.path
+            }
+          }
+        }
+        break
+    }
+  }
+
+  const refreshParentDirectory = async (filePath: string) => {
+    const parentPath = fileSystem.getParentPath(filePath)
+    const parentNode = fileTree.value.get(parentPath)
+    
+    if (parentNode && parentNode.isExpanded) {
+      try {
+        await expandNode(parentPath)
+      } catch (error) {
+        console.error('Failed to refresh parent directory:', error)
+      }
     }
   }
 
@@ -537,6 +768,17 @@ export const useFileSystemMenuStore = defineStore('fileSystemMenu', () => {
     }
   }
 
+  // Watch for connection changes
+  watch(isConnected, handleConnectionChange)
+
+  // Cleanup on unmount
+  onUnmounted(() => {
+    // Stop watching all paths
+    watchedPaths.value.forEach(path => {
+      stopWatchingPath(path).catch(console.error)
+    })
+  })
+
   return {
     // State
     fileTree,
@@ -546,6 +788,8 @@ export const useFileSystemMenuStore = defineStore('fileSystemMenu', () => {
     searchQuery,
     searchResults,
     isSearchActive,
+    searchLoading,
+    searchError,
     previewContent,
     previewLoading,
     previewError,
@@ -553,11 +797,18 @@ export const useFileSystemMenuStore = defineStore('fileSystemMenu', () => {
     splitPaneSize,
     contextMenu,
     isConnected,
+    connectionStatus,
     isLoading,
     lastSync,
+    reconnectAttempts,
+    watchedPaths,
+    fileChangeEvents,
     
     // Getters
     state,
+    filteredFileTree,
+    selectedNode,
+    canReconnect,
     
     // Actions
     initialize,
@@ -565,6 +816,8 @@ export const useFileSystemMenuStore = defineStore('fileSystemMenu', () => {
     expandNode,
     collapseNode,
     setSearchQuery,
+    performSearch,
+    clearSearch,
     loadPreviewContent,
     togglePreview,
     setSplitPaneSize,
@@ -576,6 +829,15 @@ export const useFileSystemMenuStore = defineStore('fileSystemMenu', () => {
     copyFileContent,
     openInEditor,
     revealInExplorer,
-    refreshFileTree
+    refreshFileTree,
+    
+    // WebSocket integration
+    waitForConnection,
+    handleConnectionChange,
+    setupFileWatching,
+    startWatchingPath,
+    stopWatchingPath,
+    handleFileChangeEvent,
+    refreshParentDirectory
   }
 })

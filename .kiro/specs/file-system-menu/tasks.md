@@ -8,7 +8,9 @@
 
 ## Tasks
 
-- [-] 1. Set up core file system menu structure and interfaces
+- [x] 1. Set up core file system menu structure and interfaces
+
+
 
 
 
@@ -19,7 +21,10 @@
   - **Git Commit:** `feat: initialize file system menu component structure`
   - **Description:** Set up the foundational directory structure and TypeScript interfaces for the file system menu feature. Created base component files including FileSystemMenu container, defined core interfaces for props and state management, and established the basic layout structure that will house the tree and preview panels.
 
-- [ ] 2. Implement file system menu store and state management
+- [-] 2. Implement file system menu store and state management
+
+
+
   - Create Pinia store for file system menu state management
   - Implement state interfaces for tree, preview, and UI state
   - Add actions for file selection, expansion, and search operations

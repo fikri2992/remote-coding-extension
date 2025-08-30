@@ -4,9 +4,19 @@ import { addBreadcrumb, captureError, createAppError } from './error-handler'
 
 export class ConnectionService {
   private webSocket = useWebSocket()
-  private connectionStore = useConnectionStore()
+  private connectionStore: ReturnType<typeof useConnectionStore> | null = null
   private reconnectTimer: NodeJS.Timeout | null = null
   private isInitialized = false
+
+  /**
+   * Get the connection store, ensuring it's initialized
+   */
+  private getConnectionStore() {
+    if (!this.connectionStore) {
+      throw new Error('ConnectionService not initialized. Call initialize() first.')
+    }
+    return this.connectionStore
+  }
 
   /**
    * Initialize the connection service
@@ -15,6 +25,9 @@ export class ConnectionService {
     if (this.isInitialized) {
       return
     }
+
+    // Initialize the connection store now that Pinia is available
+    this.connectionStore = useConnectionStore()
 
     addBreadcrumb('connection', 'Initializing connection service', 'info')
 
@@ -37,7 +50,7 @@ export class ConnectionService {
       const wsUrl = this.getWebSocketUrl()
       addBreadcrumb('connection', `Attempting to connect to ${wsUrl}`, 'info')
 
-      this.connectionStore.setConnectionStatus('connecting')
+      this.getConnectionStore().setConnectionStatus('connecting')
       
       await this.webSocket.connect(wsUrl, {
         maxReconnectAttempts: 10,
@@ -77,7 +90,7 @@ export class ConnectionService {
         }
       ))
 
-      this.connectionStore.setConnectionStatus('error', errorMessage)
+      this.getConnectionStore().setConnectionStatus('error', errorMessage)
       this.scheduleReconnect()
     }
   }
@@ -94,7 +107,7 @@ export class ConnectionService {
     }
 
     this.webSocket.disconnect()
-    this.connectionStore.disconnect()
+    this.getConnectionStore().disconnect()
   }
 
   /**
@@ -124,7 +137,7 @@ export class ConnectionService {
     // Connection established
     this.webSocket.onConnect(() => {
       addBreadcrumb('connection', 'WebSocket connected successfully', 'info')
-      this.connectionStore.setConnected(this.webSocket.getConnectionInfo().url || 'unknown')
+      this.getConnectionStore().setConnected(this.webSocket.getConnectionInfo().url || 'unknown')
       
       if (this.reconnectTimer) {
         clearTimeout(this.reconnectTimer)
@@ -135,7 +148,7 @@ export class ConnectionService {
     // Connection lost
     this.webSocket.onDisconnect(() => {
       addBreadcrumb('connection', 'WebSocket disconnected', 'warning')
-      this.connectionStore.setConnectionStatus('disconnected')
+      this.getConnectionStore().setConnectionStatus('disconnected')
       this.scheduleReconnect()
     })
 
@@ -156,12 +169,12 @@ export class ConnectionService {
         }
       ))
 
-      this.connectionStore.setConnectionStatus('error', errorMessage)
+      this.getConnectionStore().setConnectionStatus('error', errorMessage)
     })
 
     // Health status changes
     this.webSocket.onHealthChange((health) => {
-      this.connectionStore.updateLatency(health.latency)
+      this.getConnectionStore().updateLatency(health.latency)
       
       if (!health.isHealthy) {
         addBreadcrumb('connection', 'Connection health degraded', 'warning', {
@@ -184,15 +197,15 @@ export class ConnectionService {
    * Schedule reconnection attempt
    */
   private scheduleReconnect(): void {
-    if (!this.connectionStore.canReconnect || this.reconnectTimer) {
+    if (!this.getConnectionStore().canReconnect || this.reconnectTimer) {
       return
     }
 
-    const delay = this.connectionStore.nextReconnectDelay
+    const delay = this.getConnectionStore().nextReconnectDelay
     addBreadcrumb('connection', `Scheduling reconnect in ${delay}ms`, 'info')
 
-    this.connectionStore.incrementReconnectAttempts()
-    this.connectionStore.setConnectionStatus('reconnecting')
+    this.getConnectionStore().incrementReconnectAttempts()
+    this.getConnectionStore().setConnectionStatus('reconnecting')
 
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null
@@ -218,7 +231,7 @@ export class ConnectionService {
    * Get connection status
    */
   get connectionStatus() {
-    return this.connectionStore.connectionStatus
+    return this.getConnectionStore().connectionStatus
   }
 }
 

@@ -73,6 +73,7 @@
           @expand="$emit('expand', $event)"
           @collapse="$emit('collapse', $event)"
           @context-menu="$emit('context-menu', $event)"
+          @open-in-editor="$emit('open-in-editor', $event)"
         />
       </div>
     </div>
@@ -103,6 +104,7 @@ const emit = defineEmits<{
   collapse: [path: string]
   search: [query: string]
   'context-menu': [event: { node: FileSystemNode; x: number; y: number }]
+  'open-in-editor': [path: string]
   refresh: []
 }>()
 

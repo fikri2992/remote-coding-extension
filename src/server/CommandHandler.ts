@@ -73,6 +73,8 @@ export class CommandHandler {
             
             // File system operations
             'vscode.open',
+            'vscode.window.showTextDocument',
+            'revealInExplorer',
             'vscode.workspace.getFileTree',
             'vscode.workspace.refreshFileTree',
             'vscode.workspace.getDirectoryContents',

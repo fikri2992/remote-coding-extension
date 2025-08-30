@@ -10,12 +10,14 @@ import type {
 import type { FileSystemNode, FileWatchEvent } from '../types/filesystem'
 import { useFileSystem } from '../composables/useFileSystem'
 import { useConnectionStore } from './connection'
+import { useUIStore } from './ui'
 import { connectionService } from '../services/connection'
 
 export const useFileSystemMenuStore = defineStore('fileSystemMenu', () => {
   // Composables
   const fileSystem = useFileSystem()
   const connectionStore = useConnectionStore()
+  const uiStore = useUIStore()
 
   // State
   const fileTree = ref<Map<string, FileSystemNode>>(new Map())
@@ -389,9 +391,10 @@ export const useFileSystemMenuStore = defineStore('fileSystemMenu', () => {
   const copyPath = async (path: string) => {
     try {
       await navigator.clipboard.writeText(path)
-      // Could emit a success notification here
+      uiStore.addNotification('Path copied to clipboard', 'success', true, 2000)
     } catch (error) {
       console.error('Failed to copy path:', error)
+      uiStore.addNotification('Failed to copy path to clipboard', 'error')
       throw error
     }
   }
@@ -401,9 +404,10 @@ export const useFileSystemMenuStore = defineStore('fileSystemMenu', () => {
       // Calculate relative path from workspace root
       const relativePath = path.startsWith('./') ? path : `./${path.replace(/^\/+/, '')}`
       await navigator.clipboard.writeText(relativePath)
-      // Could emit a success notification here
+      uiStore.addNotification('Relative path copied to clipboard', 'success', true, 2000)
     } catch (error) {
       console.error('Failed to copy relative path:', error)
+      uiStore.addNotification('Failed to copy relative path to clipboard', 'error')
       throw error
     }
   }
@@ -422,16 +426,25 @@ export const useFileSystemMenuStore = defineStore('fileSystemMenu', () => {
       
       const fileContent = await fileSystem.readFile(path)
       await navigator.clipboard.writeText(fileContent.content)
-      // Could emit a success notification here
+      uiStore.addNotification('File content copied to clipboard', 'success', true, 2000)
     } catch (error) {
       console.error('Failed to copy file content:', error)
+      if (error instanceof Error && error.message.includes('binary file')) {
+        uiStore.addNotification('Cannot copy binary file content', 'warning')
+      } else {
+        uiStore.addNotification('Failed to copy file content', 'error')
+      }
       throw error
     }
   }
 
   const openInEditor = async (path: string) => {
     if (!isConnected.value) {
-      throw new Error('Not connected to VS Code')
+      throw new Error('Not connected to VS Code. Please ensure the extension is running and the connection is established.')
+    }
+
+    if (!path) {
+      throw new Error('No file path provided')
     }
 
     try {
@@ -441,22 +454,49 @@ export const useFileSystemMenuStore = defineStore('fileSystemMenu', () => {
         command: 'vscode.window.showTextDocument',
         args: [path, { preview: false }],
         timestamp: Date.now()
-      })
+      }, 5000) // 5 second timeout
 
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to open file in editor')
+      if (!result || !result.success) {
+        const errorMessage = result?.error || 'Failed to open file in editor'
+        throw new Error(`VS Code operation failed: ${errorMessage}`)
       }
 
       console.log('File opened in editor:', path)
+      const fileName = fileSystem.getFileName(path)
+      uiStore.addNotification(`Opened "${fileName}" in VS Code`, 'success', true, 3000)
+      
     } catch (error) {
       console.error('Failed to open file in editor:', error)
-      throw error
+      
+      // Provide more specific error messages and notifications
+      let errorMessage = 'Failed to open file in VS Code'
+      
+      if (error instanceof Error) {
+        if (error.message.includes('timeout')) {
+          errorMessage = 'VS Code did not respond in time. The file may still open, or VS Code may be busy.'
+        } else if (error.message.includes('connection')) {
+          errorMessage = 'Lost connection to VS Code. Please check that the extension is still running.'
+        } else if (error.message.includes('ENOENT') || error.message.includes('not found')) {
+          errorMessage = `File not found: ${fileSystem.getFileName(path)}. The file may have been moved or deleted.`
+        } else if (error.message.includes('permission')) {
+          errorMessage = `Permission denied: Cannot open ${fileSystem.getFileName(path)}. Check file permissions.`
+        } else if (error.message.includes('Not connected')) {
+          errorMessage = 'Not connected to VS Code. Please ensure the extension is running.'
+        }
+      }
+      
+      uiStore.addNotification(errorMessage, 'error', false) // Don't auto-close error notifications
+      throw new Error(errorMessage)
     }
   }
 
   const revealInExplorer = async (path: string) => {
     if (!isConnected.value) {
-      throw new Error('Not connected to VS Code')
+      throw new Error('Not connected to VS Code. Please ensure the extension is running and the connection is established.')
+    }
+
+    if (!path) {
+      throw new Error('No file path provided')
     }
 
     try {
@@ -466,16 +506,39 @@ export const useFileSystemMenuStore = defineStore('fileSystemMenu', () => {
         command: 'vscode.commands.executeCommand',
         args: ['revealInExplorer', path],
         timestamp: Date.now()
-      })
+      }, 5000) // 5 second timeout
 
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to reveal file in explorer')
+      if (!result || !result.success) {
+        const errorMessage = result?.error || 'Failed to reveal file in explorer'
+        throw new Error(`VS Code operation failed: ${errorMessage}`)
       }
 
       console.log('File revealed in explorer:', path)
+      const fileName = fileSystem.getFileName(path)
+      uiStore.addNotification(`Revealed "${fileName}" in VS Code Explorer`, 'success', true, 3000)
+      
     } catch (error) {
       console.error('Failed to reveal file in explorer:', error)
-      throw error
+      
+      // Provide more specific error messages and notifications
+      let errorMessage = 'Failed to reveal file in VS Code Explorer'
+      
+      if (error instanceof Error) {
+        if (error.message.includes('timeout')) {
+          errorMessage = 'VS Code did not respond in time. Please try again.'
+        } else if (error.message.includes('connection')) {
+          errorMessage = 'Lost connection to VS Code. Please check that the extension is still running.'
+        } else if (error.message.includes('ENOENT') || error.message.includes('not found')) {
+          errorMessage = `File not found: ${fileSystem.getFileName(path)}. The file may have been moved or deleted.`
+        } else if (error.message.includes('command not found')) {
+          errorMessage = 'The "Reveal in Explorer" command is not available. Please ensure you have a compatible version of VS Code.'
+        } else if (error.message.includes('Not connected')) {
+          errorMessage = 'Not connected to VS Code. Please ensure the extension is running.'
+        }
+      }
+      
+      uiStore.addNotification(errorMessage, 'error', false) // Don't auto-close error notifications
+      throw new Error(errorMessage)
     }
   }
 

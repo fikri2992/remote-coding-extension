@@ -54,6 +54,8 @@
 
 
 
+
+
   - Connect file tree to existing useFileSystem composable
   - Implement file tree loading via WebSocket messages
   - Add directory expansion with server communication
@@ -117,7 +119,10 @@
   - **Git Commit:** `feat: add keyboard navigation and shortcuts`
   - **Description:** Implemented comprehensive keyboard event handlers for navigation throughout the file system menu. Added arrow key navigation between tree items, copy shortcuts (Ctrl+C, Ctrl+Shift+C), preview toggle shortcuts, and search focus functionality for efficient keyboard-only operation.
 
-- [ ] 11. Integrate VS Code file operations
+- [-] 11. Integrate VS Code file operations
+
+
+
   - Implement file opening in VS Code editor via WebSocket commands
   - Add "Reveal in Explorer" functionality
   - Handle VS Code integration errors gracefully

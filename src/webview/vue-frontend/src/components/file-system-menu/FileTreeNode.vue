@@ -78,6 +78,7 @@
         @expand="$emit('expand', $event)"
         @collapse="$emit('collapse', $event)"
         @context-menu="$emit('context-menu', $event)"
+        @open-in-editor="$emit('open-in-editor', $event)"
       />
     </div>
   </div>
@@ -102,6 +103,7 @@ const emit = defineEmits<{
   expand: [path: string]
   collapse: [path: string]
   'context-menu': [event: { node: FileSystemNode; x: number; y: number }]
+  'open-in-editor': [path: string]
 }>()
 
 // Computed
@@ -226,8 +228,8 @@ const handleDoubleClick = () => {
   if (props.node.type === 'directory') {
     handleToggle()
   } else {
-    // Double-click on file could open it
-    // This will be handled by the parent component
+    // Double-click on file opens it in VS Code editor
+    emit('open-in-editor', props.node.path)
   }
 }
 

@@ -16,6 +16,7 @@
         @collapse="handleNodeCollapse"
         @search="handleSearch"
         @context-menu="handleContextMenu"
+        @open-in-editor="handleOpenInEditor"
       />
     </div>
 
@@ -173,6 +174,15 @@ const closeContextMenu = () => {
 
 const togglePreview = () => {
   fileSystemMenuStore.togglePreview()
+}
+
+const handleOpenInEditor = async (path: string) => {
+  try {
+    await fileSystemMenuStore.openInEditor(path)
+  } catch (error) {
+    console.error('Failed to open file in editor:', error)
+    // Error notification is already handled in the store
+  }
 }
 
 // Resize functionality

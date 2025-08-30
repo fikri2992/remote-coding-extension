@@ -106,6 +106,14 @@
           >
             👆
           </button>
+          
+          <button
+            @click="showProgressiveLoadingDemo = !showProgressiveLoadingDemo"
+            class="text-xs px-2 py-1 bg-indigo-500 text-white rounded hover:bg-indigo-600 transition-colors"
+            title="Progressive Loading Demo"
+          >
+            ⚡
+          </button>
         </div>
       </template>
     </CollapsibleHeader>
@@ -154,6 +162,8 @@
         @scroll="handleTreeScroll"
         @visible-range-change="handleVisibleRangeChange"
         @swipe-action="handleSwipeAction"
+        @loading-state-change="handleProgressiveLoadingStateChange"
+        @offline-state-change="handleProgressiveOfflineStateChange"
       />
     </div>
 
@@ -290,6 +300,26 @@
       </div>
     </div>
 
+    <!-- Loading State Manager -->
+    <LoadingStateManager
+      v-if="progressiveLoadingState.isLoading || progressiveOfflineState.isOffline || progressiveLoadingStats.failedRequests > 0"
+      :loading-state="progressiveLoadingState"
+      :offline-state="progressiveOfflineState"
+      :loading-stats="progressiveLoadingStats"
+      :loading-progress="progressiveLoadingStats.loadingProgress"
+      :show-skeletons="showSkeletons"
+      :skeleton-count="Math.ceil(containerHeight / dynamicItemHeight)"
+      :density="fileDensity"
+      :debug-mode="showPerformanceDebug"
+      :show-debug-stats="showPerformanceDebug"
+      @retry-connection="handleRetryConnection"
+      @cancel-request="handleCancelProgressiveRequest"
+      @retry-request="handleRetryProgressiveRequest"
+      @dismiss-offline="handleDismissOfflineIndicator"
+      @dismiss-cached="handleDismissCachedIndicator"
+      @dismiss-error="handleDismissErrorIndicator"
+    />
+
     <!-- Performance Debug Panel -->
     <div v-if="showPerformanceDebug" class="mobile:col-span-full tablet:col-span-2 desktop:col-span-3 mt-4">
       <PerformanceDebugPanel />
@@ -298,6 +328,11 @@
     <!-- Gesture Demo -->
     <div v-if="showGestureDemo" class="mobile:col-span-full tablet:col-span-2 desktop:col-span-3 mt-4">
       <GestureDemo />
+    </div>
+
+    <!-- Progressive Loading Demo -->
+    <div v-if="showProgressiveLoadingDemo" class="mobile:col-span-full tablet:col-span-2 desktop:col-span-3 mt-4">
+      <ProgressiveLoadingDemo />
     </div>
 
     <!-- Adaptive Navigation -->
@@ -335,6 +370,8 @@ import MobileContextMenu from './MobileContextMenu.vue'
 import MobileConfirmationDialog from './MobileConfirmationDialog.vue'
 import CollapsibleHeader from '../layout/CollapsibleHeader.vue'
 import AdaptiveNavigation from '../layout/AdaptiveNavigation.vue'
+import LoadingStateManager from './LoadingStateManager.vue'
+import ProgressiveLoadingDemo from './ProgressiveLoadingDemo.vue'
 import { 
   FolderIcon, 
   ArrowPathIcon, 
@@ -379,6 +416,35 @@ const cacheEnabled = ref(true)
 const cacheSize = ref(1000)
 const isLoadingMore = ref(false)
 const visibleRange = ref({ start: 0, end: 0 })
+
+// Progressive loading state
+const progressiveLoadingState = ref({
+  isLoading: false,
+  loadingItems: new Set<string>(),
+  pendingRequests: new Map(),
+  completedRequests: new Set<string>(),
+  failedRequests: new Map(),
+  totalItems: 0,
+  loadedItems: 0
+})
+
+const progressiveOfflineState = ref({
+  isOffline: false,
+  lastOnlineTime: Date.now(),
+  queuedRequests: [],
+  offlineCache: new Map()
+})
+
+const progressiveLoadingStats = ref({
+  totalRequests: 0,
+  successfulRequests: 0,
+  failedRequests: 0,
+  pendingRequests: 0,
+  cacheHitRate: 0,
+  loadingProgress: 0
+})
+
+const showProgressiveLoadingDemo = ref(false)
 
 const filterOptions = ref<FileFilterOptions>({
   showHidden: false,
@@ -445,8 +511,25 @@ const isLoading = computed(() => fileSystem.isLoading.value)
 
 // Responsive state
 const isMobile = computed(() => breakpoints.isMobile.value)
-const isTablet = computed(() => breakpoints.isTablet.value)
+// const isTablet = computed(() => breakpoints.isTablet.value) // Unused
 const currentBreakpoint = computed(() => breakpoints.current.value)
+
+// Progressive loading computed properties
+const dynamicItemHeight = computed(() => {
+  switch (fileDensity.value) {
+    case 'compact':
+      return isMobile.value ? 40 : 28
+    case 'comfortable':
+      return isMobile.value ? 56 : 40
+    default: // normal
+      return isMobile.value ? 48 : 32
+  }
+})
+
+const containerHeight = computed(() => {
+  // Calculate container height based on viewport
+  return window.innerHeight - 200 // Approximate header/footer height
+})
 
 // Context menu actions for mobile
 const contextMenuActions = computed(() => {
@@ -533,9 +616,9 @@ const handleNavigationAction = (item: any) => {
   console.log('Navigation action:', item.id)
 }
 
-const clearSearch = () => {
-  searchQuery.value = ''
-}
+// const clearSearch = () => {
+//   searchQuery.value = ''
+// } // Unused
 
 const applyFilters = () => {
   // Filters are applied by computed property
@@ -896,6 +979,67 @@ const testConnection = async () => {
     showNotification('Connection test failed', 'error')
   }
 }
+
+// Progressive loading handlers
+const handleProgressiveLoadingStateChange = (isLoading: boolean, loadingStats: any) => {
+  progressiveLoadingState.value.isLoading = isLoading
+  if (loadingStats) {
+    progressiveLoadingStats.value = loadingStats
+  }
+}
+
+const handleProgressiveOfflineStateChange = (isOffline: boolean, offlineState: any) => {
+  progressiveOfflineState.value.isOffline = isOffline
+  if (offlineState) {
+    progressiveOfflineState.value = offlineState
+  }
+}
+
+const handleRetryConnection = async () => {
+  try {
+    // Attempt to reconnect
+    await connectionService.connect()
+    showNotification('Connection restored', 'success')
+  } catch (error) {
+    showNotification('Failed to reconnect', 'error')
+  }
+}
+
+const handleCancelProgressiveRequest = (requestId: string) => {
+  if (fileTreeRef.value) {
+    fileTreeRef.value.cancelRequest(requestId)
+    showNotification('Request cancelled', 'info')
+  }
+}
+
+const handleRetryProgressiveRequest = async (requestId: string) => {
+  if (fileTreeRef.value) {
+    try {
+      await fileTreeRef.value.retryFailedRequest(requestId)
+      showNotification('Request retried', 'info')
+    } catch (error) {
+      showNotification('Retry failed', 'error')
+    }
+  }
+}
+
+const handleDismissOfflineIndicator = () => {
+  // Handle offline indicator dismissal
+  if (progressiveOfflineState.value) {
+    progressiveOfflineState.value.isOffline = false
+  }
+}
+
+const handleDismissCachedIndicator = () => {
+  // Handle cached indicator dismissal
+  showNotification('Cached indicator dismissed', 'info')
+}
+
+const handleDismissErrorIndicator = () => {
+  // Handle error indicator dismissal
+  if (progressiveLoadingStats.value) {
+    progressiveLoadingStats.value.failedRequests = 0
+  }
 }
 
 // Initialize gesture system after handlers are declared
@@ -991,72 +1135,11 @@ const handleVisibleRangeChange = (startIndex: number, endIndex: number, visibleN
   }
 }
 
-const changeDensity = (newDensity: 'compact' | 'normal' | 'comfortable') => {
-  fileDensity.value = newDensity
-  showNotification(`File list density: ${newDensity}`, 'info')
-  
-  // Persist density preference
-  try {
-    localStorage.setItem('file-explorer-density', newDensity)
-  } catch (error) {
-    console.warn('Failed to persist density preference:', error)
-  }
-}
+// Removed duplicate changeDensity function
 
 // Removed unused function scrollToSelectedNode
 
-const testConnection = async () => {
-  console.log('🔧 Debug: Testing WebSocket connection...')
-  
-  // Log connection status
-  console.log('Connection Status:', {
-    isConnected: connectionService.isConnected,
-    connectionStatus: connectionStore.connectionStatus,
-    serverUrl: connectionStore.serverUrl,
-    lastError: connectionStore.lastError
-  })
-  
-  // Test WebSocket directly
-  const webSocket = connectionService.getWebSocket()
-  if (webSocket) {
-    console.log('WebSocket State:', {
-      isConnected: webSocket.isConnected.value,
-      connectionStatus: webSocket.connectionStatus.value,
-      health: webSocket.health.value,
-      queueSize: webSocket.queueSize.value
-    })
-    
-    // Try to send a simple test message
-    try {
-      console.log('🧪 Sending test message...')
-      const result = await webSocket.sendMessageWithResponse({
-      type: 'command',
-      command: 'test.ping',
-      args: [],
-      timestamp: Date.now()
-    }, 5000)
-    
-      console.log('✅ Test message response:', result)
-      showNotification('WebSocket connection test successful', 'success')
-    } catch (error) {
-      console.error('❌ Test message failed:', error)
-      showNotification(`WebSocket test failed: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error')
-    }
-  } else {
-    console.warn('⚠️ WebSocket not available')
-    showNotification('WebSocket not initialized', 'warning')
-  }
-  
-  // Try to load file tree with detailed logging
-  try {
-    console.log('📁 Testing file tree loading...')
-    await fileSystem.loadFileTree('.')
-    showNotification('File tree test successful', 'success')
-  } catch (error) {
-    console.error('❌ File tree test failed:', error)
-    showNotification(`File tree test failed: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error')
-  }
-}
+// Removed duplicate testConnection function
 
 // Watchers
 watch(showCreateDialog, async (show) => {

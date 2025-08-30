@@ -85,6 +85,7 @@ import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useBreakpoints } from '../../composables/useBreakpoints'
 import { useVirtualScrollCache } from '../../composables/useVirtualScrollCache'
 import { useIntersectionObserver } from '../../composables/useIntersectionObserver'
+import { useProgressiveFileLoading } from '../../composables/useProgressiveFileLoading'
 import { virtualScrollPerformanceMonitor } from '../../utils/virtual-scroll-performance'
 
 interface Props {
@@ -100,12 +101,19 @@ interface Props {
   momentumScrolling?: boolean
   cacheEnabled?: boolean
   cacheSize?: number
+  loadFunction?: (path: string, startIndex: number, endIndex: number, signal?: AbortSignal) => Promise<any[]>
+  basePath?: string
+  enableSmartPreloading?: boolean
+  maxConcurrentRequests?: number
+  scrollVelocityThreshold?: number
 }
 
 interface Emits {
   (e: 'load-more', direction: 'up' | 'down'): void
   (e: 'scroll', scrollTop: number, direction: 'up' | 'down'): void
   (e: 'visible-range-change', startIndex: number, endIndex: number): void
+  (e: 'loading-state-change', isLoading: boolean, loadingStats: any): void
+  (e: 'offline-state-change', isOffline: boolean, offlineState: any): void
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -117,7 +125,11 @@ const props = withDefaults(defineProps<Props>(), {
   showSkeletons: true,
   momentumScrolling: true,
   cacheEnabled: true,
-  cacheSize: 1000
+  cacheSize: 1000,
+  basePath: '/',
+  enableSmartPreloading: true,
+  maxConcurrentRequests: 3,
+  scrollVelocityThreshold: 100
 })
 
 const emit = defineEmits<Emits>()
@@ -125,6 +137,19 @@ const emit = defineEmits<Emits>()
 // Composables
 const breakpoints = useBreakpoints()
 const cache = useVirtualScrollCache(props.cacheSize || 1000)
+
+// Progressive loading composable
+const progressiveLoader = props.loadFunction ? useProgressiveFileLoading(
+  props.loadFunction,
+  {
+    pageSize: props.pageSize,
+    preloadDistance: props.preloadDistance,
+    maxConcurrentRequests: props.maxConcurrentRequests,
+    cacheSize: props.cacheSize,
+    enableSmartPreloading: props.enableSmartPreloading,
+    scrollVelocityThreshold: props.scrollVelocityThreshold
+  }
+) : null
 
 // State
 const containerRef = ref<HTMLElement>()
@@ -263,10 +288,15 @@ const showLoadingIndicator = computed(() => {
 })
 
 const skeletonItems = computed(() => {
-  if (!props.showSkeletons || !isLoading.value) return []
+  if (!props.showSkeletons) return []
   
-  const count = Math.ceil(props.containerHeight / dynamicItemHeight.value)
-  return Array.from({ length: count }, (_, i) => ({
+  // Use progressive loader skeleton count if available
+  const skeletonCount = progressiveLoader?.skeletonCount.value || 
+    (isLoading.value ? Math.ceil(props.containerHeight / dynamicItemHeight.value) : 0)
+  
+  if (skeletonCount === 0) return []
+  
+  return Array.from({ length: skeletonCount }, (_, i) => ({
     id: `skeleton-${i}`,
     type: 'skeleton'
   }))
@@ -286,6 +316,11 @@ const handleScroll = (event: Event) => {
   lastScrollTop.value = newScrollTop
   scrollTop.value = newScrollTop
   
+  // Update progressive loader scroll behavior
+  if (progressiveLoader) {
+    progressiveLoader.updateScrollBehavior(newScrollTop, scrollDirection.value)
+  }
+  
   // Set scrolling state
   isScrolling.value = true
   if (scrollTimeout.value) {
@@ -293,6 +328,9 @@ const handleScroll = (event: Event) => {
   }
   scrollTimeout.value = window.setTimeout(() => {
     isScrolling.value = false
+    if (progressiveLoader) {
+      progressiveLoader.stopScrollTracking()
+    }
     virtualScrollPerformanceMonitor.endRenderMeasurement()
   }, 150)
   
@@ -385,11 +423,38 @@ const scrollToItem = (item: any, behavior: ScrollBehavior = 'smooth') => {
   }
 }
 
-const loadMore = (direction: 'up' | 'down') => {
+const loadMore = async (direction: 'up' | 'down') => {
   if (isLoading.value) return
   
-  isLoading.value = true
-  emit('load-more', direction)
+  // Use progressive loader if available
+  if (progressiveLoader && props.loadFunction) {
+    try {
+      isLoading.value = true
+      const currentRange = { start: startIndex.value, end: endIndex.value }
+      await progressiveLoader.loadMore(
+        props.basePath || '/',
+        direction,
+        currentRange,
+        props.items.length
+      )
+      
+      // Update scroll behavior tracking
+      progressiveLoader.updateScrollBehavior(scrollTop.value, direction)
+      
+      // Emit loading state changes
+      emit('loading-state-change', progressiveLoader.isLoadingAny.value, progressiveLoader.loadingStats.value)
+      emit('offline-state-change', progressiveLoader.offlineState.value.isOffline, progressiveLoader.offlineState.value)
+      
+    } catch (error) {
+      console.error('Progressive loading failed:', error)
+    } finally {
+      isLoading.value = false
+    }
+  } else {
+    // Fallback to original behavior
+    isLoading.value = true
+    emit('load-more', direction)
+  }
 }
 
 const setLoading = (loading: boolean) => {
@@ -511,7 +576,14 @@ defineExpose({
   setLoading,
   addLoadingItem,
   removeLoadingItem,
-  cacheItem
+  cacheItem,
+  // Progressive loading methods
+  cancelAllRequests: () => progressiveLoader?.cancelAllRequests(),
+  cancelRequest: (id: string) => progressiveLoader?.cancelRequest(id),
+  retryFailedRequest: (id: string) => progressiveLoader?.retryFailedRequest(id),
+  getLoadingStats: () => progressiveLoader?.loadingStats.value,
+  getOfflineState: () => progressiveLoader?.offlineState.value,
+  cacheForOffline: (path: string, items: any[]) => progressiveLoader?.cacheForOffline(path, items)
 })
 </script>
 

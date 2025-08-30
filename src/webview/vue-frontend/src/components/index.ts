@@ -21,6 +21,12 @@ export { default as FileViewer } from './files/FileViewer.vue'
 export { default as FileSearch } from './files/FileSearch.vue'
 export { default as VirtualList } from './files/VirtualList.vue'
 
+// Progressive loading components
+export { default as SkeletonFileItem } from './files/SkeletonFileItem.vue'
+export { default as OfflineIndicator } from './files/OfflineIndicator.vue'
+export { default as LoadingStateManager } from './files/LoadingStateManager.vue'
+export { default as ProgressiveLoadingDemo } from './files/ProgressiveLoadingDemo.vue'
+
 // Mobile file preview components
 export { default as MobileFilePreview } from './files/MobileFilePreview.vue'
 export { default as MobileImagePreview } from './files/MobileImagePreview.vue'

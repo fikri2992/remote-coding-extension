@@ -12,11 +12,16 @@
       :momentum-scrolling="momentumScrolling"
       :cache-enabled="cacheEnabled"
       :cache-size="cacheSize"
+      :load-function="loadFunction"
+      :base-path="basePath"
+      :enable-smart-preloading="enableSmartPreloading"
       v-slot="{ item, isLoading: itemLoading }"
       class="h-full"
       @load-more="handleLoadMore"
       @scroll="handleScroll"
       @visible-range-change="handleVisibleRangeChange"
+      @loading-state-change="handleLoadingStateChange"
+      @offline-state-change="handleOfflineStateChange"
     >
       <FileTreeNode
         :key="item.path"
@@ -55,6 +60,10 @@ interface Props {
   momentumScrolling?: boolean
   cacheEnabled?: boolean
   cacheSize?: number
+  loadFunction?: (path: string, startIndex: number, endIndex: number, signal?: AbortSignal) => Promise<FileSystemNode[]>
+  basePath?: string
+  enableSmartPreloading?: boolean
+  showLoadingState?: boolean
 }
 
 interface Emits {
@@ -66,6 +75,8 @@ interface Emits {
   (e: 'scroll', scrollTop: number, direction: 'up' | 'down'): void
   (e: 'visible-range-change', startIndex: number, endIndex: number, visibleNodes: FileSystemNode[]): void
   (e: 'swipe-action', action: import('../../composables/useFileGestures').FileGestureAction, node: FileSystemNode): void
+  (e: 'loading-state-change', isLoading: boolean, loadingStats: any): void
+  (e: 'offline-state-change', isOffline: boolean, offlineState: any): void
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -78,7 +89,10 @@ const props = withDefaults(defineProps<Props>(), {
   showSkeletons: true,
   momentumScrolling: true,
   cacheEnabled: true,
-  cacheSize: 1000
+  cacheSize: 1000,
+  basePath: '/',
+  enableSmartPreloading: true,
+  showLoadingState: true
 })
 
 const emit = defineEmits<Emits>()
@@ -156,6 +170,14 @@ const handleVisibleRangeChange = (startIndex: number, endIndex: number) => {
   emit('visible-range-change', startIndex, endIndex, visibleNodesSlice)
 }
 
+const handleLoadingStateChange = (isLoading: boolean, loadingStats: any) => {
+  emit('loading-state-change', isLoading, loadingStats)
+}
+
+const handleOfflineStateChange = (isOffline: boolean, offlineState: any) => {
+  emit('offline-state-change', isOffline, offlineState)
+}
+
 const handleNodeHeightChange = (nodeId: string, height: number) => {
   nodeHeights.value.set(nodeId, height)
   
@@ -227,7 +249,14 @@ defineExpose({
   scrollToIndex,
   setLoading,
   cacheNode,
-  updateContainerHeight
+  updateContainerHeight,
+  // Progressive loading methods
+  cancelAllRequests: () => virtualListRef.value?.cancelAllRequests(),
+  cancelRequest: (id: string) => virtualListRef.value?.cancelRequest(id),
+  retryFailedRequest: (id: string) => virtualListRef.value?.retryFailedRequest(id),
+  getLoadingStats: () => virtualListRef.value?.getLoadingStats(),
+  getOfflineState: () => virtualListRef.value?.getOfflineState(),
+  cacheForOffline: (path: string, items: FileSystemNode[]) => virtualListRef.value?.cacheForOffline(path, items)
 })
 </script>
 

@@ -1,28 +1,28 @@
 <template>
-  <div class="file-explorer h-full flex flex-col bg-white dark:bg-gray-900">
+  <div class="file-explorer h-full responsive-grid file-explorer-grid bg-white dark:bg-gray-900 pt-safe" :class="{ 'mobile-layout': isMobile, 'tablet-layout': isTablet }">
     <!-- Header with search and actions -->
-    <div class="file-explorer-header p-4 border-b border-gray-200 dark:border-gray-700">
+    <div class="file-explorer-header mobile:col-span-full tablet:col-span-2 desktop:col-span-3 p-safe border-b border-gray-200 dark:border-gray-700">
       <div class="flex items-center justify-between mb-3">
-        <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+        <h2 class="text-responsive font-semibold text-gray-900 dark:text-white">
           File Explorer
         </h2>
-        <div class="flex items-center space-x-2">
+        <div class="flex items-center gap-2">
           <button
             @click="refreshTree"
             :disabled="isLoading"
-            class="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 disabled:opacity-50"
+            class="touch-friendly mobile-button p-3 md:p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 disabled:opacity-50 rounded-lg"
             title="Refresh"
           >
-            <svg class="w-4 h-4" :class="{ 'animate-spin': isLoading }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg class="w-5 h-5 md:w-4 md:h-4" :class="{ 'animate-spin': isLoading }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
           </button>
           <button
             @click="showCreateDialog = true"
-            class="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+            class="touch-friendly mobile-button p-3 md:p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-lg"
             title="Create File/Folder"
           >
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg class="w-5 h-5 md:w-4 md:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
             </svg>
           </button>
@@ -36,28 +36,28 @@
           @input="handleSearch"
           type="text"
           placeholder="Search files and folders..."
-          class="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          class="mobile-input w-full pl-12 pr-12 py-3 md:py-2 text-base md:text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
         >
-        <svg class="absolute left-3 top-2.5 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg class="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 md:w-4 md:h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
         </svg>
         <button
           v-if="searchQuery"
           @click="clearSearch"
-          class="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
+          class="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 touch-target"
         >
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-5 h-5 md:w-4 md:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
       </div>
 
       <!-- Filter options -->
-      <div v-if="showFilters" class="mt-3 flex flex-wrap gap-2">
+      <div v-if="showFilters" class="mt-3 flex flex-col md:flex-row flex-wrap gap-3 md:gap-2">
         <select
           v-model="filterOptions.sortBy"
           @change="applyFilters"
-          class="text-sm border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+          class="mobile-input text-base md:text-sm border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
         >
           <option value="name">Sort by Name</option>
           <option value="modified">Sort by Modified</option>
@@ -67,26 +67,26 @@
         <select
           v-model="filterOptions.sortOrder"
           @change="applyFilters"
-          class="text-sm border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+          class="mobile-input text-base md:text-sm border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
         >
           <option value="asc">Ascending</option>
           <option value="desc">Descending</option>
         </select>
-        <label class="flex items-center text-sm text-gray-700 dark:text-gray-300">
+        <label class="flex items-center text-base md:text-sm text-gray-700 dark:text-gray-300 touch-target">
           <input
             v-model="filterOptions.showHidden"
             @change="applyFilters"
             type="checkbox"
-            class="mr-1"
+            class="mr-3 w-5 h-5 md:w-4 md:h-4"
           >
           Show Hidden
         </label>
       </div>
 
-      <div class="flex items-center justify-between mt-2">
+      <div class="flex items-center justify-between mt-3">
         <button
           @click="showFilters = !showFilters"
-          class="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+          class="touch-friendly text-base md:text-sm text-blue-600 dark:text-blue-400 hover:underline py-2 px-3 rounded-lg"
         >
           {{ showFilters ? 'Hide Filters' : 'Show Filters' }}
         </button>
@@ -95,8 +95,8 @@
         <button
           @click="testConnection"
           :disabled="isLoading"
-          class="text-xs px-2 py-1 bg-yellow-500 text-white rounded hover:bg-yellow-600 disabled:opacity-50"
-          title="Test WebSocket Connection"
+          class="touch-friendly text-sm md:text-xs px-3 py-2 md:px-2 md:py-1 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 disabled:opacity-50"
+          :title="`Test WebSocket Connection (${currentBreakpoint})`"
         >
           🔧 Debug
         </button>
@@ -104,7 +104,7 @@
     </div>
 
     <!-- File tree -->
-    <div class="file-tree flex-1 overflow-auto">
+    <div class="file-tree mobile:col-span-full tablet:col-span-2 desktop:col-span-3 scroll-mobile overflow-auto pb-safe">
       <FileTree
         :nodes="displayedNodes"
         :selected-path="selectedPath"
@@ -120,50 +120,50 @@
     <div
       v-if="contextMenu.show"
       :style="{ top: contextMenu.y + 'px', left: contextMenu.x + 'px' }"
-      class="fixed z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-48"
+      class="fixed z-modal bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-mobile-lg py-2 min-w-48 md:min-w-40"
       @click.stop
     >
       <button
         v-if="contextMenu.node?.type === 'file'"
         @click="openFile(contextMenu.node)"
-        class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+        class="touch-friendly w-full text-left px-4 py-3 md:py-2 text-base md:text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg mx-1"
       >
         Open File
       </button>
       <button
         @click="showRenameDialog = true; closeContextMenu()"
-        class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+        class="touch-friendly w-full text-left px-4 py-3 md:py-2 text-base md:text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg mx-1"
       >
         Rename
       </button>
       <button
         @click="copyPath(contextMenu.node?.path)"
-        class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+        class="touch-friendly w-full text-left px-4 py-3 md:py-2 text-base md:text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg mx-1"
       >
         Copy Path
       </button>
-      <hr class="my-1 border-gray-200 dark:border-gray-600">
+      <hr class="my-2 border-gray-200 dark:border-gray-600">
       <button
         @click="deleteNode(contextMenu.node)"
-        class="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
+        class="touch-friendly w-full text-left px-4 py-3 md:py-2 text-base md:text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg mx-1"
       >
         Delete
       </button>
     </div>
 
     <!-- Create dialog -->
-    <div v-if="showCreateDialog" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div class="bg-white dark:bg-gray-800 rounded-lg p-6 w-96 max-w-full mx-4">
-        <h3 class="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Create New</h3>
+    <div v-if="showCreateDialog" class="mobile-modal bg-black bg-opacity-50">
+      <div class="mobile-modal-content bg-white dark:bg-gray-800 p-6 w-full max-w-md mx-4">
+        <h3 class="text-responsive font-semibold mb-4 text-gray-900 dark:text-white">Create New</h3>
         <div class="space-y-4">
-          <div class="flex space-x-4">
-            <label class="flex items-center">
-              <input v-model="createType" type="radio" value="file" class="mr-2">
-              <span class="text-gray-700 dark:text-gray-300">File</span>
+          <div class="flex flex-col md:flex-row gap-4">
+            <label class="flex items-center touch-target">
+              <input v-model="createType" type="radio" value="file" class="mr-3 w-5 h-5">
+              <span class="text-base md:text-sm text-gray-700 dark:text-gray-300">File</span>
             </label>
-            <label class="flex items-center">
-              <input v-model="createType" type="radio" value="directory" class="mr-2">
-              <span class="text-gray-700 dark:text-gray-300">Folder</span>
+            <label class="flex items-center touch-target">
+              <input v-model="createType" type="radio" value="directory" class="mr-3 w-5 h-5">
+              <span class="text-base md:text-sm text-gray-700 dark:text-gray-300">Folder</span>
             </label>
           </div>
           <input
@@ -171,21 +171,21 @@
             @keyup.enter="handleCreate"
             type="text"
             :placeholder="`${createType === 'file' ? 'File' : 'Folder'} name`"
-            class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            class="mobile-input w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
             ref="createInput"
           >
         </div>
-        <div class="flex justify-end space-x-3 mt-6">
+        <div class="flex flex-col md:flex-row justify-end gap-3 mt-6">
           <button
             @click="showCreateDialog = false; createName = ''"
-            class="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
+            class="mobile-button touch-friendly px-6 py-3 md:px-4 md:py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 rounded-lg border border-gray-300 dark:border-gray-600"
           >
             Cancel
           </button>
           <button
             @click="handleCreate"
             :disabled="!createName.trim()"
-            class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            class="mobile-button touch-friendly px-6 py-3 md:px-4 md:py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Create
           </button>
@@ -194,28 +194,28 @@
     </div>
 
     <!-- Rename dialog -->
-    <div v-if="showRenameDialog" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div class="bg-white dark:bg-gray-800 rounded-lg p-6 w-96 max-w-full mx-4">
-        <h3 class="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Rename</h3>
+    <div v-if="showRenameDialog" class="mobile-modal bg-black bg-opacity-50">
+      <div class="mobile-modal-content bg-white dark:bg-gray-800 p-6 w-full max-w-md mx-4">
+        <h3 class="text-responsive font-semibold mb-4 text-gray-900 dark:text-white">Rename</h3>
         <input
           v-model="renameName"
           @keyup.enter="handleRename"
           type="text"
           placeholder="New name"
-          class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+          class="mobile-input w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
           ref="renameInput"
         >
-        <div class="flex justify-end space-x-3 mt-6">
+        <div class="flex flex-col md:flex-row justify-end gap-3 mt-6">
           <button
             @click="showRenameDialog = false; renameName = ''"
-            class="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
+            class="mobile-button touch-friendly px-6 py-3 md:px-4 md:py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 rounded-lg border border-gray-300 dark:border-gray-600"
           >
             Cancel
           </button>
           <button
             @click="handleRename"
             :disabled="!renameName.trim()"
-            class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            class="mobile-button touch-friendly px-6 py-3 md:px-4 md:py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Rename
           </button>
@@ -236,6 +236,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { useFileSystem } from '../../composables/useFileSystem'
+import { useBreakpoints } from '../../composables/useBreakpoints'
 import { connectionService } from '../../services/connection'
 import { useConnectionStore } from '../../stores/connection'
 import type { FileSystemNode, FileFilterOptions } from '../../types/filesystem'
@@ -245,6 +246,7 @@ import NotificationToast from '../common/NotificationToast.vue'
 // Composables
 const fileSystem = useFileSystem()
 const connectionStore = useConnectionStore()
+const breakpoints = useBreakpoints()
 
 // State
 const searchQuery = ref('')
@@ -299,6 +301,11 @@ const displayedNodes = computed(() => {
 const selectedPath = computed(() => fileSystem.fileTree.value.selectedPath)
 const loadingPaths = computed(() => fileSystem.fileTree.value.loadingPaths)
 const isLoading = computed(() => fileSystem.isLoading.value)
+
+// Responsive state
+const isMobile = computed(() => breakpoints.isMobile.value)
+const isTablet = computed(() => breakpoints.isTablet.value)
+const currentBreakpoint = computed(() => breakpoints.current.value)
 
 // Methods
 const refreshTree = async () => {
@@ -524,9 +531,114 @@ onMounted(async () => {
 <style scoped>
 .file-explorer {
   min-height: 0; /* Allow flex child to shrink */
+  /* Mobile-first responsive grid */
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0;
+}
+
+@media (min-width: 768px) {
+  .file-explorer {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .file-explorer {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+}
+
+.file-explorer-header {
+  /* Ensure header spans full width on all breakpoints */
+  grid-column: 1 / -1;
 }
 
 .file-tree {
   min-height: 0; /* Allow flex child to shrink */
+  /* Mobile-optimized scrolling */
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+/* Mobile-specific responsive adjustments */
+@media (max-width: 767px) {
+  .file-explorer {
+    padding: 0;
+  }
+  
+  .file-explorer-header {
+    padding: 1rem;
+    border-bottom: 1px solid var(--border-color, #e5e7eb);
+  }
+  
+  .file-tree {
+    padding: 0.5rem;
+  }
+}
+
+/* Tablet adjustments */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .file-explorer {
+    padding: 0.5rem;
+  }
+}
+
+/* Desktop adjustments */
+@media (min-width: 1024px) {
+  .file-explorer {
+    padding: 1rem;
+  }
+}
+
+/* Safe area support */
+@supports (padding: env(safe-area-inset-top)) {
+  .file-explorer {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+}
+
+/* Touch-friendly hover states */
+@media (hover: none) and (pointer: coarse) {
+  .touch-friendly:hover {
+    /* Remove hover effects on touch devices */
+    background-color: initial;
+    color: initial;
+  }
+  
+  .touch-friendly:active {
+    /* Add active state for touch feedback */
+    transform: scale(0.98);
+    opacity: 0.8;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .file-explorer-header {
+    border-bottom-width: 2px;
+  }
+  
+  .mobile-input,
+  .mobile-button {
+    border-width: 2px;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .mobile-modal-content {
+    animation: none;
+  }
+  
+  .touch-friendly:active {
+    transform: none;
+  }
 }
 </style>

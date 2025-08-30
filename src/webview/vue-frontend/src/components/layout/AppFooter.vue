@@ -25,9 +25,10 @@
 </template>
 
 <script setup lang="ts">
-import { useUIStore, useConnectionStore } from '../../stores'
+import { useUIStore } from '../../stores'
+// import { useConnectionStore } from '../../stores' // TODO: Use for connection status display
 import ConnectionStatus from '../common/ConnectionStatus.vue'
 
 const uiStore = useUIStore()
-const connectionStore = useConnectionStore()
+// const connectionStore = useConnectionStore() // TODO: Use for connection status display
 </script>

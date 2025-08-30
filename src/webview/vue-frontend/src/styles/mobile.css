@@ -1,0 +1,315 @@
+/* Mobile-first responsive foundation styles */
+
+:root {
+  /* Mobile-specific CSS custom properties */
+  --mobile-header-height: 56px;
+  --tablet-header-height: 64px;
+  --desktop-header-height: 72px;
+  
+  --mobile-padding: 16px;
+  --tablet-padding: 24px;
+  --desktop-padding: 32px;
+  
+  --mobile-gap: 8px;
+  --tablet-gap: 12px;
+  --desktop-gap: 16px;
+  
+  --mobile-border-radius: 8px;
+  --tablet-border-radius: 12px;
+  --desktop-border-radius: 16px;
+  
+  /* Touch target sizes */
+  --touch-target-min: 44px;
+  --touch-target-comfortable: 48px;
+  --touch-target-large: 56px;
+  
+  /* Safe area fallbacks for non-supporting browsers */
+  --safe-area-inset-top: 0px;
+  --safe-area-inset-bottom: 0px;
+  --safe-area-inset-left: 0px;
+  --safe-area-inset-right: 0px;
+  
+  /* Animation durations optimized for mobile */
+  --mobile-transition-fast: 150ms;
+  --mobile-transition-normal: 250ms;
+  --mobile-transition-slow: 350ms;
+  
+  /* Z-index scale for mobile layering */
+  --z-base: 1;
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-fixed: 300;
+  --z-modal-backdrop: 400;
+  --z-modal: 500;
+  --z-popover: 600;
+  --z-tooltip: 700;
+  --z-toast: 800;
+}
+
+/* Safe area support for notched devices */
+@supports (padding: env(safe-area-inset-top)) {
+  :root {
+    --safe-area-inset-top: env(safe-area-inset-top);
+    --safe-area-inset-bottom: env(safe-area-inset-bottom);
+    --safe-area-inset-left: env(safe-area-inset-left);
+    --safe-area-inset-right: env(safe-area-inset-right);
+  }
+}
+
+/* Mobile-first responsive grid system */
+.responsive-grid {
+  display: grid;
+  gap: var(--mobile-gap);
+  grid-template-columns: var(--grid-columns, 1fr);
+  padding: var(--mobile-padding);
+}
+
+@media (min-width: 768px) {
+  .responsive-grid {
+    gap: var(--tablet-gap);
+    padding: var(--tablet-padding);
+  }
+}
+
+@media (min-width: 1024px) {
+  .responsive-grid {
+    gap: var(--desktop-gap);
+    padding: var(--desktop-padding);
+  }
+}
+
+/* File explorer specific responsive layouts */
+.file-explorer-grid {
+  --grid-columns: 1fr;
+}
+
+@media (min-width: 768px) {
+  .file-explorer-grid {
+    --grid-columns: 240px 1fr;
+  }
+}
+
+@media (min-width: 1024px) {
+  .file-explorer-grid {
+    --grid-columns: 240px 1fr 320px;
+  }
+}
+
+/* Mobile-optimized flexbox utilities */
+.flex-mobile-col {
+  display: flex;
+  flex-direction: column;
+}
+
+@media (min-width: 768px) {
+  .flex-mobile-col {
+    flex-direction: row;
+  }
+}
+
+/* Touch-friendly interactive elements */
+.touch-friendly {
+  min-height: var(--touch-target-min);
+  min-width: var(--touch-target-min);
+  padding: 12px;
+  border-radius: var(--mobile-border-radius);
+  transition: all var(--mobile-transition-fast) ease;
+}
+
+.touch-friendly:active {
+  transform: scale(0.98);
+}
+
+/* Mobile-optimized scrolling */
+.scroll-mobile {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+}
+
+/* Prevent overscroll bounce on iOS */
+.scroll-mobile {
+  overscroll-behavior: contain;
+}
+
+/* Mobile-specific animations */
+@keyframes slideInFromBottom {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideOutToBottom {
+  from {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+}
+
+@keyframes fadeInScale {
+  from {
+    transform: scale(0.95);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Mobile modal and overlay styles */
+.mobile-modal {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: var(--mobile-padding);
+  padding-bottom: calc(var(--mobile-padding) + var(--safe-area-inset-bottom));
+}
+
+@media (min-width: 768px) {
+  .mobile-modal {
+    align-items: center;
+    padding: var(--tablet-padding);
+  }
+}
+
+.mobile-modal-content {
+  width: 100%;
+  max-width: 100%;
+  background: white;
+  border-radius: var(--mobile-border-radius) var(--mobile-border-radius) 0 0;
+  animation: slideInFromBottom var(--mobile-transition-normal) ease-out;
+}
+
+@media (min-width: 768px) {
+  .mobile-modal-content {
+    max-width: 480px;
+    border-radius: var(--tablet-border-radius);
+    animation: fadeInScale var(--mobile-transition-normal) ease-out;
+  }
+}
+
+/* Mobile-optimized form elements */
+.mobile-input {
+  width: 100%;
+  min-height: var(--touch-target-min);
+  padding: 12px 16px;
+  border: 1px solid #d1d5db;
+  border-radius: var(--mobile-border-radius);
+  font-size: 16px; /* Prevents zoom on iOS */
+  transition: border-color var(--mobile-transition-fast) ease;
+}
+
+.mobile-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+/* Mobile-optimized buttons */
+.mobile-button {
+  min-height: var(--touch-target-min);
+  padding: 12px 24px;
+  border-radius: var(--mobile-border-radius);
+  font-weight: 500;
+  transition: all var(--mobile-transition-fast) ease;
+  cursor: pointer;
+  user-select: none;
+}
+
+.mobile-button:active {
+  transform: scale(0.98);
+}
+
+/* Responsive text sizing */
+.text-responsive {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+@media (min-width: 768px) {
+  .text-responsive {
+    font-size: 16px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .text-responsive {
+    font-size: 18px;
+  }
+}
+
+/* Mobile-specific utility classes */
+.mobile-only {
+  display: block;
+}
+
+@media (min-width: 768px) {
+  .mobile-only {
+    display: none;
+  }
+}
+
+.tablet-up {
+  display: none;
+}
+
+@media (min-width: 768px) {
+  .tablet-up {
+    display: block;
+  }
+}
+
+.desktop-only {
+  display: none;
+}
+
+@media (min-width: 1024px) {
+  .desktop-only {
+    display: block;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .mobile-input,
+  .mobile-button {
+    border-width: 2px;
+  }
+}
+
+/* Dark mode mobile optimizations */
+@media (prefers-color-scheme: dark) {
+  .mobile-input {
+    background-color: #374151;
+    border-color: #4b5563;
+    color: white;
+  }
+  
+  .mobile-modal-content {
+    background-color: #1f2937;
+  }
+}

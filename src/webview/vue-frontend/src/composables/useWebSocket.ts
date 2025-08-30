@@ -267,8 +267,36 @@ export function useWebSocket(): WebSocketComposable {
     }
 
     if (!socket.value || socket.value.readyState !== WebSocket.OPEN) {
+      // Mobile-aware queue management
+      const mobileConfig = currentConfig.value?.mobile
+      const isPriorityMessage = mobileConfig?.priorityMessageTypes?.includes(message.type) ?? false
+      
+      // Determine queue size limit based on mobile configuration
+      let queueSizeLimit = currentConfig.value?.maxQueueSize ?? WS_MAX_QUEUE_SIZE
+      
+      if (mobileConfig?.bandwidthAware) {
+        // Check connection quality for bandwidth-aware queuing
+        const connection = (navigator as any).connection
+        if (connection && (connection.effectiveType === '2g' || connection.effectiveType === 'slow-2g')) {
+          queueSizeLimit = Math.min(queueSizeLimit, 50) // Reduce queue size for slow connections
+        }
+      }
+      
+      // Priority messages get special treatment
+      if (isPriorityMessage && messageQueue.value.length < queueSizeLimit + 20) {
+        const queuedMessage: QueuedMessage = {
+          message,
+          timestamp: Date.now(),
+          retryCount: 0
+        }
+        // Insert priority messages at the beginning of the queue
+        messageQueue.value.unshift(queuedMessage)
+        queueSize.value = messageQueue.value.length
+        return
+      }
+      
       // Queue message if not connected and queue has space
-      if (messageQueue.value.length < (currentConfig.value?.maxQueueSize ?? WS_MAX_QUEUE_SIZE)) {
+      if (messageQueue.value.length < queueSizeLimit) {
         const queuedMessage: QueuedMessage = {
           message,
           timestamp: Date.now(),
@@ -347,11 +375,36 @@ export function useWebSocket(): WebSocketComposable {
     reconnectAttempts.value++
     connectionStatus.value = 'reconnecting'
 
-    // Exponential backoff: base interval * (2 ^ attempts) with jitter
+    // Enhanced exponential backoff with mobile-specific adaptations
     const baseInterval = currentConfig.value?.reconnectInterval ?? WS_RECONNECT_INTERVAL
-    const backoffMultiplier = Math.pow(2, Math.min(reconnectAttempts.value - 1, 5)) // Cap at 2^5 = 32
+    let backoffMultiplier = Math.pow(2, Math.min(reconnectAttempts.value - 1, 5)) // Cap at 2^5 = 32
+    
+    // Mobile-specific adaptive retry logic
+    if (currentConfig.value?.mobile?.adaptiveRetry) {
+      // Use connection quality to adjust backoff
+      const connection = (navigator as any).connection
+      if (connection) {
+        const effectiveType = connection.effectiveType
+        if (effectiveType === 'slow-2g' || effectiveType === '2g') {
+          backoffMultiplier *= 2 // Double backoff for very slow connections
+        } else if (effectiveType === '3g') {
+          backoffMultiplier *= 1.5 // Increase backoff for slow connections
+        }
+      }
+      
+      // Consider battery level if available
+      navigator.getBattery?.().then((battery: any) => {
+        if (battery.level < 0.2) {
+          backoffMultiplier *= 1.5 // Increase backoff when battery is low
+        }
+      }).catch(() => {
+        // Battery API not supported, ignore
+      })
+    }
+    
     const jitter = Math.random() * 0.3 + 0.85 // 85-115% of calculated time
-    const delay = Math.min(baseInterval * backoffMultiplier * jitter, 30000) // Cap at 30 seconds
+    const maxDelay = currentConfig.value?.mobile?.maxRetryBackoff ?? 30000
+    const delay = Math.min(baseInterval * backoffMultiplier * jitter, maxDelay)
 
     reconnectTimer.value = setTimeout(() => {
       if (currentUrl.value) {
@@ -371,22 +424,58 @@ export function useWebSocket(): WebSocketComposable {
     messageQueue.value = []
     queueSize.value = 0
 
-    messagesToProcess.forEach(queuedMessage => {
+    // Mobile bandwidth-aware processing
+    const mobileConfig = currentConfig.value?.mobile
+    const connection = (navigator as any).connection
+    let processingDelay = 0
+    
+    if (mobileConfig?.bandwidthAware && connection) {
+      // Adjust processing speed based on connection quality
+      if (connection.effectiveType === 'slow-2g') {
+        processingDelay = 200 // 200ms delay between messages
+      } else if (connection.effectiveType === '2g') {
+        processingDelay = 100 // 100ms delay between messages
+      } else if (connection.effectiveType === '3g') {
+        processingDelay = 50 // 50ms delay between messages
+      }
+    }
+
+    const processMessage = async (queuedMessage: QueuedMessage, index: number): Promise<void> => {
+      // Add delay for bandwidth-aware processing
+      if (processingDelay > 0 && index > 0) {
+        await new Promise(resolve => setTimeout(resolve, processingDelay))
+      }
+      
       try {
         socket.value?.send(JSON.stringify(queuedMessage.message))
       } catch (error) {
         console.error('Failed to send queued message:', error)
         // Re-queue if there's space
-        if (messageQueue.value.length < (currentConfig.value?.maxQueueSize ?? WS_MAX_QUEUE_SIZE)) {
+        const maxQueueSize = currentConfig.value?.maxQueueSize ?? WS_MAX_QUEUE_SIZE
+        if (messageQueue.value.length < maxQueueSize) {
           queuedMessage.retryCount++
           if (queuedMessage.retryCount < 3) { // Max 3 retries
             messageQueue.value.push(queuedMessage)
           }
         }
       }
-    })
+    }
 
-    queueSize.value = messageQueue.value.length
+    // Process messages with potential delays
+    if (processingDelay > 0) {
+      // Process messages sequentially with delays
+      messagesToProcess.reduce((promise, queuedMessage, index) => {
+        return promise.then(() => processMessage(queuedMessage, index))
+      }, Promise.resolve()).finally(() => {
+        queueSize.value = messageQueue.value.length
+      })
+    } else {
+      // Process all messages immediately
+      messagesToProcess.forEach((queuedMessage, index) => {
+        processMessage(queuedMessage, index)
+      })
+      queueSize.value = messageQueue.value.length
+    }
   }
 
   const startHealthMonitoring = (): void => {

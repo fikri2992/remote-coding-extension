@@ -376,7 +376,10 @@ export class WebSocketServer {
      */
     private validateMessage(message: WebSocketMessage): boolean {
         // Check required type field
-        const validTypes = ['command', 'response', 'broadcast', 'status', 'fileSystem', 'prompt', 'git', 'config'];
+        const validTypes = [
+            'command', 'response', 'broadcast', 'status', 'fileSystem', 'prompt', 'git', 'config',
+            'mobile_gesture', 'mobile_layout', 'mobile_preview', 'mobile_haptic', 'mobile_sync'
+        ];
         if (!message.type || !validTypes.includes(message.type)) {
             return false;
         }
@@ -425,6 +428,26 @@ export class WebSocketServer {
 
             case 'config':
                 await this.handleConfigMessage(clientId, message);
+                break;
+
+            case 'mobile_gesture':
+                await this.handleMobileGestureMessage(clientId, message);
+                break;
+
+            case 'mobile_layout':
+                await this.handleMobileLayoutMessage(clientId, message);
+                break;
+
+            case 'mobile_preview':
+                await this.handleMobilePreviewMessage(clientId, message);
+                break;
+
+            case 'mobile_haptic':
+                await this.handleMobileHapticMessage(clientId, message);
+                break;
+
+            case 'mobile_sync':
+                await this.handleMobileSyncMessage(clientId, message);
                 break;
 
             default:
@@ -1972,6 +1995,247 @@ export class WebSocketServer {
     }
 
 
+
+    /**
+     * Handle mobile gesture messages
+     */
+    private async handleMobileGestureMessage(clientId: string, message: WebSocketMessage): Promise<void> {
+        try {
+            const gestureData = message.data;
+            
+            if (!gestureData || !gestureData.gestureType || !gestureData.target) {
+                this.sendError(clientId, 'Invalid gesture data', message.id);
+                return;
+            }
+
+            console.log(`Mobile gesture from ${clientId}: ${gestureData.gestureType} on ${gestureData.target}`);
+
+            // Process gesture based on type
+            switch (gestureData.gestureType) {
+                case 'swipe':
+                    await this.handleSwipeGesture(clientId, gestureData);
+                    break;
+                case 'pinch':
+                    await this.handlePinchGesture(clientId, gestureData);
+                    break;
+                case 'longpress':
+                    await this.handleLongPressGesture(clientId, gestureData);
+                    break;
+                case 'pullrefresh':
+                    await this.handlePullRefreshGesture(clientId, gestureData);
+                    break;
+                default:
+                    console.log(`Unhandled gesture type: ${gestureData.gestureType}`);
+            }
+
+            // Send acknowledgment
+            const response: WebSocketMessage = {
+                type: 'response',
+                id: message.id,
+                data: { 
+                    success: true, 
+                    gestureType: gestureData.gestureType,
+                    processed: true 
+                },
+                timestamp: Date.now()
+            };
+
+            this.sendMessage(clientId, response);
+
+        } catch (error) {
+            console.error('Error handling mobile gesture message:', error);
+            this.sendError(clientId, `Failed to process gesture: ${error instanceof Error ? error.message : 'Unknown error'}`, message.id);
+        }
+    }
+
+    /**
+     * Handle mobile layout messages
+     */
+    private async handleMobileLayoutMessage(clientId: string, message: WebSocketMessage): Promise<void> {
+        try {
+            const layoutData = message.data;
+            
+            if (!layoutData || !layoutData.breakpoint || !layoutData.orientation) {
+                this.sendError(clientId, 'Invalid layout data', message.id);
+                return;
+            }
+
+            console.log(`Mobile layout update from ${clientId}: ${layoutData.breakpoint} ${layoutData.orientation}`);
+
+            // Store layout preferences for this client
+            const client = this._clients.get(clientId);
+            if (client) {
+                client.connection.metadata = {
+                    ...client.connection.metadata,
+                    mobileLayout: layoutData
+                };
+            }
+
+            // Send acknowledgment
+            const response: WebSocketMessage = {
+                type: 'response',
+                id: message.id,
+                data: { success: true, layout: layoutData },
+                timestamp: Date.now()
+            };
+
+            this.sendMessage(clientId, response);
+
+        } catch (error) {
+            console.error('Error handling mobile layout message:', error);
+            this.sendError(clientId, `Failed to process layout update: ${error instanceof Error ? error.message : 'Unknown error'}`, message.id);
+        }
+    }
+
+    /**
+     * Handle mobile preview messages
+     */
+    private async handleMobilePreviewMessage(clientId: string, message: WebSocketMessage): Promise<void> {
+        try {
+            const previewData = message.data;
+            
+            if (!previewData || !previewData.path || !previewData.action) {
+                this.sendError(clientId, 'Invalid preview data', message.id);
+                return;
+            }
+
+            console.log(`Mobile preview action from ${clientId}: ${previewData.action} on ${previewData.path}`);
+
+            // Send response
+            const response: WebSocketMessage = {
+                type: 'response',
+                id: message.id,
+                data: { 
+                    success: true, 
+                    action: previewData.action,
+                    path: previewData.path
+                },
+                timestamp: Date.now()
+            };
+
+            this.sendMessage(clientId, response);
+
+        } catch (error) {
+            console.error('Error handling mobile preview message:', error);
+            this.sendError(clientId, `Failed to process preview action: ${error instanceof Error ? error.message : 'Unknown error'}`, message.id);
+        }
+    }
+
+    /**
+     * Handle mobile haptic messages
+     */
+    private async handleMobileHapticMessage(clientId: string, message: WebSocketMessage): Promise<void> {
+        try {
+            const hapticData = message.data;
+            
+            if (!hapticData || !hapticData.type || !hapticData.trigger) {
+                this.sendError(clientId, 'Invalid haptic data', message.id);
+                return;
+            }
+
+            console.log(`Mobile haptic feedback from ${clientId}: ${hapticData.type} (${hapticData.trigger})`);
+
+            // Send acknowledgment
+            const response: WebSocketMessage = {
+                type: 'response',
+                id: message.id,
+                data: { 
+                    success: true, 
+                    hapticType: hapticData.type,
+                    trigger: hapticData.trigger 
+                },
+                timestamp: Date.now()
+            };
+
+            this.sendMessage(clientId, response);
+
+        } catch (error) {
+            console.error('Error handling mobile haptic message:', error);
+            this.sendError(clientId, `Failed to process haptic feedback: ${error instanceof Error ? error.message : 'Unknown error'}`, message.id);
+        }
+    }
+
+    /**
+     * Handle mobile sync messages
+     */
+    private async handleMobileSyncMessage(clientId: string, message: WebSocketMessage): Promise<void> {
+        try {
+            const syncData = message.data;
+            
+            if (!syncData || !syncData.syncType) {
+                this.sendError(clientId, 'Invalid sync data', message.id);
+                return;
+            }
+
+            console.log(`Mobile sync from ${clientId}: ${syncData.syncType}`);
+
+            // Send response
+            const response: WebSocketMessage = {
+                type: 'response',
+                id: message.id,
+                data: { 
+                    success: true, 
+                    syncType: syncData.syncType
+                },
+                timestamp: Date.now()
+            };
+
+            this.sendMessage(clientId, response);
+
+        } catch (error) {
+            console.error('Error handling mobile sync message:', error);
+            this.sendError(clientId, `Failed to process sync: ${error instanceof Error ? error.message : 'Unknown error'}`, message.id);
+        }
+    }
+
+    // Mobile gesture handlers
+    private async handleSwipeGesture(clientId: string, gestureData: any): Promise<void> {
+        console.log(`Swipe ${gestureData.direction} on ${gestureData.target}`);
+        
+        if (gestureData.direction === 'left' && gestureData.metadata?.filePath) {
+            console.log(`Swipe left detected on file: ${gestureData.metadata.filePath}`);
+        }
+    }
+
+    private async handlePinchGesture(clientId: string, gestureData: any): Promise<void> {
+        console.log(`Pinch gesture with scale ${gestureData.scale}`);
+    }
+
+    private async handleLongPressGesture(clientId: string, gestureData: any): Promise<void> {
+        console.log(`Long press on ${gestureData.target}`);
+    }
+
+    private async handlePullRefreshGesture(clientId: string, gestureData: any): Promise<void> {
+        console.log(`Pull refresh triggered`);
+        
+        try {
+            const refreshMessage: WebSocketMessage = {
+                type: 'broadcast',
+                data: {
+                    type: 'fileSystemRefresh',
+                    timestamp: Date.now()
+                },
+                timestamp: Date.now()
+            };
+            
+            this.broadcastToAllClients(refreshMessage);
+        } catch (error) {
+            console.error('Failed to handle pull refresh:', error);
+        }
+    }
+
+    // Utility methods for mobile features
+    private broadcastToAllClients(message: WebSocketMessage): void {
+        this._clients.forEach(({ ws }, clientId) => {
+            if (ws.readyState === WebSocket.OPEN) {
+                try {
+                    ws.send(JSON.stringify(message));
+                } catch (error) {
+                    console.error(`Failed to broadcast to client ${clientId}:`, error);
+                }
+            }
+        });
+    }
 
     /**
      * Get the CommandHandler instance

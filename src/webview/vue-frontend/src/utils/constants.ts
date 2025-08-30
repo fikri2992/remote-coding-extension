@@ -178,3 +178,15 @@ export const CHAT_SEARCH_DEBOUNCE = 300 // 300ms
 export const CHAT_RECONNECT_DELAY = 2000 // 2 seconds
 export const CHAT_MAX_DRAFT_AGE = 7 * 24 * 60 * 60 * 1000 // 7 days
 export const CHAT_MAX_HISTORY_CACHE = 1000 // messages per room
+
+// Mobile WebSocket constants
+export const MOBILE_WS_RETRY_BASE_DELAY = 1000 // Base delay for exponential backoff
+export const MOBILE_WS_MAX_RETRY_DELAY = 30000 // Maximum retry delay
+export const MOBILE_WS_CONNECTION_QUALITY_CHECK_INTERVAL = 5000 // Check connection quality every 5s
+export const MOBILE_WS_BANDWIDTH_THRESHOLD = 1.0 // Mbps threshold for bandwidth-aware mode
+export const MOBILE_WS_RTT_THRESHOLD = 500 // ms threshold for poor connection
+export const MOBILE_WS_GESTURE_DEBOUNCE = 50 // ms debounce for gesture events
+export const MOBILE_WS_LAYOUT_SYNC_DEBOUNCE = 200 // ms debounce for layout changes
+export const MOBILE_WS_PRIORITY_QUEUE_SIZE = 20 // Priority messages that bypass normal queue limits
+export const MOBILE_WS_LOW_BANDWIDTH_QUEUE_SIZE = 50 // Reduced queue size for low bandwidth
+export const MOBILE_WS_HAPTIC_COOLDOWN = 100 // ms cooldown between haptic events

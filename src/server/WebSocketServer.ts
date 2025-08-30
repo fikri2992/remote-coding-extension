@@ -600,7 +600,7 @@ export class WebSocketServer {
                 const itemPath = path.join(fullPath, entry.name);
                 const stats = await fs.stat(itemPath);
                 
-                const item = {
+                const item: any = {
                     name: entry.name,
                     path: path.join(dirPath, entry.name).replace(/\\/g, '/'),
                     type: entry.isDirectory() ? 'directory' : 'file',
@@ -2145,11 +2145,10 @@ export class WebSocketServer {
             data: {
                 type: 'fileChange',
                 event: event
-            },
-            timestamp: Date.now()
+            }
         };
 
-        this.broadcast(message);
+        this.broadcastMessage(message);
     }
 
     /**

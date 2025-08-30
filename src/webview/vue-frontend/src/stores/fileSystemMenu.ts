@@ -487,12 +487,33 @@ export const useFileSystemMenuStore = defineStore('fileSystemMenu', () => {
 
     try {
       // Send command via WebSocket using the connection service
-      const result = await connectionService.getWebSocket().sendMessageWithResponse({
-        type: 'command',
-        command: 'vscode.window.showTextDocument',
-        args: [path, { preview: false }],
-        timestamp: Date.now()
-      }, 5000) // 5 second timeout
+      const result = await new Promise<any>((resolve, reject) => {
+        const messageId = Date.now().toString()
+        const message = {
+          id: messageId,
+          type: 'command',
+          command: 'vscode.window.showTextDocument',
+          args: [path, { preview: false }],
+          timestamp: Date.now()
+        }
+        
+        // Set up one-time response handler
+        const handleResponse = (responseMessage: any) => {
+          if (responseMessage.id === messageId) {
+            if (responseMessage.error) {
+              reject(new Error(responseMessage.error))
+            } else {
+              resolve(responseMessage)
+            }
+          }
+        }
+        
+        connectionService.onMessage('response', handleResponse)
+        connectionService.send(message)
+        
+        // 5 second timeout
+        setTimeout(() => reject(new Error('Request timeout')), 5000)
+      })
 
       if (!result || !result.success) {
         const errorMessage = result?.error || 'Failed to open file in editor'
@@ -539,12 +560,33 @@ export const useFileSystemMenuStore = defineStore('fileSystemMenu', () => {
 
     try {
       // Send command via WebSocket using the connection service
-      const result = await connectionService.getWebSocket().sendMessageWithResponse({
-        type: 'command',
-        command: 'vscode.commands.executeCommand',
-        args: ['revealInExplorer', path],
-        timestamp: Date.now()
-      }, 5000) // 5 second timeout
+      const result = await new Promise<any>((resolve, reject) => {
+        const messageId = Date.now().toString()
+        const message = {
+          id: messageId,
+          type: 'command',
+          command: 'vscode.commands.executeCommand',
+          args: ['revealInExplorer', path],
+          timestamp: Date.now()
+        }
+        
+        // Set up one-time response handler
+        const handleResponse = (responseMessage: any) => {
+          if (responseMessage.id === messageId) {
+            if (responseMessage.error) {
+              reject(new Error(responseMessage.error))
+            } else {
+              resolve(responseMessage)
+            }
+          }
+        }
+        
+        connectionService.onMessage('response', handleResponse)
+        connectionService.send(message)
+        
+        // 5 second timeout
+        setTimeout(() => reject(new Error('Request timeout')), 5000)
+      })
 
       if (!result || !result.success) {
         const errorMessage = result?.error || 'Failed to reveal file in explorer'

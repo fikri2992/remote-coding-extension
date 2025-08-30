@@ -280,12 +280,18 @@
             </div>
         </div>
 
-        <!-- Legacy Action Section -->
+        <!-- Web Interface Section -->
         <div class="section">
-            <div class="section-title">Legacy Actions</div>
-            <button id="executeActionBtn" class="action-button secondary-button">
-                Execute Action
-            </button>
+            <div class="section-title">Web Interface</div>
+            <p class="description">Access the full Vue.js interface in your browser for advanced features.</p>
+            <div class="button-group">
+                <button id="openWebInterfaceBtn" class="action-button">
+                    <span>🌐</span> Open Web Interface
+                </button>
+                <button id="executeActionBtn" class="action-button secondary-button">
+                    Execute Action
+                </button>
+            </div>
         </div>
     </div>
 
@@ -297,6 +303,7 @@
         const startServerBtn = document.getElementById('startServerBtn');
         const stopServerBtn = document.getElementById('stopServerBtn');
         const executeButton = document.getElementById('executeActionBtn');
+        const openWebInterfaceBtn = document.getElementById('openWebInterfaceBtn');
         const statusDot = document.getElementById('statusDot');
         const statusText = document.getElementById('statusText');
         const errorMessage = document.getElementById('errorMessage');
@@ -334,6 +341,13 @@
             setLoadingState(true, 'Stopping server...');
             vscode.postMessage({
                 command: 'stopServer'
+            });
+        });
+
+        // Open web interface button
+        openWebInterfaceBtn.addEventListener('click', function() {
+            vscode.postMessage({
+                command: 'openWebInterface'
             });
         });
 
@@ -498,7 +512,7 @@
         }
 
         // Handle keyboard events for accessibility
-        [startServerBtn, stopServerBtn, executeButton].forEach(button => {
+        [startServerBtn, stopServerBtn, executeButton, openWebInterfaceBtn].forEach(button => {
             button.addEventListener('keydown', function(event) {
                 if (event.key === 'Enter' || event.key === ' ') {
                     event.preventDefault();

@@ -129,6 +129,7 @@
     "build:vue:dev": "cd src/webview/vue-frontend && npm run build:dev",
     "build:vue:prod": "cd src/webview/vue-frontend && npm run build:prod",
     "dev:vue": "cd src/webview/vue-frontend && npm run dev",
+    "start:vue": "cd src/webview/vue-frontend && npm run dev",
     "pretest": "npm run build",
     "lint": "eslint src --ext ts",
     "lint:vue": "cd src/webview/vue-frontend && npm run lint",

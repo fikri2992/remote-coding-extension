@@ -73,6 +73,9 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
                     case 'configOperation':
                         this._handleConfigOperation(message.data);
                         break;
+                    case 'openWebInterface':
+                        this._handleOpenWebInterface();
+                        break;
                     default:
                         console.log('Unknown message received from webview:', message);
                         break;
@@ -87,8 +90,8 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
     }
 
     private _getHtmlForWebview(webview: vscode.Webview): string {
-        // Use Vue frontend for VS Code webview - modern unified interface
-        return this._getUnifiedHtmlForWebview(webview);
+        // Use simple panel for VS Code webview - Vue frontend runs on separate web server
+        return this._getPanelHtmlForWebview(webview);
     }
 
     private _getPanelHtmlForWebview(webview: vscode.Webview): string {
@@ -697,6 +700,14 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
                 }
             });
         }
+    }
+
+    /**
+     * Handle opening web interface in browser
+     */
+    private _handleOpenWebInterface(): void {
+        const webInterfaceUrl = 'http://localhost:5173'; // Vue dev server default port
+        vscode.env.openExternal(vscode.Uri.parse(webInterfaceUrl));
     }
 
     /**

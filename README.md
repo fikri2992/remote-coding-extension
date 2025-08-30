@@ -48,6 +48,31 @@ A modern VS Code extension that provides a web automation tunnel with HTTP and W
    - Type "Extensions: Install from VSIX"
    - Select the generated `.vsix` file
 
+## Interface Options
+
+This extension provides two interface options:
+
+### 1. VS Code Panel (Simple)
+- Embedded HTML panel in VS Code activity bar
+- Basic server controls and status monitoring
+- No CSP restrictions or complex setup
+
+### 2. Vue.js Web Interface (Full-Featured)
+- Modern Vue.js application running on localhost:5173
+- Full browser capabilities and developer tools
+- Advanced features like file management, Git integration, and chat
+
+**Quick Start:**
+```bash
+# Start the Vue.js development server
+npm run start:vue
+
+# Then use the VS Code panel to start the automation server
+# Click "Open Web Interface" to access the full Vue.js app
+```
+
+See [WEBVIEW_SETUP.md](./WEBVIEW_SETUP.md) for detailed setup instructions.
+
 ## Configuration
 
 The extension provides several configuration options accessible through VS Code settings:

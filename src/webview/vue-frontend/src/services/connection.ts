@@ -1,21 +1,28 @@
-import { useWebSocket } from '../composables/useWebSocket'
-import { useConnectionStore } from '../stores/connection'
 import { addBreadcrumb, captureError, createAppError } from './error-handler'
 
 export class ConnectionService {
-  private webSocket = useWebSocket()
-  private connectionStore: ReturnType<typeof useConnectionStore> | null = null
+  private ws: WebSocket | null = null
   private reconnectTimer: NodeJS.Timeout | null = null
   private isInitialized = false
+  private isConnected = false
+  private connectionUrl = ''
+  private eventHandlers: {
+    onConnect?: () => void
+    onDisconnect?: () => void
+    onMessage?: (data: any) => void
+    onError?: (error: any) => void
+  } = {}
 
   /**
-   * Get the connection store, ensuring it's initialized
+   * Set event handlers
    */
-  private getConnectionStore() {
-    if (!this.connectionStore) {
-      throw new Error('ConnectionService not initialized. Call initialize() first.')
-    }
-    return this.connectionStore
+  public setEventHandlers(handlers: {
+    onConnect?: () => void
+    onDisconnect?: () => void
+    onMessage?: (data: any) => void
+    onError?: (error: any) => void
+  }) {
+    this.eventHandlers = handlers
   }
 
   /**
@@ -26,13 +33,7 @@ export class ConnectionService {
       return
     }
 
-    // Initialize the connection store now that Pinia is available
-    this.connectionStore = useConnectionStore()
-
     addBreadcrumb('connection', 'Initializing connection service', 'info')
-
-    // Set up WebSocket event handlers
-    this.setupEventHandlers()
 
     // Attempt initial connection
     await this.connect()
@@ -48,18 +49,43 @@ export class ConnectionService {
     try {
       // Determine WebSocket URL
       const wsUrl = this.getWebSocketUrl()
+      this.connectionUrl = wsUrl
       addBreadcrumb('connection', `Attempting to connect to ${wsUrl}`, 'info')
 
-      this.getConnectionStore().setConnectionStatus('connecting')
+      this.ws = new WebSocket(wsUrl)
       
-      await this.webSocket.connect(wsUrl, {
-        maxReconnectAttempts: 10,
-        reconnectInterval: 2000,
-        heartbeatInterval: 30000,
-        messageTimeout: 10000
-      })
+      this.ws.onopen = () => {
+        this.isConnected = true
+        addBreadcrumb('connection', 'WebSocket connection established', 'info')
+        this.eventHandlers.onConnect?.()
+        
+        if (this.reconnectTimer) {
+          clearTimeout(this.reconnectTimer)
+          this.reconnectTimer = null
+        }
+      }
 
-      addBreadcrumb('connection', 'WebSocket connection established', 'info')
+      this.ws.onclose = () => {
+        this.isConnected = false
+        addBreadcrumb('connection', 'WebSocket disconnected', 'warning')
+        this.eventHandlers.onDisconnect?.()
+        this.scheduleReconnect()
+      }
+
+      this.ws.onerror = (error) => {
+        addBreadcrumb('connection', `WebSocket error: ${error}`, 'error')
+        this.eventHandlers.onError?.(error)
+      }
+
+      this.ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data)
+          this.eventHandlers.onMessage?.(data)
+        } catch (error) {
+          console.error('Failed to parse WebSocket message:', error)
+        }
+      }
+
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown connection error'
       addBreadcrumb('connection', `Connection failed: ${errorMessage}`, 'error')
@@ -82,7 +108,6 @@ export class ConnectionService {
             {
               label: 'Check Extension Status',
               action: () => {
-                // This would open VS Code command palette or show extension status
                 console.log('Check if the Web Automation Tunnel extension is running')
               }
             }
@@ -90,7 +115,6 @@ export class ConnectionService {
         }
       ))
 
-      this.getConnectionStore().setConnectionStatus('error', errorMessage)
       this.scheduleReconnect()
     }
   }
@@ -106,8 +130,33 @@ export class ConnectionService {
       this.reconnectTimer = null
     }
 
-    this.webSocket.disconnect()
-    this.getConnectionStore().disconnect()
+    if (this.ws) {
+      this.ws.close()
+      this.ws = null
+    }
+    
+    this.isConnected = false
+  }
+
+  /**
+   * Send message through WebSocket
+   */
+  send(message: any): void {
+    if (this.ws && this.isConnected) {
+      this.ws.send(JSON.stringify(message))
+    } else {
+      console.warn('Cannot send message: WebSocket not connected')
+    }
+  }
+
+  /**
+   * Get connection status
+   */
+  getConnectionStatus() {
+    return {
+      isConnected: this.isConnected,
+      url: this.connectionUrl
+    }
   }
 
   /**
@@ -130,82 +179,18 @@ export class ConnectionService {
     return `${protocol}//${host}:${port}`
   }
 
-  /**
-   * Set up WebSocket event handlers
-   */
-  private setupEventHandlers(): void {
-    // Connection established
-    this.webSocket.onConnect(() => {
-      addBreadcrumb('connection', 'WebSocket connected successfully', 'info')
-      this.getConnectionStore().setConnected(this.webSocket.getConnectionInfo().url || 'unknown')
-      
-      if (this.reconnectTimer) {
-        clearTimeout(this.reconnectTimer)
-        this.reconnectTimer = null
-      }
-    })
 
-    // Connection lost
-    this.webSocket.onDisconnect(() => {
-      addBreadcrumb('connection', 'WebSocket disconnected', 'warning')
-      this.getConnectionStore().setConnectionStatus('disconnected')
-      this.scheduleReconnect()
-    })
-
-    // Connection error
-    this.webSocket.onError((error) => {
-      const errorMessage = error.message || 'Unknown WebSocket error'
-      addBreadcrumb('connection', `WebSocket error: ${errorMessage}`, 'error')
-      
-      captureError(createAppError(
-        `WebSocket error: ${errorMessage}`,
-        'websocket',
-        'medium',
-        { errorInfo: errorMessage },
-        {
-          title: 'Connection Issue',
-          message: 'There was a problem with the connection to the VS Code extension.',
-          reportable: false
-        }
-      ))
-
-      this.getConnectionStore().setConnectionStatus('error', errorMessage)
-    })
-
-    // Health status changes
-    this.webSocket.onHealthChange((health) => {
-      this.getConnectionStore().updateLatency(health.latency)
-      
-      if (!health.isHealthy) {
-        addBreadcrumb('connection', 'Connection health degraded', 'warning', {
-          latency: health.latency,
-          consecutiveFailures: health.consecutiveFailures
-        })
-      }
-    })
-
-    // Message handling
-    this.webSocket.onMessage((message) => {
-      // Handle global messages here if needed
-      if (message.type === 'status' && message.data?.type === 'serverInfo') {
-        addBreadcrumb('connection', 'Received server info', 'info', message.data)
-      }
-    })
-  }
 
   /**
    * Schedule reconnection attempt
    */
   private scheduleReconnect(): void {
-    if (!this.getConnectionStore().canReconnect || this.reconnectTimer) {
+    if (this.reconnectTimer) {
       return
     }
 
-    const delay = this.getConnectionStore().nextReconnectDelay
+    const delay = 3000 // 3 seconds
     addBreadcrumb('connection', `Scheduling reconnect in ${delay}ms`, 'info')
-
-    this.getConnectionStore().incrementReconnectAttempts()
-    this.getConnectionStore().setConnectionStatus('reconnecting')
 
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null
@@ -214,25 +199,28 @@ export class ConnectionService {
   }
 
   /**
+   * Subscribe to messages of a specific type
+   */
+  onMessage(type: string, callback: (message: any) => void) {
+    const originalHandler = this.eventHandlers.onMessage
+    this.eventHandlers.onMessage = (message) => {
+      originalHandler?.(message)
+      if (message.type === type) {
+        callback(message)
+      }
+    }
+  }
+
+  /**
    * Get the WebSocket instance for direct use
    */
   getWebSocket() {
-    return this.webSocket
+    return this.ws
   }
 
-  /**
-   * Check if connected
-   */
-  get isConnected(): boolean {
-    return this.webSocket.isConnected.value
-  }
 
-  /**
-   * Get connection status
-   */
-  get connectionStatus() {
-    return this.getConnectionStore().connectionStatus
-  }
+
+
 }
 
 // Create singleton instance

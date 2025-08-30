@@ -84,7 +84,35 @@ export interface FileSystemComposable {
 }
 
 export function useFileSystem(): FileSystemComposable {
-  const webSocket = connectionService.getWebSocket()
+  // Helper function to send messages with response handling
+  const sendMessageWithResponse = async (message: any): Promise<any> => {
+    return new Promise((resolve, reject) => {
+      const messageId = Date.now().toString()
+      const messageWithId = { ...message, id: messageId }
+      
+      // Set up one-time message handler for this response
+      const handleResponse = (responseMessage: any) => {
+        if (responseMessage.id === messageId) {
+          if (responseMessage.error) {
+            reject(new Error(responseMessage.error))
+          } else {
+            resolve(responseMessage)
+          }
+        }
+      }
+      
+      // Register the handler
+      connectionService.onMessage('response', handleResponse)
+      
+      // Send the message
+      connectionService.send(messageWithId)
+      
+      // Set timeout
+      setTimeout(() => {
+        reject(new Error('Request timeout'))
+      }, FILE_OPERATION_TIMEOUT)
+    })
+  }
 
   // State
   const fileTree = ref<FileTreeState>({
@@ -119,7 +147,7 @@ export function useFileSystem(): FileSystemComposable {
     try {
       const path = rootPath || '.'
       
-      const result = await webSocket.sendMessageWithResponse({
+      const result = await sendMessageWithResponse({
         type: 'command',
         command: 'vscode.workspace.getFileTree',
         args: [path],
@@ -162,7 +190,7 @@ export function useFileSystem(): FileSystemComposable {
     fileTree.value.loadingPaths.add(targetPath)
     
     try {
-      const result = await webSocket.sendMessageWithResponse({
+      const result = await sendMessageWithResponse({
         type: 'command',
         command: 'vscode.workspace.refreshFileTree',
         args: [targetPath],
@@ -192,7 +220,7 @@ export function useFileSystem(): FileSystemComposable {
     fileTree.value.loadingPaths.add(path)
     
     try {
-      const result = await webSocket.sendMessageWithResponse({
+      const result = await sendMessageWithResponse({
         type: 'command',
         command: 'vscode.workspace.getDirectoryContents',
         args: [path],
@@ -373,7 +401,7 @@ export function useFileSystem(): FileSystemComposable {
   // File content operations
   const readFile = async (path: string): Promise<FileContent> => {
     try {
-      const result = await webSocket.sendMessageWithResponse({
+      const result = await sendMessageWithResponse({
         type: 'command',
         command: 'vscode.workspace.readFile',
         args: [normalizePath(path)],
@@ -440,7 +468,7 @@ export function useFileSystem(): FileSystemComposable {
         maxResults: options.maxResults || FILE_SEARCH_MAX_RESULTS
       }
 
-      const result = await webSocket.sendMessageWithResponse({
+      const result = await sendMessageWithResponse({
         type: 'command',
         command: 'vscode.workspace.searchFiles',
         args: [searchOptions],
@@ -537,7 +565,7 @@ export function useFileSystem(): FileSystemComposable {
   // File watching
   const watchPath = async (path: string, options: FileWatchOptions = {}): Promise<void> => {
     try {
-      const result = await webSocket.sendMessageWithResponse({
+      const result = await sendMessageWithResponse({
         type: 'command',
         command: 'vscode.workspace.watchPath',
         args: [normalizePath(path), options],
@@ -557,7 +585,7 @@ export function useFileSystem(): FileSystemComposable {
 
   const unwatchPath = async (path: string): Promise<void> => {
     try {
-      const result = await webSocket.sendMessageWithResponse({
+      const result = await sendMessageWithResponse({
         type: 'command',
         command: 'vscode.workspace.unwatchPath',
         args: [normalizePath(path)],
@@ -582,7 +610,7 @@ export function useFileSystem(): FileSystemComposable {
   // Utilities
   const getFileStats = async (path: string): Promise<FileSystemNode> => {
     try {
-      const result = await webSocket.sendMessageWithResponse({
+      const result = await sendMessageWithResponse({
         type: 'command',
         command: 'vscode.workspace.getFileStats',
         args: [normalizePath(path)],
@@ -675,12 +703,12 @@ export function useFileSystem(): FileSystemComposable {
         args.push(options)
       }
 
-      const result = await webSocket.sendMessageWithResponse({
+      const result = await sendMessageWithResponse({
         type: 'command',
         command,
         args,
         timestamp: Date.now()
-      }, FILE_OPERATION_TIMEOUT)
+      })
 
       if (!result.success) {
         throw new Error(result.error || 'File operation failed')
@@ -850,7 +878,7 @@ export function useFileSystem(): FileSystemComposable {
   }
 
   // Set up WebSocket message handling for file events
-  webSocket.onMessage((message) => {
+  connectionService.onMessage('broadcast', (message: any) => {
     if (message.type === 'broadcast' && message.data?.type === 'fileChange') {
       const event = message.data.event
       // Convert server event format to FileWatchEvent format

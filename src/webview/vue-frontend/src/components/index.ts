@@ -20,3 +20,10 @@ export { default as FileTreeNode } from './files/FileTreeNode.vue'
 export { default as FileViewer } from './files/FileViewer.vue'
 export { default as FileSearch } from './files/FileSearch.vue'
 export { default as VirtualList } from './files/VirtualList.vue'
+
+// Mobile file preview components
+export { default as MobileFilePreview } from './files/MobileFilePreview.vue'
+export { default as MobileImagePreview } from './files/MobileImagePreview.vue'
+export { default as MobileCodePreview } from './files/MobileCodePreview.vue'
+export { default as MobileMarkdownPreview } from './files/MobileMarkdownPreview.vue'
+export { default as MobileTextPreview } from './files/MobileTextPreview.vue'

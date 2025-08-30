@@ -8,7 +8,10 @@
 
 ## Tasks
 
-- [ ] 1. Set up core file system menu structure and interfaces
+- [-] 1. Set up core file system menu structure and interfaces
+
+
+
   - Create base component files and directory structure for the file system menu
   - Define TypeScript interfaces for all component props and state management
   - Set up the main FileSystemMenu container component with basic layout

@@ -5,8 +5,6 @@ import type {
   FilePreviewContent, 
   FileMetadata,
   ContextMenuState,
-  ClipboardOperation,
-  VSCodeFileOperation,
   FileSystemEvent
 } from '../components/file-system-menu/types'
 import type { FileSystemNode, FileWatchEvent } from '../types/filesystem'
@@ -437,14 +435,6 @@ export const useFileSystemMenuStore = defineStore('fileSystemMenu', () => {
     }
 
     try {
-      const operation: VSCodeFileOperation = {
-        type: 'open',
-        path,
-        options: {
-          preview: false
-        }
-      }
-      
       // Send command via WebSocket using the connection service
       const result = await connectionService.getWebSocket().sendMessageWithResponse({
         type: 'command',
@@ -470,11 +460,6 @@ export const useFileSystemMenuStore = defineStore('fileSystemMenu', () => {
     }
 
     try {
-      const operation: VSCodeFileOperation = {
-        type: 'reveal',
-        path
-      }
-      
       // Send command via WebSocket using the connection service
       const result = await connectionService.getWebSocket().sendMessageWithResponse({
         type: 'command',
@@ -571,7 +556,7 @@ export const useFileSystemMenuStore = defineStore('fileSystemMenu', () => {
     try {
       await fileSystem.watchPath(path, {
         recursive: true,
-        includeSubdirectories: true
+        includeDirectories: true
       })
       watchedPaths.value.add(path)
     } catch (error) {
@@ -597,8 +582,7 @@ export const useFileSystemMenuStore = defineStore('fileSystemMenu', () => {
             event.type === 'renamed' ? 'file-renamed' : 'file-changed',
       path: event.path,
       oldPath: event.oldPath,
-      timestamp: new Date(),
-      metadata: event.metadata
+      timestamp: new Date()
     }
 
     // Add to event history

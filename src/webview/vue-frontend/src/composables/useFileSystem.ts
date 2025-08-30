@@ -731,7 +731,10 @@ export function useFileSystem(): FileSystemComposable {
 
       // Handle hasChildren property for lazy loading
       if (nodeData.hasChildren !== undefined) {
-        node.hasChildren = nodeData.hasChildren
+        // Set children array if hasChildren is true
+        if (nodeData.hasChildren && !node.children) {
+          node.children = []
+        }
       }
 
       fileTree.value.nodes.set(node.path, node)

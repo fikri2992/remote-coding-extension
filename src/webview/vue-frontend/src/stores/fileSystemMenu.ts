@@ -12,6 +12,7 @@ import { useFileSystem } from '../composables/useFileSystem'
 import { useConnectionStore } from './connection'
 import { useUIStore } from './ui'
 import { connectionService } from '../services/connection'
+import { performanceMonitor, memoryMonitor } from '../utils/performance'
 
 export const useFileSystemMenuStore = defineStore('fileSystemMenu', () => {
   // Composables
@@ -96,46 +97,61 @@ export const useFileSystemMenuStore = defineStore('fileSystemMenu', () => {
 
   // Actions
   const initialize = async (initialPath?: string) => {
-    try {
-      isLoading.value = true
-      
-      // Wait for connection if not connected
-      if (!isConnected.value) {
-        console.log('Waiting for WebSocket connection...')
-        await waitForConnection()
-      }
-      
-      // Load persisted state
-      loadPersistedState()
-      
-      // Set up file change event handling
-      setupFileWatching()
-      
-      // Load file tree
-      const nodes = await fileSystem.loadFileTree(initialPath)
-      
-      // Update file tree
-      fileTree.value.clear()
-      nodes.forEach(node => {
-        fileTree.value.set(node.path, node)
-        // Add children to the map as well
-        if (node.children) {
-          addChildrenToMap(node.children)
+    return performanceMonitor.measure(
+      'file-system-menu-initialization',
+      async () => {
+        try {
+          isLoading.value = true
+          
+          // Wait for connection if not connected
+          if (!isConnected.value) {
+            console.log('Waiting for WebSocket connection...')
+            await performanceMonitor.measure(
+              'websocket-connection-wait',
+              () => waitForConnection()
+            )
+          }
+          
+          // Load persisted state
+          loadPersistedState()
+          
+          // Set up file change event handling
+          setupFileWatching()
+          
+          // Load file tree with performance monitoring
+          const nodes = await performanceMonitor.measureFileTreeLoad(
+            initialPath || '.',
+            () => fileSystem.loadFileTree(initialPath)
+          )
+          
+          // Update file tree
+          fileTree.value.clear()
+          nodes.forEach(node => {
+            fileTree.value.set(node.path, node)
+            // Add children to the map as well
+            if (node.children) {
+              addChildrenToMap(node.children)
+            }
+          })
+          
+          // Start watching the root path
+          if (initialPath) {
+            await startWatchingPath(initialPath)
+          }
+          
+          lastSync.value = new Date()
+          
+          // Log memory usage after initialization
+          memoryMonitor.logMemoryUsage('After File System Menu Initialization')
+        } catch (error) {
+          console.error('Failed to initialize file system menu:', error)
+          throw error
+        } finally {
+          isLoading.value = false
         }
-      })
-      
-      // Start watching the root path
-      if (initialPath) {
-        await startWatchingPath(initialPath)
-      }
-      
-      lastSync.value = new Date()
-    } catch (error) {
-      console.error('Failed to initialize file system menu:', error)
-      throw error
-    } finally {
-      isLoading.value = false
-    }
+      },
+      { initialPath, operation: 'initialization' }
+    )
   }
 
   const addChildrenToMap = (children: FileSystemNode[]) => {
@@ -160,31 +176,37 @@ export const useFileSystemMenuStore = defineStore('fileSystemMenu', () => {
   const expandNode = async (path: string) => {
     if (expandedPaths.value.has(path)) return
     
-    try {
-      loadingPaths.value.add(path)
-      
-      // Expand node using file system composable
-      await fileSystem.expandNode(path)
-      
-      // Update expanded paths
-      expandedPaths.value.add(path)
-      
-      // Update file tree with new children
-      const node = fileSystem.getNodeByPath(path)
-      if (node) {
-        fileTree.value.set(path, node)
-        if (node.children) {
-          addChildrenToMap(node.children)
+    return performanceMonitor.measure(
+      'directory-expansion',
+      async () => {
+        try {
+          loadingPaths.value.add(path)
+          
+          // Expand node using file system composable
+          await fileSystem.expandNode(path)
+          
+          // Update expanded paths
+          expandedPaths.value.add(path)
+          
+          // Update file tree with new children
+          const node = fileSystem.getNodeByPath(path)
+          if (node) {
+            fileTree.value.set(path, node)
+            if (node.children) {
+              addChildrenToMap(node.children)
+            }
+          }
+          
+          persistState()
+        } catch (error) {
+          console.error('Failed to expand node:', error)
+          throw error
+        } finally {
+          loadingPaths.value.delete(path)
         }
-      }
-      
-      persistState()
-    } catch (error) {
-      console.error('Failed to expand node:', error)
-      throw error
-    } finally {
-      loadingPaths.value.delete(path)
-    }
+      },
+      { path, childCount: fileSystem.getNodeByPath(path)?.children?.length || 0 }
+    )
   }
 
   const collapseNode = (path: string) => {
@@ -218,39 +240,45 @@ export const useFileSystemMenuStore = defineStore('fileSystemMenu', () => {
       return
     }
 
-    try {
-      searchLoading.value = true
-      searchError.value = null
-      
-      const results = await fileSystem.searchFiles({
-        query,
-        includeFiles: true,
-        includeDirectories: true,
-        caseSensitive: false,
-        useRegex: false,
-        maxResults: 100
-      })
-      
-      // Convert search results to FileSystemNode format
-      searchResults.value = results.map(result => {
-        const existingNode = fileTree.value.get(result.path)
-        return existingNode || {
-          path: result.path,
-          name: result.name,
-          type: result.type,
-          size: 0,
-          modified: new Date(),
-          created: new Date(),
-          parent: fileSystem.getParentPath(result.path)
+    return performanceMonitor.measure(
+      'file-search',
+      async () => {
+        try {
+          searchLoading.value = true
+          searchError.value = null
+          
+          const results = await fileSystem.searchFiles({
+            query,
+            includeFiles: true,
+            includeDirectories: true,
+            caseSensitive: false,
+            useRegex: false,
+            maxResults: 100
+          })
+          
+          // Convert search results to FileSystemNode format
+          searchResults.value = results.map(result => {
+            const existingNode = fileTree.value.get(result.path)
+            return existingNode || {
+              path: result.path,
+              name: result.name,
+              type: result.type,
+              size: 0,
+              modified: new Date(),
+              created: new Date(),
+              parent: fileSystem.getParentPath(result.path)
+            }
+          })
+        } catch (error) {
+          console.error('Search failed:', error)
+          searchError.value = error instanceof Error ? error.message : 'Search failed'
+          searchResults.value = []
+        } finally {
+          searchLoading.value = false
         }
-      })
-    } catch (error) {
-      console.error('Search failed:', error)
-      searchError.value = error instanceof Error ? error.message : 'Search failed'
-      searchResults.value = []
-    } finally {
-      searchLoading.value = false
-    }
+      },
+      { query, resultCount: searchResults.value.length }
+    )
   }
 
   const clearSearch = () => {
@@ -266,74 +294,84 @@ export const useFileSystemMenuStore = defineStore('fileSystemMenu', () => {
       return
     }
     
-    try {
-      previewLoading.value = true
-      previewError.value = null
-      
-      const node = fileTree.value.get(path)
-      if (!node) {
-        throw new Error('Node not found')
-      }
-      
-      const metadata: FileMetadata = {
-        name: node.name,
-        path: node.path,
-        size: node.size || 0,
-        modified: node.modified,
-        created: node.created,
-        type: node.type,
-        permissions: node.permissions || undefined,
-        isHidden: node.name.startsWith('.'),
-        extension: getFileExtension(node.name),
-        mimeType: getMimeType(node.name)
-      }
-      
-      if (node.type === 'directory') {
-        previewContent.value = {
-          path: node.path,
-          type: 'directory',
-          metadata,
-          size: node.size || 0
+    return performanceMonitor.measure(
+      'file-preview-load',
+      async () => {
+        try {
+          previewLoading.value = true
+          previewError.value = null
+          
+          const node = fileTree.value.get(path)
+          if (!node) {
+            throw new Error('Node not found')
+          }
+          
+          const metadata: FileMetadata = {
+            name: node.name,
+            path: node.path,
+            size: node.size || 0,
+            modified: node.modified,
+            created: node.created,
+            type: node.type,
+            permissions: node.permissions || undefined,
+            isHidden: node.name.startsWith('.'),
+            extension: getFileExtension(node.name),
+            mimeType: getMimeType(node.name)
+          }
+          
+          if (node.type === 'directory') {
+            previewContent.value = {
+              path: node.path,
+              type: 'directory',
+              metadata,
+              size: node.size || 0
+            }
+          } else {
+            // Determine file type
+            const extension = getFileExtension(node.name).toLowerCase()
+            
+            if (isImageFile(extension)) {
+              previewContent.value = {
+                path: node.path,
+                type: 'image',
+                metadata,
+                size: node.size || 0
+              }
+            } else if (isTextFile(extension)) {
+              // Load file content with performance monitoring
+              const fileContent = await performanceMonitor.measureFileContentLoad(
+                path,
+                node.size || 0,
+                () => fileSystem.readFile(path)
+              )
+              previewContent.value = {
+                path: node.path,
+                type: 'text',
+                content: fileContent.content,
+                metadata,
+                language: getLanguageFromExtension(extension),
+                size: fileContent.size,
+                encoding: fileContent.encoding || undefined
+              }
+            } else {
+              previewContent.value = {
+                path: node.path,
+                type: 'binary',
+                metadata,
+                size: node.size || 0
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Failed to load preview content:', error)
+          previewError.value = error instanceof Error ? error.message : 'Failed to load preview'
+          previewContent.value = null
+        } finally {
+          previewLoading.value = false
         }
-      } else {
-        // Determine file type
-        const extension = getFileExtension(node.name).toLowerCase()
-        
-        if (isImageFile(extension)) {
-          previewContent.value = {
-            path: node.path,
-            type: 'image',
-            metadata,
-            size: node.size || 0
-          }
-        } else if (isTextFile(extension)) {
-          // Load file content
-          const fileContent = await fileSystem.readFile(path)
-          previewContent.value = {
-            path: node.path,
-            type: 'text',
-            content: fileContent.content,
-            metadata,
-            language: getLanguageFromExtension(extension),
-            size: fileContent.size,
-            encoding: fileContent.encoding || undefined
-          }
-        } else {
-          previewContent.value = {
-            path: node.path,
-            type: 'binary',
-            metadata,
-            size: node.size || 0
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Failed to load preview content:', error)
-      previewError.value = error instanceof Error ? error.message : 'Failed to load preview'
-      previewContent.value = null
-    } finally {
-      previewLoading.value = false
-    }
+      },
+      { path, fileSize: fileTree.value.get(path)?.size || 0 }
+    )
   }
 
   const togglePreview = () => {

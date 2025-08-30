@@ -38,17 +38,43 @@ export default defineConfig(({ command, mode }) => {
       cssCodeSplit: true,
       rollupOptions: {
         output: {
-          manualChunks: {
-            'vue-vendor': ['vue', 'vue-router', 'pinia']
+          manualChunks: (id) => {
+            // Vendor chunks
+            if (id.includes('node_modules')) {
+              if (id.includes('vue') || id.includes('pinia') || id.includes('vue-router')) {
+                return 'vue-vendor'
+              }
+              if (id.includes('tailwindcss') || id.includes('postcss')) {
+                return 'css-vendor'
+              }
+              return 'vendor'
+            }
+            
+            // Feature-based chunks
+            if (id.includes('file-system-menu')) {
+              return 'file-system-menu'
+            }
+            if (id.includes('components/common')) {
+              return 'common-components'
+            }
+            if (id.includes('stores')) {
+              return 'stores'
+            }
+            if (id.includes('composables')) {
+              return 'composables'
+            }
+            if (id.includes('services')) {
+              return 'services'
+            }
           },
           chunkFileNames: isProd ? 'assets/[name]-[hash].js' : 'assets/[name].js',
           entryFileNames: isProd ? 'assets/[name]-[hash].js' : 'assets/[name].js',
           assetFileNames: isProd ? 'assets/[name]-[hash].[ext]' : 'assets/[name].[ext]'
         }
       },
-      chunkSizeWarningLimit: 1000,
+      chunkSizeWarningLimit: 500, // Stricter chunk size warning
       reportCompressedSize: isProd,
-      assetsInlineLimit: 4096
+      assetsInlineLimit: 2048 // Smaller inline limit for better caching
     },
     server: {
       port: 5173,
@@ -78,7 +104,19 @@ export default defineConfig(({ command, mode }) => {
       exclude: ['vue-demi']
     },
     esbuild: {
-      drop: isProd ? ['console', 'debugger'] : []
+      drop: isProd ? ['console', 'debugger'] : [],
+      legalComments: 'none', // Remove legal comments in production
+      treeShaking: true
+    },
+    // Performance optimizations
+    experimental: {
+      renderBuiltUrl(filename, { hostType }) {
+        if (hostType === 'js') {
+          return { js: `"${filename}"` }
+        } else {
+          return { relative: true }
+        }
+      }
     }
   }
 })

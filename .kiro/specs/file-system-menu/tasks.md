@@ -119,7 +119,9 @@
   - **Git Commit:** `feat: add keyboard navigation and shortcuts`
   - **Description:** Implemented comprehensive keyboard event handlers for navigation throughout the file system menu. Added arrow key navigation between tree items, copy shortcuts (Ctrl+C, Ctrl+Shift+C), preview toggle shortcuts, and search focus functionality for efficient keyboard-only operation.
 
-- [-] 11. Integrate VS Code file operations
+- [x] 11. Integrate VS Code file operations
+
+
 
 
 
@@ -203,7 +205,10 @@
   - **Git Commit:** `test: add comprehensive testing suite for file system menu`
   - **Description:** Created comprehensive testing suite including unit tests for all major components, integration tests for WebSocket communication, accessibility and keyboard navigation tests, and performance tests for large file trees to ensure reliability and quality.
 
-- [ ] 20. Final integration and polish
+- [-] 20. Final integration and polish
+
+
+
   - Integrate file system menu into main webview application
   - Add proper error boundaries and fallback UI
   - Optimize bundle size and loading performance

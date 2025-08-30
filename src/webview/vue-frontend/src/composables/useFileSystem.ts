@@ -725,8 +725,13 @@ export function useFileSystem(): FileSystemComposable {
         created: nodeData.created ? new Date(nodeData.created) : new Date(),
         permissions: nodeData.permissions,
         parent: parentPath || '',
-        isExpanded: fileTree.value.expandedPaths.has(nodeData.path || nodeData.uri),
+        isExpanded: nodeData.isExpanded || fileTree.value.expandedPaths.has(nodeData.path || nodeData.uri),
         children: nodeData.children ? await processFileNodes(nodeData.children, nodeData.path || nodeData.uri) : []
+      }
+
+      // Handle hasChildren property for lazy loading
+      if (nodeData.hasChildren !== undefined) {
+        node.hasChildren = nodeData.hasChildren
       }
 
       fileTree.value.nodes.set(node.path, node)
@@ -779,17 +784,35 @@ export function useFileSystem(): FileSystemComposable {
 
   // Handle file change events from WebSocket
   const handleFileChangeEvent = (event: FileWatchEvent): void => {
+    console.log('File change event received:', event)
+    
     // Update file tree based on the event
     switch (event.type) {
       case 'created':
-      case 'modified':
+        // Refresh parent directory to show new file
         refreshFileTree(getParentPath(event.path)).catch(console.error)
         break
+      case 'modified':
+        // Update file metadata if it exists in tree
+        const modifiedNode = fileTree.value.nodes.get(event.path)
+        if (modifiedNode) {
+          modifiedNode.modified = new Date()
+          fileTree.value.nodes.set(event.path, modifiedNode)
+        }
+        break
       case 'deleted':
+        // Remove from file tree
         fileTree.value.nodes.delete(event.path)
         if (fileTree.value.selectedPath === event.path) {
           fileTree.value.selectedPath = null
           selectedNode.value = null
+        }
+        // Also remove any children
+        const pathPrefix = event.path + '/'
+        for (const [nodePath] of fileTree.value.nodes) {
+          if (nodePath.startsWith(pathPrefix)) {
+            fileTree.value.nodes.delete(nodePath)
+          }
         }
         break
       case 'renamed':
@@ -800,6 +823,12 @@ export function useFileSystem(): FileSystemComposable {
             oldNode.path = event.path
             oldNode.name = getFileName(event.path)
             fileTree.value.nodes.set(event.path, oldNode)
+            
+            // Update selection if renamed file was selected
+            if (fileTree.value.selectedPath === event.oldPath) {
+              fileTree.value.selectedPath = event.path
+              selectedNode.value = oldNode
+            }
           }
         }
         break
@@ -820,7 +849,15 @@ export function useFileSystem(): FileSystemComposable {
   // Set up WebSocket message handling for file events
   webSocket.onMessage((message) => {
     if (message.type === 'broadcast' && message.data?.type === 'fileChange') {
-      handleFileChangeEvent(message.data.event)
+      const event = message.data.event
+      // Convert server event format to FileWatchEvent format
+      const fileWatchEvent: FileWatchEvent = {
+        type: event.type,
+        path: event.path,
+        oldPath: event.oldPath,
+        timestamp: new Date(event.timestamp)
+      }
+      handleFileChangeEvent(fileWatchEvent)
     }
   })
 

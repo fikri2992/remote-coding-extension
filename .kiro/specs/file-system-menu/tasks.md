@@ -35,7 +35,9 @@
   - **Git Commit:** `feat: implement file system menu Pinia store`
   - **Description:** Created comprehensive Pinia store for file system menu state management including tree state, preview state, and UI state. Implemented actions for file selection, directory expansion, and search operations. Integrated with existing connection store to maintain WebSocket state synchronization and real-time updates.
 
-- [-] 3. Create file tree panel with basic navigation
+- [x] 3. Create file tree panel with basic navigation
+
+
 
 
 
@@ -47,7 +49,11 @@
   - **Git Commit:** `feat: create file tree panel with navigation`
   - **Description:** Implemented FileTreePanel component with hierarchical file/directory display. Created reusable FileTreeNode component for individual items with proper indentation and icons. Added expand/collapse functionality for directories with visual indicators and implemented file selection with highlighting states.
 
-- [ ] 4. Integrate WebSocket communication for file operations
+- [x] 4. Integrate WebSocket communication for file operations
+
+
+
+
   - Connect file tree to existing useFileSystem composable
   - Implement file tree loading via WebSocket messages
   - Add directory expansion with server communication

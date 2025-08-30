@@ -41,6 +41,8 @@ export class WebSocketServer {
     private _recoveryManager: ConnectionRecoveryManager;
     private _gitService: GitService;
     private _remoteRCService: RemoteRCService;
+    private _fileWatchers: Map<string, any> = new Map();
+    private _watchedPaths: Map<string, Set<string>> = new Map(); // clientId -> Set of watched paths
 
     constructor(config: ServerConfig) {
         this._config = config;
@@ -536,6 +538,12 @@ export class WebSocketServer {
                         data: await this.searchFiles(args[0]?.query || '', args[0]?.path || '.')
                     };
 
+                case 'vscode.workspace.watchPath':
+                    return await this.watchPath(args[0], args[1] || {});
+
+                case 'vscode.workspace.unwatchPath':
+                    return await this.unwatchPath(args[0]);
+
                 case 'vscode.workspace.getWorkspaceInfo':
                     return {
                         success: true,
@@ -584,17 +592,30 @@ export class WebSocketServer {
             
             const contents = [];
             for (const entry of entries) {
+                // Use enhanced filtering
+                if (this.shouldSkipEntry(entry.name)) {
+                    continue;
+                }
+
                 const itemPath = path.join(fullPath, entry.name);
                 const stats = await fs.stat(itemPath);
                 
-                contents.push({
+                const item = {
                     name: entry.name,
                     path: path.join(dirPath, entry.name).replace(/\\/g, '/'),
                     type: entry.isDirectory() ? 'directory' : 'file',
                     size: entry.isFile() ? stats.size : undefined,
                     modified: stats.mtime,
                     created: stats.birthtime
-                });
+                };
+
+                // Add directory-specific properties
+                if (entry.isDirectory()) {
+                    item.hasChildren = await this.hasChildren(itemPath);
+                    item.isExpanded = false;
+                }
+
+                contents.push(item);
             }
 
             return contents.sort((a, b) => {
@@ -1034,19 +1055,21 @@ export class WebSocketServer {
             const workspaceRoot = workspaceFolders[0]!.uri.fsPath;
             const targetPath = path.resolve(workspaceRoot, rootPath);
 
-            // Build file tree recursively
-            const buildTree = async (dirPath: string, relativePath: string = ''): Promise<any[]> => {
+            // Enhanced file tree building with lazy loading
+            const buildTree = async (dirPath: string, relativePath: string = '', depth: number = 0): Promise<any[]> => {
                 const items: any[] = [];
                 
                 try {
+                    // Limit depth for initial load to improve performance
+                    if (depth > 2) {
+                        return items;
+                    }
+
                     const entries = await fs.readdir(dirPath, { withFileTypes: true });
                     
                     for (const entry of entries) {
-                        // Skip hidden files and common ignore patterns
-                        if (entry.name.startsWith('.') && !entry.name.match(/^\.(git|vscode|env)$/)) {
-                            continue;
-                        }
-                        if (entry.name === 'node_modules' || entry.name === 'dist' || entry.name === 'build') {
+                        // Enhanced filtering for better performance
+                        if (this.shouldSkipEntry(entry.name)) {
                             continue;
                         }
 
@@ -1054,12 +1077,17 @@ export class WebSocketServer {
                         const itemRelativePath = path.join(relativePath, entry.name).replace(/\\/g, '/');
                         
                         if (entry.isDirectory()) {
-                            const children = await buildTree(fullPath, itemRelativePath);
+                            // For directories, only load immediate children for root level
+                            const children = depth === 0 ? await buildTree(fullPath, itemRelativePath, depth + 1) : [];
+                            const hasChildren = children.length > 0 || await this.hasChildren(fullPath);
+                            
                             items.push({
                                 name: entry.name,
                                 path: itemRelativePath,
                                 type: 'directory',
-                                children: children
+                                children: children,
+                                isExpanded: false,
+                                hasChildren: hasChildren
                             });
                         } else {
                             const stats = await fs.stat(fullPath);
@@ -1068,7 +1096,8 @@ export class WebSocketServer {
                                 path: itemRelativePath,
                                 type: 'file',
                                 size: stats.size,
-                                modified: stats.mtime
+                                modified: stats.mtime,
+                                created: stats.birthtime
                             });
                         }
                     }
@@ -1090,6 +1119,38 @@ export class WebSocketServer {
         } catch (error) {
             console.error('Failed to get file tree:', error);
             return [];
+        }
+    }
+
+    /**
+     * Check if entry should be skipped for performance
+     */
+    private shouldSkipEntry(name: string): boolean {
+        // Skip hidden files except important ones
+        if (name.startsWith('.') && !name.match(/^\.(git|vscode|env|gitignore|eslintrc|prettierrc)$/)) {
+            return true;
+        }
+        
+        // Skip common build/dependency directories
+        const skipDirs = ['node_modules', 'dist', 'build', '.next', '.nuxt', 'coverage', '.nyc_output', 'tmp', 'temp'];
+        if (skipDirs.includes(name)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Check if directory has children (for lazy loading)
+     */
+    private async hasChildren(dirPath: string): Promise<boolean> {
+        const fs = await import('fs').then(m => m.promises);
+        
+        try {
+            const entries = await fs.readdir(dirPath, { withFileTypes: true });
+            return entries.some(entry => !this.shouldSkipEntry(entry.name));
+        } catch {
+            return false;
         }
     }
 
@@ -1601,6 +1662,9 @@ export class WebSocketServer {
             this._clientThrottles.delete(clientId);
         }
 
+        // Cleanup file watchers for this client
+        this.cleanupClientFileWatchers(clientId);
+
         // Remove client from connections
         this._clients.delete(clientId);
     }
@@ -1936,6 +2000,170 @@ export class WebSocketServer {
     }
 
 
+
+    /**
+     * Watch a file system path for changes
+     */
+    private async watchPath(filePath: string, options: any = {}): Promise<any> {
+        const vscode = await import('vscode');
+        const path = await import('path');
+
+        try {
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+            if (!workspaceFolders || workspaceFolders.length === 0) {
+                return {
+                    success: false,
+                    error: 'No workspace folder available'
+                };
+            }
+
+            const workspaceRoot = workspaceFolders[0]!.uri.fsPath;
+            const fullPath = path.resolve(workspaceRoot, filePath);
+            const watchKey = fullPath;
+
+            // Check if already watching this path
+            if (this._fileWatchers.has(watchKey)) {
+                return {
+                    success: true,
+                    data: { path: filePath, alreadyWatching: true }
+                };
+            }
+
+            // Create file system watcher
+            const pattern = new vscode.RelativePattern(workspaceRoot, filePath + '/**');
+            const watcher = vscode.workspace.createFileSystemWatcher(
+                pattern,
+                false, // Don't ignore create events
+                false, // Don't ignore change events
+                false  // Don't ignore delete events
+            );
+
+            // Set up event handlers
+            const onDidCreate = watcher.onDidCreate((uri) => {
+                this.broadcastFileChangeEvent({
+                    type: 'created',
+                    path: path.relative(workspaceRoot, uri.fsPath).replace(/\\/g, '/'),
+                    timestamp: new Date()
+                });
+            });
+
+            const onDidChange = watcher.onDidChange((uri) => {
+                this.broadcastFileChangeEvent({
+                    type: 'modified',
+                    path: path.relative(workspaceRoot, uri.fsPath).replace(/\\/g, '/'),
+                    timestamp: new Date()
+                });
+            });
+
+            const onDidDelete = watcher.onDidDelete((uri) => {
+                this.broadcastFileChangeEvent({
+                    type: 'deleted',
+                    path: path.relative(workspaceRoot, uri.fsPath).replace(/\\/g, '/'),
+                    timestamp: new Date()
+                });
+            });
+
+            // Store watcher and disposables
+            this._fileWatchers.set(watchKey, {
+                watcher,
+                disposables: [onDidCreate, onDidChange, onDidDelete],
+                path: filePath,
+                options
+            });
+
+            console.log(`Started watching path: ${filePath}`);
+
+            return {
+                success: true,
+                data: { path: filePath, watching: true }
+            };
+
+        } catch (error) {
+            return {
+                success: false,
+                error: `Failed to watch path: ${error instanceof Error ? error.message : 'Unknown error'}`
+            };
+        }
+    }
+
+    /**
+     * Stop watching a file system path
+     */
+    private async unwatchPath(filePath: string): Promise<any> {
+        const vscode = await import('vscode');
+        const path = await import('path');
+
+        try {
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+            if (!workspaceFolders || workspaceFolders.length === 0) {
+                return {
+                    success: false,
+                    error: 'No workspace folder available'
+                };
+            }
+
+            const workspaceRoot = workspaceFolders[0]!.uri.fsPath;
+            const fullPath = path.resolve(workspaceRoot, filePath);
+            const watchKey = fullPath;
+
+            const watcherInfo = this._fileWatchers.get(watchKey);
+            if (!watcherInfo) {
+                return {
+                    success: true,
+                    data: { path: filePath, notWatching: true }
+                };
+            }
+
+            // Dispose of watcher and event handlers
+            watcherInfo.watcher.dispose();
+            watcherInfo.disposables.forEach((disposable: any) => disposable.dispose());
+
+            // Remove from tracking
+            this._fileWatchers.delete(watchKey);
+
+            console.log(`Stopped watching path: ${filePath}`);
+
+            return {
+                success: true,
+                data: { path: filePath, unwatched: true }
+            };
+
+        } catch (error) {
+            return {
+                success: false,
+                error: `Failed to unwatch path: ${error instanceof Error ? error.message : 'Unknown error'}`
+            };
+        }
+    }
+
+    /**
+     * Broadcast file change event to all connected clients
+     */
+    private broadcastFileChangeEvent(event: any): void {
+        const message: WebSocketMessage = {
+            type: 'broadcast',
+            data: {
+                type: 'fileChange',
+                event: event
+            },
+            timestamp: Date.now()
+        };
+
+        this.broadcast(message);
+    }
+
+    /**
+     * Cleanup file watchers when client disconnects
+     */
+    private cleanupClientFileWatchers(clientId: string): void {
+        const watchedPaths = this._watchedPaths.get(clientId);
+        if (watchedPaths) {
+            watchedPaths.forEach(watchPath => {
+                this.unwatchPath(watchPath).catch(console.error);
+            });
+            this._watchedPaths.delete(clientId);
+        }
+    }
 
     /**
      * Get the CommandHandler instance

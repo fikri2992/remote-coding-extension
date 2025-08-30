@@ -3,10 +3,22 @@ import { useConnectionStore } from '../stores/connection'
 import { addBreadcrumb, captureError, createAppError } from './error-handler'
 
 export class ConnectionService {
-  private webSocket = useWebSocket()
-  private connectionStore = useConnectionStore()
+  private webSocket: ReturnType<typeof useWebSocket> | null = null
+  private connectionStore: ReturnType<typeof useConnectionStore> | null = null
   private reconnectTimer: NodeJS.Timeout | null = null
   private isInitialized = false
+
+  /**
+   * Initialize stores and composables (must be called after Pinia is set up)
+   */
+  private initializeStores(): void {
+    if (!this.webSocket) {
+      this.webSocket = useWebSocket()
+    }
+    if (!this.connectionStore) {
+      this.connectionStore = useConnectionStore()
+    }
+  }
 
   /**
    * Initialize the connection service
@@ -15,6 +27,9 @@ export class ConnectionService {
     if (this.isInitialized) {
       return
     }
+
+    // Initialize stores first
+    this.initializeStores()
 
     addBreadcrumb('connection', 'Initializing connection service', 'info')
 
@@ -37,9 +52,9 @@ export class ConnectionService {
       const wsUrl = this.getWebSocketUrl()
       addBreadcrumb('connection', `Attempting to connect to ${wsUrl}`, 'info')
 
-      this.connectionStore.setConnectionStatus('connecting')
+      this.connectionStore!.setConnectionStatus('connecting')
       
-      await this.webSocket.connect(wsUrl, {
+      await this.webSocket!.connect(wsUrl, {
         maxReconnectAttempts: 10,
         reconnectInterval: 2000,
         heartbeatInterval: 30000,
@@ -77,7 +92,7 @@ export class ConnectionService {
         }
       ))
 
-      this.connectionStore.setConnectionStatus('error', errorMessage)
+      this.connectionStore!.setConnectionStatus('error', errorMessage)
       this.scheduleReconnect()
     }
   }
@@ -93,8 +108,8 @@ export class ConnectionService {
       this.reconnectTimer = null
     }
 
-    this.webSocket.disconnect()
-    this.connectionStore.disconnect()
+    this.webSocket?.disconnect()
+    this.connectionStore?.disconnect()
   }
 
   /**
@@ -125,9 +140,9 @@ export class ConnectionService {
    */
   private setupEventHandlers(): void {
     // Connection established
-    this.webSocket.onConnect(() => {
+    this.webSocket!.onConnect(() => {
       addBreadcrumb('connection', 'WebSocket connected successfully', 'info')
-      this.connectionStore.setConnected(this.webSocket.getConnectionInfo().url || 'unknown')
+      this.connectionStore!.setConnected(this.webSocket!.getConnectionInfo().url || 'unknown')
       
       if (this.reconnectTimer) {
         clearTimeout(this.reconnectTimer)
@@ -136,14 +151,14 @@ export class ConnectionService {
     })
 
     // Connection lost
-    this.webSocket.onDisconnect(() => {
+    this.webSocket!.onDisconnect(() => {
       addBreadcrumb('connection', 'WebSocket disconnected', 'warning')
-      this.connectionStore.setConnectionStatus('disconnected')
+      this.connectionStore!.setConnectionStatus('disconnected')
       this.scheduleReconnect()
     })
 
     // Connection error
-    this.webSocket.onError((error) => {
+    this.webSocket!.onError((error) => {
       const errorMessage = error.message || 'Unknown WebSocket error'
       addBreadcrumb('connection', `WebSocket error: ${errorMessage}`, 'error')
       
@@ -159,12 +174,12 @@ export class ConnectionService {
         }
       ))
 
-      this.connectionStore.setConnectionStatus('error', errorMessage)
+      this.connectionStore!.setConnectionStatus('error', errorMessage)
     })
 
     // Health status changes
-    this.webSocket.onHealthChange((health) => {
-      this.connectionStore.updateLatency(health.latency)
+    this.webSocket!.onHealthChange((health) => {
+      this.connectionStore!.updateLatency(health.latency)
       
       if (!health.isHealthy) {
         addBreadcrumb('connection', 'Connection health degraded', 'warning', {
@@ -175,7 +190,7 @@ export class ConnectionService {
     })
 
     // Message handling
-    this.webSocket.onMessage((message) => {
+    this.webSocket!.onMessage((message) => {
       // Handle global messages here if needed
       if (message.type === 'status' && message.data?.type === 'serverInfo') {
         addBreadcrumb('connection', 'Received server info', 'info', message.data)
@@ -187,7 +202,7 @@ export class ConnectionService {
    * Schedule reconnection attempt
    */
   private scheduleReconnect(): void {
-    if (!this.connectionStore.canReconnect || this.reconnectTimer) {
+    if (!this.connectionStore?.canReconnect || this.reconnectTimer) {
       return
     }
 
@@ -214,14 +229,14 @@ export class ConnectionService {
    * Check if connected
    */
   get isConnected(): boolean {
-    return this.webSocket.isConnected.value
+    return this.webSocket?.isConnected.value || false
   }
 
   /**
    * Get connection status
    */
   get connectionStatus() {
-    return this.connectionStore.connectionStatus
+    return this.connectionStore?.connectionStatus || 'disconnected'
   }
 }
 

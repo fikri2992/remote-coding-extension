@@ -85,6 +85,10 @@ export interface FileSystemComposable {
 
 export function useFileSystem(): FileSystemComposable {
   const webSocket = connectionService.getWebSocket()
+  
+  if (!webSocket) {
+    throw new Error('WebSocket not initialized. Make sure connectionService.initialize() is called first.')
+  }
 
   // State
   const fileTree = ref<FileTreeState>({

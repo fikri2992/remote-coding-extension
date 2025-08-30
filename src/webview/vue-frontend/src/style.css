@@ -1,5 +1,7 @@
 /* Mobile-first responsive foundation */
 @import './styles/mobile.css';
+@import './styles/gestures.css';
+@import './styles/layout-transitions.css';
 
 @tailwind base;
 @tailwind components;

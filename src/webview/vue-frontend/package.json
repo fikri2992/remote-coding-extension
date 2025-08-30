@@ -19,6 +19,7 @@
     "analyze": "npm run build && npx vite-bundle-analyzer dist/stats.html"
   },
   "dependencies": {
+    "@heroicons/vue": "^2.0.18",
     "pinia": "^2.1.7",
     "vitest": "^3.2.4",
     "vue": "^3.4.0",

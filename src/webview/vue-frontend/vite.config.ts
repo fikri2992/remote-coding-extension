@@ -34,7 +34,7 @@ export default defineConfig(({ command, mode }) => {
       emptyOutDir: true,
       target: 'es2020',
       minify: isProd ? 'esbuild' : false,
-      sourcemap: isDev ? true : 'hidden',
+      sourcemap: true, // Always enable source maps for debugging
       cssCodeSplit: true,
       rollupOptions: {
         output: {

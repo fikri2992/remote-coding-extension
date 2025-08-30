@@ -7,6 +7,8 @@ export * from './common'
 export { default as AppHeader } from './layout/AppHeader.vue'
 export { default as AppSidebar } from './layout/AppSidebar.vue'
 export { default as AppFooter } from './layout/AppFooter.vue'
+export { default as CollapsibleHeader } from './layout/CollapsibleHeader.vue'
+export { default as AdaptiveNavigation } from './layout/AdaptiveNavigation.vue'
 
 // Automation components
 export { default as CommandPanel } from './automation/CommandPanel.vue'

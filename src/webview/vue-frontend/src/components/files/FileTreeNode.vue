@@ -1,16 +1,31 @@
 <template>
-  <div
-    :class="[
-      'file-tree-node flex items-center px-2 py-1 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors',
-      {
-        'bg-blue-100 dark:bg-blue-900/30': isSelected,
-        'text-blue-700 dark:text-blue-300': isSelected
-      }
-    ]"
-    :style="{ paddingLeft: `${level * 16 + 8}px` }"
-    @click="handleClick"
-    @contextmenu="handleContextMenu"
+  <MobileSwipeActions
+    :left-actions="leftSwipeActions"
+    :right-actions="rightSwipeActions"
+    :haptic-feedback="hapticFeedback"
+    @action="handleSwipeAction"
   >
+    <div
+      ref="nodeRef"
+      :class="[
+        'file-tree-node file-item-gesture flex items-center cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors',
+        `density-${density}`,
+        {
+          'bg-blue-100 dark:bg-blue-900/30': isSelected,
+          'text-blue-700 dark:text-blue-300': isSelected,
+          'loading-state': isLoading
+        }
+      ]"
+      :style="{ 
+        paddingLeft: `${level * indentSize + baseIndent}px`,
+        minHeight: `${minHeight}px`
+      }"
+      :data-file-path="node.path"
+      :data-file-name="node.name"
+      :data-file-type="node.type"
+      @click="handleClick"
+      @contextmenu="handleContextMenu"
+    >
     <!-- Expand/collapse button -->
     <button
       v-if="node.type === 'directory'"
@@ -82,12 +97,17 @@
     >
       {{ formatDate(node.modified) }}
     </span>
-  </div>
+    </div>
+  </MobileSwipeActions>
 </template>
 
 <script setup lang="ts">
-// No imports needed for this component
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
+import { useBreakpoints } from '../../composables/useBreakpoints'
+
+import MobileSwipeActions from './MobileSwipeActions.vue'
 import type { FileSystemNode } from '../../types/filesystem'
+import type { FileGestureAction } from '../../composables/useFileGestures'
 
 interface Props {
   node: FileSystemNode
@@ -95,6 +115,9 @@ interface Props {
   isSelected: boolean
   isLoading: boolean
   showDetails?: boolean
+  density?: 'compact' | 'normal' | 'comfortable'
+  enableSwipeActions?: boolean
+  hapticFeedback?: boolean
 }
 
 interface Emits {
@@ -102,15 +125,116 @@ interface Emits {
   (e: 'expand', node: FileSystemNode): void
   (e: 'collapse', node: FileSystemNode): void
   (e: 'context-menu', event: { node: FileSystemNode; x: number; y: number }): void
+  (e: 'height-change', nodeId: string, height: number): void
+  (e: 'swipe-action', action: FileGestureAction, node: FileSystemNode): void
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  showDetails: false
+  showDetails: false,
+  density: 'normal',
+  enableSwipeActions: true,
+  hapticFeedback: true
 })
 
 const emit = defineEmits<Emits>()
 
+// Composables
+const breakpoints = useBreakpoints()
+
+// State
+const nodeRef = ref<HTMLElement>()
+const lastHeight = ref(0)
+
+// Computed
+const isMobile = computed(() => breakpoints.isMobile.value)
+
+const indentSize = computed(() => {
+  switch (props.density) {
+    case 'compact':
+      return isMobile.value ? 12 : 12
+    case 'comfortable':
+      return isMobile.value ? 20 : 16
+    default: // normal
+      return isMobile.value ? 16 : 16
+  }
+})
+
+const baseIndent = computed(() => {
+  switch (props.density) {
+    case 'compact':
+      return isMobile.value ? 8 : 8
+    case 'comfortable':
+      return isMobile.value ? 16 : 12
+    default: // normal
+      return isMobile.value ? 12 : 8
+  }
+})
+
+const minHeight = computed(() => {
+  switch (props.density) {
+    case 'compact':
+      return isMobile.value ? 40 : 28
+    case 'comfortable':
+      return isMobile.value ? 56 : 40
+    default: // normal
+      return isMobile.value ? 48 : 32
+  }
+})
+
+// Swipe actions configuration
+const leftSwipeActions = computed((): FileGestureAction[] => {
+  if (!props.enableSwipeActions || !isMobile.value) return []
+  
+  return [
+    {
+      type: 'delete',
+      icon: '🗑️',
+      color: '#ef4444',
+      label: 'Delete',
+      haptic: { type: 'medium' },
+      confirmRequired: true
+    }
+  ]
+})
+
+const rightSwipeActions = computed((): FileGestureAction[] => {
+  if (!props.enableSwipeActions || !isMobile.value) return []
+  
+  const actions: FileGestureAction[] = [
+    {
+      type: 'share',
+      icon: '📤',
+      color: '#3b82f6',
+      label: 'Share',
+      haptic: { type: 'light' }
+    }
+  ]
+  
+  // Add preview action for files
+  if (props.node.type === 'file') {
+    actions.unshift({
+      type: 'preview',
+      icon: '👁️',
+      color: '#10b981',
+      label: 'Preview',
+      haptic: { type: 'light' }
+    })
+  }
+  
+  return actions
+})
+
 // Methods
+const measureHeight = async () => {
+  await nextTick()
+  if (nodeRef.value) {
+    const height = nodeRef.value.offsetHeight
+    if (height !== lastHeight.value) {
+      lastHeight.value = height
+      emit('height-change', props.node.path, height)
+    }
+  }
+}
 const handleClick = () => {
   emit('select', props.node)
 }
@@ -130,6 +254,10 @@ const handleContextMenu = (event: MouseEvent) => {
     x: event.clientX,
     y: event.clientY
   })
+}
+
+const handleSwipeAction = (action: FileGestureAction) => {
+  emit('swipe-action', action, props.node)
 }
 
 const getFileIconClass = (): string => {
@@ -200,10 +328,132 @@ const formatDate = (date: Date): string => {
     return date.toLocaleDateString()
   }
 }
+
+// Watchers
+watch(() => props.density, measureHeight)
+watch(() => props.showDetails, measureHeight)
+watch(() => props.node.name, measureHeight)
+
+// Lifecycle
+onMounted(() => {
+  measureHeight()
+})
 </script>
 
 <style scoped>
 .file-tree-node {
-  min-height: 32px;
+  contain: layout style paint;
+  will-change: transform;
+}
+
+/* Density variations */
+.file-tree-node.density-compact {
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+}
+
+.file-tree-node.density-normal {
+  padding-top: 0.375rem;
+  padding-bottom: 0.375rem;
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+}
+
+.file-tree-node.density-comfortable {
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
+/* Loading state */
+.file-tree-node.loading-state {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.file-tree-node.loading-state::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 25%,
+    rgba(255, 255, 255, 0.1) 50%,
+    transparent 75%
+  );
+  background-size: 200% 100%;
+  animation: loading-shimmer 1.5s infinite;
+}
+
+@keyframes loading-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* Mobile optimizations */
+@media (max-width: 767px) {
+  .file-tree-node {
+    /* Ensure minimum touch target size */
+    min-height: 44px;
+    touch-action: manipulation;
+  }
+  
+  .file-tree-node.density-compact {
+    min-height: 40px;
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+  }
+  
+  .file-tree-node.density-comfortable {
+    min-height: 56px;
+    padding-top: 0.75rem;
+    padding-bottom: 0.75rem;
+  }
+}
+
+/* High contrast mode */
+@media (prefers-contrast: high) {
+  .file-tree-node {
+    border-bottom: 1px solid currentColor;
+  }
+  
+  .file-tree-node:hover {
+    outline: 2px solid currentColor;
+    outline-offset: -2px;
+  }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .file-tree-node {
+    transition: none;
+  }
+  
+  .file-tree-node.loading-state::after {
+    animation: none;
+    background: rgba(255, 255, 255, 0.1);
+  }
+}
+
+/* Dark mode adjustments */
+@media (prefers-color-scheme: dark) {
+  .file-tree-node.loading-state::after {
+    background: linear-gradient(
+      90deg,
+      transparent 25%,
+      rgba(0, 0, 0, 0.1) 50%,
+      transparent 75%
+    );
+  }
 }
 </style>

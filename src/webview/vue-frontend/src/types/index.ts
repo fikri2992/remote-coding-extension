@@ -7,6 +7,7 @@ export * from './filesystem'
 export * from './git'
 export * from './terminal'
 export * from './chat'
+export * from './gestures'
 
 // Export workspace types with renamed FileOperation to avoid conflict
 export type {

@@ -121,8 +121,6 @@ import type { ImagePreviewProps } from './types'
 
 // Props
 const props = withDefaults(defineProps<ImagePreviewProps>(), {
-  maxWidth: undefined,
-  maxHeight: undefined,
   showMetadata: true
 })
 
@@ -165,11 +163,11 @@ const imageStyles = computed(() => {
   }
 
   if (props.maxWidth) {
-    styles.maxWidth = typeof props.maxWidth === 'number' ? `${props.maxWidth}px` : props.maxWidth
+    styles['maxWidth'] = typeof props.maxWidth === 'number' ? `${props.maxWidth}px` : props.maxWidth
   }
 
   if (props.maxHeight) {
-    styles.maxHeight = typeof props.maxHeight === 'number' ? `${props.maxHeight}px` : props.maxHeight
+    styles['maxHeight'] = typeof props.maxHeight === 'number' ? `${props.maxHeight}px` : props.maxHeight
   }
 
   return styles

@@ -53,7 +53,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useFileSystemMenuStore } from '../../stores/fileSystemMenu'
-import { useFileSystem } from '../../composables/useFileSystem'
 import type { FileSystemMenuProps, ContextMenuEvent, ContextMenuAction } from './types'
 
 import FileTreePanel from './FileTreePanel.vue'
@@ -70,7 +69,6 @@ const props = withDefaults(defineProps<FileSystemMenuProps>(), {
 
 // Composables
 const fileSystemMenuStore = useFileSystemMenuStore()
-const fileSystem = useFileSystem()
 
 // State
 const splitPaneSize = ref(300)
@@ -116,7 +114,7 @@ const contextMenuActions = computed((): ContextMenuAction[] => {
         icon: 'file-text',
         shortcut: 'Ctrl+Shift+C'
       },
-      { id: 'separator-1', separator: true },
+      { id: 'separator-1', separator: true, label: '', icon: '' },
       {
         id: 'open-editor',
         label: 'Open in Editor',
@@ -131,7 +129,7 @@ const contextMenuActions = computed((): ContextMenuAction[] => {
     )
   } else {
     baseActions.push(
-      { id: 'separator-1', separator: true },
+      { id: 'separator-1', separator: true, label: '', icon: '' },
       {
         id: 'reveal-explorer',
         label: 'Reveal in Explorer',

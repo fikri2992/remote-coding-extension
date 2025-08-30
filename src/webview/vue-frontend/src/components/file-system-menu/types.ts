@@ -25,7 +25,7 @@ export interface FileTreeNodeProps {
   isSelected: boolean
   isExpanded: boolean
   isLoading: boolean
-  searchQuery?: string
+  searchQuery?: string | undefined
 }
 
 // File preview panel props
@@ -45,7 +45,7 @@ export interface FilePreviewContent {
   metadata: FileMetadata
   language?: string
   size: number
-  encoding?: string
+  encoding?: string | undefined
 }
 
 export interface FileMetadata {
@@ -55,7 +55,7 @@ export interface FileMetadata {
   modified: Date
   created: Date
   type: 'file' | 'directory'
-  permissions?: FilePermissions
+  permissions?: FilePermissions | undefined
   isHidden?: boolean
   extension?: string
   mimeType?: string
@@ -101,8 +101,8 @@ export interface ContextMenuProps {
 
 export interface ContextMenuAction {
   id: string
-  label: string
-  icon: string
+  label?: string
+  icon?: string
   shortcut?: string
   disabled?: boolean
   separator?: boolean
@@ -181,7 +181,7 @@ export interface SearchMatch {
 export interface FileSystemEvent {
   type: 'file-changed' | 'file-created' | 'file-deleted' | 'file-renamed'
   path: string
-  oldPath?: string
+  oldPath?: string | undefined
   timestamp: Date
   metadata?: FileMetadata
 }

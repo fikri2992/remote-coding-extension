@@ -280,7 +280,7 @@ export const useFileSystemMenuStore = defineStore('fileSystemMenu', () => {
         modified: node.modified,
         created: node.created,
         type: node.type,
-        permissions: node.permissions,
+        permissions: node.permissions || undefined,
         isHidden: node.name.startsWith('.'),
         extension: getFileExtension(node.name),
         mimeType: getMimeType(node.name)
@@ -314,7 +314,7 @@ export const useFileSystemMenuStore = defineStore('fileSystemMenu', () => {
             metadata,
             language: getLanguageFromExtension(extension),
             size: fileContent.size,
-            encoding: fileContent.encoding
+            encoding: fileContent.encoding || undefined
           }
         } else {
           previewContent.value = {
@@ -581,7 +581,7 @@ export const useFileSystemMenuStore = defineStore('fileSystemMenu', () => {
             event.type === 'deleted' ? 'file-deleted' :
             event.type === 'renamed' ? 'file-renamed' : 'file-changed',
       path: event.path,
-      oldPath: event.oldPath,
+      oldPath: event.oldPath || undefined,
       timestamp: new Date()
     }
 

@@ -76,7 +76,7 @@
         <!-- Image Preview -->
         <ImagePreview
           v-else-if="previewContent.type === 'image'"
-          :src="getImageSrc(previewContent.path)"
+          :src="getImageSrc()"
           :alt="previewContent.metadata.name"
           :show-metadata="true"
         />
@@ -131,7 +131,7 @@ const emit = defineEmits<{
 const previewContent = computed(() => props.previewContent)
 
 // Methods
-const getImageSrc = (path: string): string => {
+const getImageSrc = (): string => {
   // This would need to be implemented to serve images through the WebSocket or HTTP server
   // For now, return a placeholder
   return `data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect width="200" height="200" fill="%23f3f4f6"/><text x="100" y="100" text-anchor="middle" fill="%236b7280">Image</text></svg>`

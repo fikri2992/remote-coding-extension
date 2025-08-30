@@ -7,7 +7,7 @@
     @click.stop
     @contextmenu.prevent
   >
-    <template v-for="(action, index) in actions" :key="action.id">
+    <template v-for="action in actions" :key="action.id">
       <!-- Separator -->
       <div
         v-if="action.separator"
@@ -18,7 +18,7 @@
       <button
         v-else
         @click="handleAction(action.id)"
-        :disabled="action.disabled"
+        :disabled="action.disabled || false"
         class="context-menu-item w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-between"
         :class="{
           'hover:bg-gray-100 dark:hover:bg-gray-700': !action.disabled,

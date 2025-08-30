@@ -165,7 +165,10 @@ const handleSearchKeydown = (event: KeyboardEvent) => {
     clearSearch()
   } else if (event.key === 'Enter' && searchResults.value.length > 0) {
     // Select first search result
-    emit('select', searchResults.value[0].path)
+    const firstResult = searchResults.value[0]
+    if (firstResult) {
+      emit('select', firstResult.path)
+    }
   }
 }
 

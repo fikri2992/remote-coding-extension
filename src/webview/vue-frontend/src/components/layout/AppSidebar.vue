@@ -21,7 +21,7 @@
       'md:w-64': !uiStore.sidebarCollapsed && !isMobile
     }"
   >
-    <nav class="sm:pt-4 space-y-1 sm:space-y-2 overflow-y-auto h-full">
+    <nav class="pt-4 space-y-2 h-full">
       <!-- Navigation Items -->
       <router-link
         v-for="item in navigationItems"
@@ -103,12 +103,6 @@ const navigationItems = [
     icon: 'cog'
   },
   {
-    name: 'Files',
-    label: 'Files',
-    path: '/files',
-    icon: 'folder'
-  },
-  {
     name: 'Git',
     label: 'Git',
     path: '/git',
@@ -129,7 +123,7 @@ const navigationItems = [
 ]
 
 const handleNavClick = (viewName: string) => {
-  const validViews = ['automation', 'files', 'git', 'terminal', 'chat'] as const
+  const validViews = ['automation', 'git', 'terminal', 'chat'] as const
   if (validViews.includes(viewName as typeof validViews[number])) {
     uiStore.setActiveView(viewName as typeof validViews[number])
   }
@@ -172,5 +166,4 @@ const getIconSvg = (iconName: string) => {
     @apply px-4 py-3;
   }
 }
-
 </style>

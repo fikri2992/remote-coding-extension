@@ -72,8 +72,6 @@ onMounted(() => {
   
   if (currentRoute.includes('/automation')) {
     activeView = 'automation'
-  } else if (currentRoute.includes('/files')) {
-    activeView = 'files'
   } else if (currentRoute.includes('/git')) {
     activeView = 'git'
   } else if (currentRoute.includes('/terminal')) {

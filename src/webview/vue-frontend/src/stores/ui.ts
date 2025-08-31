@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { NotificationItem, LoadingState } from '../types/common'
 
-export type ViewType = 'automation' | 'files' | 'git' | 'terminal' | 'chat'
+export type ViewType = 'automation' | 'git' | 'terminal' | 'chat'
 export type ThemeType = 'light' | 'dark' | 'auto'
 
 export const useUIStore = defineStore('ui', () => {

@@ -10,14 +10,3 @@ export { default as AppFooter } from './layout/AppFooter.vue'
 
 // Automation components
 export { default as CommandPanel } from './automation/CommandPanel.vue'
-
-// File management components
-export { default as FileExplorer } from './files/FileExplorer.vue'
-export { default as FileTree } from './files/FileTree.vue'
-export { default as FileTreeNode } from './files/FileTreeNode.vue'
-export { default as FileViewer } from './files/FileViewer.vue'
-export { default as FileSearch } from './files/FileSearch.vue'
-export { default as VirtualList } from './files/VirtualList.vue'
-
-// File System Menu components
-export * from './file-system-menu'

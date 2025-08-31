@@ -704,7 +704,8 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
      * Handle opening web interface in browser
      */
     private _handleOpenWebInterface(): void {
-        const webInterfaceUrl = 'http://localhost:5173'; // Vue dev server default port
+        const status = this._serverManager.getServerStatus();
+        const webInterfaceUrl = status.webInterfaceUrl || status.serverUrl || 'http://localhost:3000';
         vscode.env.openExternal(vscode.Uri.parse(webInterfaceUrl));
     }
 

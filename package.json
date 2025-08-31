@@ -125,6 +125,7 @@
     "compile": "tsc -p ./",
     "compile:watch": "tsc -watch -p ./",
     "copy-assets": "xcopy /Y \"src\\webview\\panel.html\" \"out\\webview\\\"",
+    "copy-react-dist": "xcopy /E /I /Y \"src\\webview\\react-frontend\\dist\" \"out\\webview\\react-frontend\\dist\\\"",
     "build:vue": "cd src/webview/react-frontend && npm run build",
     "build:vue:dev": "cd src/webview/react-frontend && npm run build",
     "build:vue:prod": "cd src/webview/react-frontend && npm run build",
@@ -135,8 +136,8 @@
     "lint:vue": "cd src/webview/vue-frontend && npm run lint",
     "clean": "rimraf out",
     "clean:vue": "cd src/webview/vue-frontend && npm run clean",
-    "build": "npm run clean && npm run compile && npm run copy-assets && npm run build:vue:prod",
-    "dev": "npm run compile && npm run copy-assets && npm run build:vue:dev",
+    "build": "npm run clean && npm run compile && npm run copy-assets && npm run build:vue:prod && npm run copy-react-dist",
+    "dev": "npm run compile && npm run copy-assets && npm run build:vue:dev && npm run copy-react-dist",
     "package": "npm run build && vsce package"
   },
   "devDependencies": {

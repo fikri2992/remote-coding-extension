@@ -36,6 +36,10 @@ export interface ServerStatus {
     lastError?: string;
     /** Full server URL for web access */
     serverUrl?: string;
+    /** Local URL of the browser web interface (React/Vue app) */
+    webInterfaceUrl?: string;
+    /** Publicly accessible URL if a tunnel is active */
+    publicUrl?: string;
 }
 
 /**

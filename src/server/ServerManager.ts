@@ -10,6 +10,7 @@ import { WebServer, WebServerConfig } from './WebServer';
 import { ConfigurationManager } from './ConfigurationManager';
 import { ErrorHandler, ErrorCategory, ErrorSeverity } from './ErrorHandler';
 import { ConnectionRecoveryManager, RecoveryConfig } from './ConnectionRecoveryManager';
+import * as path from 'path';
 
 export class ServerManager {
     private _isRunning: boolean = false;
@@ -143,6 +144,12 @@ export class ServerManager {
                 this._httpServer = null;
             }
 
+            // Stop Web UI webserver
+            if (this._webServer) {
+                await this._webServer.stop();
+                this._webServer = null;
+            }
+
             this._isRunning = false;
             this._startTime = null;
             this._connectedClients.clear();
@@ -174,6 +181,17 @@ export class ServerManager {
             status.websocketPort = this._webSocketServer.port;
             status.uptime = Date.now() - this._startTime.getTime();
             status.serverUrl = `http://localhost:${this._httpServer.port}`;
+        }
+
+        // Include web interface URL from the Web UI server if available
+        if (this._webServer) {
+            const webStatus = this._webServer.getStatus();
+            if (webStatus.localUrl) {
+                status.webInterfaceUrl = webStatus.localUrl;
+            }
+            if (webStatus.publicUrl) {
+                status.publicUrl = webStatus.publicUrl;
+            }
         }
 
         return status;
@@ -524,8 +542,9 @@ export class ServerManager {
             // Use a different port for the webserver (frontend)
             const webServerConfig: WebServerConfig = {
                 port: 3000, // Use port 3000 for React frontend
-                host: 'localhost'
-                // distPath will be set when building the React app
+                host: 'localhost',
+                // Serve built React frontend from dist path
+                distPath: path.join(__dirname, '..', 'webview', 'react-frontend', 'dist')
             };
 
             this._webServer = new WebServer(webServerConfig);
@@ -554,8 +573,8 @@ export class ServerManager {
             try {
                 const webServerConfig: WebServerConfig = {
                     port: currentPort + attempt,
-                    host: 'localhost'
-                    // distPath will be set when building the React app
+                    host: 'localhost',
+                    distPath: path.join(__dirname, '..', 'webview', 'react-frontend', 'dist')
                 };
 
                 const testServer = new WebServer(webServerConfig);

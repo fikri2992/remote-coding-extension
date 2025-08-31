@@ -21,10 +21,10 @@ export class HttpServer {
         this.config = config;
         this.errorHandler = ErrorHandler.getInstance();
         
-        // Serve the Vue frontend directory - this provides the modern Vue.js web application
-        this.webAssetsPath = path.join(__dirname, '..', 'webview', 'vue-frontend');
+        // Serve the React frontend build directory (dist)
+        this.webAssetsPath = path.join(__dirname, '..', 'webview', 'react-frontend', 'dist');
         
-        console.log(`HTTP Server configured to serve Vue.js web application from: ${this.webAssetsPath}`);
+        console.log(`HTTP Server configured to serve React web application from: ${this.webAssetsPath}`);
     }
 
     /**
@@ -485,7 +485,7 @@ export class HttpServer {
             errorCount: this.errorCount,
             errorRate: this.requestCount > 0 ? (this.errorCount / this.requestCount) * 100 : 0,
             webAssetsPath: this.webAssetsPath,
-            frontendType: 'vue', // Now serves Vue.js frontend
+            frontendType: 'react', // Now serves React frontend
             useEnhancedUI: this.shouldUseEnhancedUI(),
             config: {
                 enableCors: this.config.enableCors,

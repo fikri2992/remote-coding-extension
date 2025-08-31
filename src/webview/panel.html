@@ -287,7 +287,7 @@
         <!-- Web Interface Section -->
         <div class="section">
             <div class="section-title">Web Interface</div>
-            <p class="description">Access the full Vue.js interface in your browser for advanced features.</p>
+            <p class="description">Access the full React interface in your browser for advanced features.</p>
             <div class="button-group">
                 <button id="openWebInterfaceBtn" class="action-button">
                     <span>🌐</span> Open Web Interface
@@ -410,7 +410,7 @@
             if (status.isRunning) {
                 serverInfoSection.classList.remove('hidden');
                 serverStatus.textContent = 'Running';
-                webInterfaceUrl.textContent = status.webInterfaceUrl || 'http://localhost:3000';
+                webInterfaceUrl.textContent = status.webInterfaceUrl || 'http://localhost:8080';
                 publicUrl.textContent = status.publicUrl || 'Setting up tunnel...';
                 httpPort.textContent = status.httpPort || '-';
                 websocketPort.textContent = status.websocketPort || '-';

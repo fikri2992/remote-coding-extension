@@ -90,7 +90,7 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
     }
 
     private _getHtmlForWebview(webview: vscode.Webview): string {
-        // Use simple panel for VS Code webview - Vue frontend runs on separate web server
+        // Use Vue frontend for VS Code webview - modern unified interface
         return this._getPanelHtmlForWebview(webview);
     }
 

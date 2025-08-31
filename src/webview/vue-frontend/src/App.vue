@@ -27,8 +27,8 @@
     
     <!-- App Footer -->
     <AppFooter />
-    
-    <!-- Debug Panel (Development Only) -->
+
+
   </div>
 </template>
 
@@ -42,6 +42,7 @@ import { addBreadcrumb } from './services/error-handler'
 
 const uiStore = useUIStore()
 
+// Development mode detection
 
 // Responsive breakpoint detection
 const windowWidth = ref(window.innerWidth)

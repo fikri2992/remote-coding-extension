@@ -212,6 +212,102 @@
         .hidden {
             display: none;
         }
+
+        /* Tab styles */
+        .tab-container {
+            border: 1px solid var(--vscode-panel-border);
+            border-radius: 4px;
+            background-color: var(--vscode-panel-background);
+        }
+
+        .tab-buttons {
+            display: flex;
+            border-bottom: 1px solid var(--vscode-panel-border);
+        }
+
+        .tab-button {
+            background: none;
+            border: none;
+            padding: 12px 16px;
+            font-size: 13px;
+            font-family: var(--vscode-font-family);
+            color: var(--vscode-foreground);
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.1s ease;
+        }
+
+        .tab-button:hover {
+            background-color: var(--vscode-toolbar-hoverBackground);
+        }
+
+        .tab-button.active {
+            color: var(--vscode-textLink-foreground);
+            border-bottom-color: var(--vscode-textLink-foreground);
+        }
+
+        .tab-content {
+            display: none;
+            padding: 16px;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* Form styles */
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--vscode-foreground);
+            margin-bottom: 4px;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 6px 8px;
+            border: 1px solid var(--vscode-input-border);
+            border-radius: 2px;
+            background-color: var(--vscode-input-background);
+            color: var(--vscode-input-foreground);
+            font-family: var(--vscode-font-family);
+            font-size: 13px;
+        }
+
+        .form-input:focus {
+            outline: 1px solid var(--vscode-focusBorder);
+        }
+
+        .form-checkbox {
+            margin-right: 8px;
+        }
+
+        .form-description {
+            font-size: 12px;
+            color: var(--vscode-descriptionForeground);
+            margin-top: 4px;
+        }
+
+        .success-message {
+            background-color: var(--vscode-notificationsInfoIcon-foreground, #3794ff);
+            border: 1px solid var(--vscode-notificationsInfoIcon-foreground, #3794ff);
+            color: var(--vscode-button-foreground);
+            padding: 8px 12px;
+            border-radius: 3px;
+            font-size: 12px;
+            margin-top: 8px;
+        }
+
+        .form-checkbox-container {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
     </style>
 </head>
 <body>
@@ -219,8 +315,16 @@
         <h3 class="title">Web Automation Tunnel</h3>
         <p class="description">Control and monitor the web automation server for remote VS Code access.</p>
         
-        <!-- Server Control Section -->
-        <div class="section">
+        <!-- Tab Container -->
+        <div class="tab-container">
+            <!-- Tab Buttons -->
+            <div class="tab-buttons" role="tablist" aria-label="Web Automation Tabs">
+                <button id="tab-main" class="tab-button active" role="tab" aria-selected="true" aria-controls="main-tab" data-tab="main">Main</button>
+                <button id="tab-settings" class="tab-button" role="tab" aria-selected="false" aria-controls="settings-tab" data-tab="settings">Settings</button>
+            </div>
+            
+            <!-- Tab Content: Server -->
+            <div id="main-tab" class="tab-content active" role="tabpanel" aria-labelledby="tab-main">
             <div class="section-title">Server Control</div>
             
             <div class="status-indicator">
@@ -238,7 +342,6 @@
             </div>
 
             <div id="errorMessage" class="error-message hidden"></div>
-        </div>
 
         <!-- Server Information Section -->
         <div id="serverInfoSection" class="section hidden">
@@ -296,12 +399,73 @@
                     Execute Action
                 </button>
             </div>
-        </div>
-    </div>
+            </div>
 
-    <script>
+            <!-- Close Main Tab Content -->
+            </div>
+            
+            <!-- Tab Content: Settings -->
+            <div id="settings-tab" class="tab-content" role="tabpanel" aria-labelledby="tab-settings">
+                <div class="section-title">Server Settings</div>
+                <p class="description">Configure server ports and connection settings.</p>
+                
+                <form id="settingsForm">
+                    <div class="form-group">
+                        <label class="form-label" for="httpPortInput">HTTP Port</label>
+                        <input type="number" id="httpPortInput" class="form-input" min="1024" max="65535" placeholder="8080">
+                        <div class="form-description">Port for the HTTP server (1024-65535)</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label" for="websocketPortInput">WebSocket Port</label>
+                        <input type="number" id="websocketPortInput" class="form-input" min="1024" max="65535" placeholder="8081">
+                        <div class="form-description">Port for the WebSocket server (defaults to HTTP port + 1)</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label" for="maxConnectionsInput">Max Connections</label>
+                        <input type="number" id="maxConnectionsInput" class="form-input" min="1" max="1000" placeholder="10">
+                        <div class="form-description">Maximum number of concurrent WebSocket connections</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label" for="allowedOriginsInput">Allowed Origins</label>
+                        <input type="text" id="allowedOriginsInput" class="form-input" placeholder="*">
+                        <div class="form-description">Comma-separated list of allowed origins (use * for all)</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-checkbox-container">
+                            <input type="checkbox" id="enableCorsInput" class="form-checkbox">
+                            <span class="form-label">Enable CORS</span>
+                        </label>
+                        <div class="form-description">Allow cross-origin requests</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-checkbox-container">
+                            <input type="checkbox" id="useEnhancedUIInput" class="form-checkbox" checked>
+                            <span class="form-label">Use Enhanced UI</span>
+                        </label>
+                        <div class="form-description">Use the enhanced chat-like interface instead of basic</div>
+                    </div>
+                    
+                    <div class="button-group" style="margin-top: 20px;">
+                        <button type="submit" class="action-button">Save Settings</button>
+                        <button type="button" id="resetSettingsBtn" class="action-button secondary-button">Reset to Defaults</button>
+                    </div>
+                </form>
+                
+                <div id="settingsMessage" class="error-message hidden" style="margin-top: 16px;"></div>
+            </div>
+        </div>
+        <script>
         // Get reference to VSCode API
-        const vscode = acquireVsCodeApi();
+        const vscode = (window.vscode || acquireVsCodeApi());
+        
+        // Tab management
+        const tabButtons = document.querySelectorAll('.tab-button');
+        const tabContents = document.querySelectorAll('.tab-content');
         
         // Get UI elements
         const startServerBtn = document.getElementById('startServerBtn');
@@ -323,12 +487,138 @@
         const uptime = document.getElementById('uptime');
         const clientCount = document.getElementById('clientCount');
         const clientsList = document.getElementById('clientsList');
+        
+        // Settings elements
+        const settingsForm = document.getElementById('settingsForm');
+        const httpPortInput = document.getElementById('httpPortInput');
+        const websocketPortInput = document.getElementById('websocketPortInput');
+        const maxConnectionsInput = document.getElementById('maxConnectionsInput');
+        const allowedOriginsInput = document.getElementById('allowedOriginsInput');
+        const enableCorsInput = document.getElementById('enableCorsInput');
+        const useEnhancedUIInput = document.getElementById('useEnhancedUIInput');
+        const resetSettingsBtn = document.getElementById('resetSettingsBtn');
+        const settingsMessage = document.getElementById('settingsMessage');
 
         // Current server state
         let currentServerState = {
             isRunning: false,
             isLoading: false
         };
+
+        // Tab switching functionality
+        tabButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                const tabName = this.getAttribute('data-tab');
+                switchTab(tabName);
+            });
+        });
+
+        // Keyboard navigation for tabs
+        tabButtons.forEach(button => {
+            button.addEventListener('keydown', onTabKeydown);
+        });
+
+        function switchTab(tabName) {
+            // Remove active class/selection from all buttons and contents
+            tabButtons.forEach(btn => {
+                btn.classList.remove('active');
+                btn.setAttribute('aria-selected', 'false');
+            });
+            tabContents.forEach(content => content.classList.remove('active'));
+            
+            // Add active class to selected button and content
+            const activeBtn = document.querySelector(`[data-tab="${tabName}"]`);
+            const activeContent = document.getElementById(`${tabName}-tab`);
+            if (activeBtn) {
+                activeBtn.classList.add('active');
+                activeBtn.setAttribute('aria-selected', 'true');
+            }
+            if (activeContent) {
+                activeContent.classList.add('active');
+            }
+
+            // Update tabindex for accessibility: only active tab is tabbable
+            tabButtons.forEach(btn => {
+                btn.setAttribute('tabindex', btn === activeBtn ? '0' : '-1');
+            });
+        }
+
+        function onTabKeydown(e) {
+            const keys = ['ArrowLeft', 'ArrowRight', 'Home', 'End'];
+            if (!keys.includes(e.key)) return;
+            e.preventDefault();
+
+            const buttons = Array.from(tabButtons);
+            const currentIndex = buttons.indexOf(document.activeElement);
+            let newIndex = currentIndex;
+            if (e.key === 'ArrowRight') newIndex = (currentIndex + 1) % buttons.length;
+            if (e.key === 'ArrowLeft') newIndex = (currentIndex - 1 + buttons.length) % buttons.length;
+            if (e.key === 'Home') newIndex = 0;
+            if (e.key === 'End') newIndex = buttons.length - 1;
+
+            const newTabName = buttons[newIndex].getAttribute('data-tab');
+            switchTab(newTabName);
+            buttons[newIndex].focus();
+        }
+
+        // Initialize tabs accessibility state for the default active tab
+        const initialActive = document.querySelector('.tab-button.active');
+        const initialTab = initialActive?.getAttribute('data-tab') || 'main';
+        switchTab(initialTab);
+
+        // Settings form handling
+        settingsForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            saveSettings();
+        });
+
+        resetSettingsBtn.addEventListener('click', function() {
+            resetSettings();
+        });
+
+        function saveSettings() {
+            const settings = {
+                'webAutomationTunnel.httpPort': parseInt(httpPortInput.value) || 8080,
+                'webAutomationTunnel.websocketPort': parseInt(websocketPortInput.value) || 8081,
+                'webAutomationTunnel.maxConnections': parseInt(maxConnectionsInput.value) || 10,
+                'webAutomationTunnel.allowedOrigins': allowedOriginsInput.value.split(',').map(s => s.trim()),
+                'webAutomationTunnel.enableCors': enableCorsInput.checked,
+                'webAutomationTunnel.useEnhancedUI': useEnhancedUIInput.checked
+            };
+
+            vscode.postMessage({
+                command: 'updateConfiguration',
+                data: settings
+            });
+        }
+
+        function resetSettings() {
+            vscode.postMessage({
+                command: 'resetConfiguration'
+            });
+        }
+
+        // Load current configuration
+        function loadConfiguration(config) {
+            if (config) {
+                httpPortInput.value = config.httpPort || 8080;
+                websocketPortInput.value = config.websocketPort || 8081;
+                maxConnectionsInput.value = config.maxConnections || 10;
+                allowedOriginsInput.value = Array.isArray(config.allowedOrigins) ? config.allowedOrigins.join(', ') : config.allowedOrigins || '*';
+                enableCorsInput.checked = config.enableCors !== false;
+                useEnhancedUIInput.checked = config.useEnhancedUI !== false;
+            }
+        }
+
+        // Show settings message
+        function showSettingsMessage(message, isError = false) {
+            settingsMessage.textContent = message;
+            settingsMessage.className = isError ? 'error-message' : 'success-message';
+            settingsMessage.classList.remove('hidden');
+            setTimeout(() => {
+                settingsMessage.classList.add('hidden');
+            }, 3000);
+        }
 
         // Add click handlers for server control buttons
         startServerBtn.addEventListener('click', function() {
@@ -384,6 +674,19 @@
                     break;
                 case 'statusUpdate':
                     handleStatusUpdate(message.data);
+                    break;
+                case 'configurationUpdate':
+                    // message.data contains { config, schema }
+                    loadConfiguration(message.data?.config);
+                    break;
+                case 'configurationUpdated':
+                    showSettingsMessage('Settings saved successfully!');
+                    break;
+                case 'configurationResetSuccess':
+                    showSettingsMessage('Settings reset to defaults!');
+                    break;
+                case 'configurationError':
+                    showSettingsMessage(message.data.error, true);
                     break;
                 default:
                     console.log('Unknown message from extension:', message);
@@ -532,8 +835,13 @@
             command: 'getServerStatus'
         });
         
+        // Request initial configuration
+        vscode.postMessage({
+            command: 'getConfiguration'
+        });
+        
         // Log that webview is ready
         console.log('Web Automation Tunnel webview loaded and ready');
-    </script>
+        </script>
 </body>
 </html>

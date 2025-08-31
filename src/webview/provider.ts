@@ -52,14 +52,14 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
                     case 'openWebInterface':
                         this._handleOpenWebInterface();
                         break;
-                    case 'getConfiguration':
-                        this._handleGetConfiguration();
-                        break;
                     case 'updateConfiguration':
                         this._handleUpdateConfiguration(message.data);
                         break;
                     case 'resetConfiguration':
                         this._handleResetConfiguration();
+                        break;
+                    case 'getConfiguration':
+                        this._handleGetConfiguration();
                         break;
                     case 'validatePort':
                         this._handleValidatePort(message.data);
@@ -248,6 +248,8 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
             this._sendStatusUpdate({ type: 'serverError', error: errorMessage });
             vscode.window.showErrorMessage('Failed to start server: ' + errorMessage);
+            // Send status update even on error to ensure UI reflects current state
+            this._sendServerStatus();
         }
     }
 
@@ -264,6 +266,8 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
             this._sendStatusUpdate({ type: 'serverError', error: errorMessage });
             vscode.window.showErrorMessage('Failed to stop server: ' + errorMessage);
+            // Send status update even on error to ensure UI reflects current state
+            this._sendServerStatus();
         }
     }
 
@@ -382,24 +386,38 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
     /**
      * Handle configuration update from webview
      */
-    private async _handleUpdateConfiguration(data: { key: string; value: any }): Promise<void> {
+    private async _handleUpdateConfiguration(data: any): Promise<void> {
         if (!this._view) return;
 
         try {
-            await this._serverManager.updateConfigurationValue(data.key, data.value);
-            
-            this._view.webview.postMessage({
-                command: 'configurationUpdateSuccess',
-                data: { key: data.key, value: data.value }
-            });
+            // Handle both single key-value and multiple settings format
+            if (data.key && data.value !== undefined) {
+                // Single setting update
+                await this._serverManager.updateConfigurationValue(data.key, data.value);
+                
+                this._view.webview.postMessage({
+                    command: 'configurationUpdated',
+                    data: { key: data.key, value: data.value }
+                });
+            } else if (typeof data === 'object') {
+                // Multiple settings update
+                const updates = Object.entries(data);
+                for (const [key, value] of updates) {
+                    await this._serverManager.updateConfigurationValue(key, value);
+                }
+                
+                this._view.webview.postMessage({
+                    command: 'configurationUpdated',
+                    data: data
+                });
+            } else {
+                throw new Error('Invalid configuration data format');
+            }
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             this._view.webview.postMessage({
-                command: 'configurationUpdateError',
-                data: { 
-                    key: data.key, 
-                    error: errorMessage 
-                }
+                command: 'configurationError',
+                data: { error: errorMessage }
             });
         }
     }

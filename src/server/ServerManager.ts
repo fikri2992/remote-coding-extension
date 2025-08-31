@@ -97,8 +97,8 @@ export class ServerManager {
             // Initialize and start WebSocket server with recovery
             await this.startWebSocketServerWithRecovery(this._config);
             
-            // Initialize and start webserver for React frontend
-            await this.startWebServerWithRecovery(this._config);
+            // WebServer removed - HttpServer serves React frontend
+            // await this.startWebServerWithRecovery(this._config);
             
             this._isRunning = true;
             this._startTime = new Date();
@@ -132,23 +132,23 @@ export class ServerManager {
                 return; // Already stopped
             }
 
-            // Stop WebSocket server first (closes connections gracefully)
-            if (this._webSocketServer) {
-                await this._webSocketServer.stop();
-                this._webSocketServer = null;
-            }
-            
             // Stop HTTP server
             if (this._httpServer) {
                 await this._httpServer.stop();
                 this._httpServer = null;
             }
 
-            // Stop Web UI webserver
-            if (this._webServer) {
-                await this._webServer.stop();
-                this._webServer = null;
+            // Stop WebSocket server first (closes connections gracefully)
+            if (this._webSocketServer) {
+                await this._webSocketServer.stop();
+                this._webSocketServer = null;
             }
+            
+            // WebServer removed
+            // if (this._webServer) {
+            //     await this._webServer.stop();
+            //     this._webServer = null;
+            // }
 
             this._isRunning = false;
             this._startTime = null;
@@ -183,7 +183,7 @@ export class ServerManager {
             status.serverUrl = `http://localhost:${this._httpServer.port}`;
         }
 
-        // Include web interface URL from the Web UI server if available
+        // Include web interface URL from the Web UI server if available, otherwise use HTTP server URL
         if (this._webServer) {
             const webStatus = this._webServer.getStatus();
             if (webStatus.localUrl) {
@@ -192,6 +192,16 @@ export class ServerManager {
             if (webStatus.publicUrl) {
                 status.publicUrl = webStatus.publicUrl;
             }
+        }
+
+        // If no web interface URL set, use HTTP server URL
+        if (!status.webInterfaceUrl && status.serverUrl) {
+            status.webInterfaceUrl = status.serverUrl;
+        }
+
+        // If no public URL set, use local server URL (no tunnel)
+        if (!status.publicUrl && status.serverUrl) {
+            status.publicUrl = status.serverUrl;
         }
 
         return status;

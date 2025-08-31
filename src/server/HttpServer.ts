@@ -121,6 +121,11 @@ export class HttpServer {
 
             let pathname = parsedUrl.pathname || '/';
 
+            // Handle React Router - serve index.html for client-side routes
+            if (pathname !== '/' && !pathname.includes('.')) {
+                pathname = '/index.html';
+            }
+
             // Default to index.html for root requests
             if (pathname === '/') {
                 pathname = '/index.html';

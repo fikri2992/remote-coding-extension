@@ -9,6 +9,170 @@ function ensureDirSync(dir: string) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 }
 
+// -------------------------
+// Runtime tunnel management
+// -------------------------
+
+export interface StartedTunnelInfo {
+  url: string;
+  pid: number;
+}
+
+let currentProc: cp.ChildProcess | null = null;
+let currentUrl: string | null = null;
+
+/** Check if cloudflared is installed/available */
+export async function isInstalled(): Promise<boolean> {
+  if (await isInPath()) return true;
+  // Check cached install location heuristic
+  const home = os.homedir();
+  const guess = process.platform === 'win32'
+    ? path.join(home, '.vscode-cloudflared', 'cloudflared.exe')
+    : path.join(home, '.vscode-cloudflared', 'cloudflared');
+  return fileExists(guess);
+}
+
+/** Install cloudflared (or return existing path) */
+export async function install(context?: vscode.ExtensionContext): Promise<string> {
+  return ensureCloudflared(context);
+}
+
+/**
+ * Start a Quick Tunnel that exposes http://localhost:localPort
+ * Resolves with the public URL and PID once available.
+ */
+export async function startQuickTunnel(localPort: number, context?: vscode.ExtensionContext, extraArgs: string[] = []): Promise<StartedTunnelInfo> {
+  if (currentProc) throw new Error('A tunnel is already running');
+  const bin = await ensureCloudflared(context);
+
+  const args = [
+    'tunnel',
+    '--no-autoupdate',
+    '--url', `http://localhost:${localPort}`,
+    ...extraArgs,
+  ];
+
+  return spawnAndResolveUrl(bin, args);
+}
+
+/**
+ * Start a Named Tunnel using a token or a configured tunnel name.
+ * If token is provided, we run: cloudflared tunnel run --token <token>
+ * Otherwise, we run: cloudflared tunnel run <tunnelName>
+ * In both cases we append --no-autoupdate and attempt to route to localPort via --url to simplify usage.
+ * Note: For production named tunnels, routing is often configured via YAML; this provides a simplified path.
+ */
+export async function startNamedTunnel(localPort: number, tunnelName?: string, token?: string, context?: vscode.ExtensionContext, extraArgs: string[] = []): Promise<StartedTunnelInfo> {
+  if (currentProc) throw new Error('A tunnel is already running');
+  const bin = await ensureCloudflared(context);
+
+  const base = ['tunnel', '--no-autoupdate'];
+  const route = ['--url', `http://localhost:${localPort}`];
+  let args: string[];
+
+  if (token && token.trim().length > 0) {
+    args = [...base, 'run', '--token', token, ...route, ...extraArgs];
+  } else if (tunnelName && tunnelName.trim().length > 0) {
+    args = [...base, 'run', tunnelName, ...route, ...extraArgs];
+  } else {
+    // Fallback to quick tunnel if neither provided
+    args = [...base, ...route, ...extraArgs];
+  }
+
+  return spawnAndResolveUrl(bin, args);
+}
+
+/** Stop the running tunnel process, if any */
+export async function stopTunnel(): Promise<boolean> {
+  if (!currentProc) return false;
+  const pid = currentProc.pid ?? 0;
+
+  return new Promise<boolean>((resolve) => {
+    const proc = currentProc!;
+    currentProc = null;
+    currentUrl = null;
+
+    const onExit = () => resolve(true);
+    proc.once('exit', onExit);
+
+    try {
+      if (process.platform === 'win32' && pid) {
+        // Use taskkill to ensure child tree termination on Windows
+        cp.exec(`taskkill /PID ${pid} /T /F`, { windowsHide: true }, () => {});
+      } else {
+        proc.kill('SIGTERM');
+        setTimeout(() => proc.kill('SIGKILL'), 3000).unref?.();
+      }
+    } catch {
+      resolve(false);
+    }
+  });
+}
+
+// -------------------------
+// Helpers
+// -------------------------
+
+function parsePublicUrl(data: string): string | null {
+  // Look for any https URL, prioritizing trycloudflare.com but allowing custom hosts
+  const urlRegex = /(https?:\/\/[^\s\"]+)/g;
+  const matches = data.match(urlRegex);
+  if (!matches) return null;
+  // Prefer trycloudflare if present
+  const preferred = matches.find(u => /trycloudflare\.com/.test(u));
+  return preferred || matches[0];
+}
+
+function spawnAndResolveUrl(bin: string, args: string[]): Promise<StartedTunnelInfo> {
+  return new Promise<StartedTunnelInfo>((resolve, reject) => {
+    try {
+      const proc = cp.spawn(bin, args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+      currentProc = proc;
+
+      let resolved = false;
+      const timeout = setTimeout(() => {
+        if (!resolved) {
+          try { proc.kill(); } catch {}
+          currentProc = null;
+          reject(new Error('Timed out waiting for tunnel URL'));
+        }
+      }, 20000); // 20s
+
+      const handleChunk = (buf: Buffer) => {
+        const text = buf.toString();
+        const url = parsePublicUrl(text);
+        if (url && !resolved) {
+          resolved = true;
+          clearTimeout(timeout);
+          currentUrl = url;
+          resolve({ url, pid: proc.pid ?? 0 });
+        }
+      };
+
+      proc.stdout.on('data', handleChunk);
+      proc.stderr.on('data', handleChunk);
+
+      proc.on('error', (err) => {
+        if (!resolved) {
+          clearTimeout(timeout);
+          currentProc = null;
+          reject(err);
+        }
+      });
+      proc.on('exit', (code) => {
+        if (!resolved) {
+          clearTimeout(timeout);
+          currentProc = null;
+          reject(new Error(`cloudflared exited with code ${code}`));
+        }
+      });
+    } catch (e) {
+      currentProc = null;
+      reject(e);
+    }
+  });
+}
+
 function download(url: string, dest: string, redirectsLeft = 5): Promise<void> {
   return new Promise((resolve, reject) => {
     const doGet = (u: string, remaining: number) => {

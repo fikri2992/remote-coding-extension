@@ -1,5 +1,6 @@
 import WebSocket from 'ws';
-import { IncomingMessage } from 'http';
+import { IncomingMessage, Server as HttpServer } from 'http';
+import { Socket } from 'net';
 
 export interface WebSocketConnection {
   ws: WebSocket;
@@ -12,20 +13,61 @@ export class WebSocketServer {
   private connections: Map<string, WebSocketConnection> = new Map();
   private _port: number;
   private _clientCount: number = 0;
+  private _attachedHttpServer: HttpServer | null = null;
+  private _upgradePath: string = '/ws';
 
-  constructor(config: any) {
+  constructor(config: any, attachedHttpServer?: HttpServer, upgradePath: string = '/ws') {
     // Handle both number and config object
     if (typeof config === 'number') {
       this._port = config;
     } else {
-      this._port = config.websocketPort || config.httpPort + 1;
+      this._port = (attachedHttpServer ? config.httpPort : (config.websocketPort || config.httpPort + 1));
     }
+    this._attachedHttpServer = attachedHttpServer || null;
+    this._upgradePath = upgradePath;
   }
 
   public async start(): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
-        this.wss = new WebSocket.Server({ port: this.port });
+        if (this._attachedHttpServer) {
+          // Attach to existing HTTP server using noServer mode
+          this.wss = new WebSocket.Server({ noServer: true });
+
+          this._attachedHttpServer.on('upgrade', (request: IncomingMessage, socket: Socket, head: Buffer) => {
+            try {
+              const url = new URL(request.url || '/', 'http://localhost');
+              if (url.pathname !== this._upgradePath) {
+                socket.destroy();
+                return;
+              }
+
+              // Basic origin allowlist similar to HttpServer
+              const origin = request.headers['origin'] as string | undefined;
+              const allowedOrigins = new Set([
+                'http://localhost:3000',
+                'http://localhost:8080',
+                'http://127.0.0.1:3000',
+                'http://127.0.0.1:8080',
+                'http://localhost:8081',
+                'http://127.0.0.1:8081'
+              ]);
+              if (origin && !allowedOrigins.has(origin)) {
+                socket.destroy();
+                return;
+              }
+
+              this.wss!.handleUpgrade(request, socket, head, (ws) => {
+                this.wss!.emit('connection', ws, request);
+              });
+            } catch (e) {
+              try { socket.destroy(); } catch {}
+            }
+          });
+        } else {
+          // Standalone WebSocket server on its own port for backward compatibility
+          this.wss = new WebSocket.Server({ port: this.port });
+        }
 
         this.wss.on('connection', (ws: WebSocket, request: IncomingMessage) => {
           const connectionId = this.generateConnectionId();
@@ -77,10 +119,16 @@ export class WebSocketServer {
           });
         });
 
-        this.wss.on('listening', () => {
-          console.log(`WebSocket server listening on port ${this.port}`);
+        // In attached mode, consider it started immediately after binding to HTTP server
+        if (this._attachedHttpServer) {
+          console.log(`WebSocket upgrade handler attached at path ${this._upgradePath} on HTTP port ${this.port}`);
           resolve();
-        });
+        } else {
+          this.wss.on('listening', () => {
+            console.log(`WebSocket server listening on port ${this.port}`);
+            resolve();
+          });
+        }
 
         this.wss.on('error', (error) => {
           console.error('WebSocket server error:', error);

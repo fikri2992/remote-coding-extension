@@ -119,7 +119,7 @@ export class ServerManager {
             // Initialize and start HTTP server with recovery
             await this.startHttpServerWithRecovery(this._config);
 
-            // Initialize and start WebSocket server with recovery
+            // Initialize and start WebSocket server with recovery (attach to HTTP server)
             await this.startWebSocketServerWithRecovery(this._config);
             
             // WebServer removed - HttpServer serves React frontend
@@ -130,7 +130,7 @@ export class ServerManager {
             this._lastError = null;
             this._startupAttempts = 0; // Reset on success
 
-            const successMessage = `Web Automation Server started successfully - HTTP: ${this._httpServer!.port}, WebSocket: ${this._webSocketServer!.port}`;
+            const successMessage = `Web Automation Server started successfully - HTTP+WS on port ${this._httpServer!.port} (WS path /ws)`;
             console.log(successMessage);
             
             // Show success notification
@@ -686,7 +686,9 @@ export class ServerManager {
      */
     private async startWebSocketServerWithRecovery(config: ServerConfig): Promise<void> {
         try {
-            this._webSocketServer = new WebSocketServer(config);
+            // Attach WebSocket server to the existing HTTP server to share the same port
+            const attached = this._httpServer?.nodeServer || undefined;
+            this._webSocketServer = new WebSocketServer(config, attached, '/ws');
             await this._webSocketServer.start();
             
             // Setup connection recovery for WebSocket clients
@@ -695,6 +697,8 @@ export class ServerManager {
         } catch (error) {
             const { recovered } = await this._errorHandler.handleError(error as Error, {
                 tryAlternativePort: async () => {
+                    // If attached to HTTP server, there is no alternative WS port to try
+                    if (this._httpServer?.nodeServer) return false;
                     return await this.tryAlternativeWebSocketPort(config);
                 }
             });
@@ -709,6 +713,10 @@ export class ServerManager {
      * Try alternative WebSocket port
      */
     private async tryAlternativeWebSocketPort(config: ServerConfig): Promise<boolean> {
+        // If we're attaching to the HTTP server, we can't pick another WS port; return false
+        if (this._httpServer?.nodeServer) {
+            return false;
+        }
         const maxAttempts = 10;
         const basePort = config.websocketPort || config.httpPort + 1;
 

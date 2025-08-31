@@ -88,29 +88,40 @@ export function activate(context: vscode.ExtensionContext) {
     // Tunnel management commands
     const startTunnelCommand = vscode.commands.registerCommand('webAutomationTunnel.startTunnel', async () => {
         try {
-            const config = vscode.workspace.getConfiguration('webAutomationTunnel');
+            // Ask for tunnel name (blank -> quick tunnel)
+            let tunnelName = await vscode.window.showInputBox({
+                prompt: 'Enter tunnel name (optional, leave empty for quick tunnel)',
+                placeHolder: 'vscode-web-automation'
+            });
 
-            // Get configured values (may be undefined)
-            const configuredTunnelName = config.get<string>('tunnelName');
-            const configuredCloudflareToken = config.get<string>('cloudflareToken');
+            let cloudflareToken: string | undefined;
 
-            // Prompt for tunnel name if not configured
-            let tunnelName = configuredTunnelName;
-            if (!tunnelName) {
-                tunnelName = await vscode.window.showInputBox({
-                    prompt: 'Enter tunnel name (optional, leave empty for quick tunnel)',
-                    placeHolder: 'vscode-web-automation'
-                });
-            }
+            if (tunnelName) {
+                // Named tunnel: try SecretStorage first
+                const secretKey = 'webAutomationTunnel.cloudflareToken';
+                const existing = await context.secrets.get(secretKey);
+                cloudflareToken = existing || undefined;
 
-            // Prompt for Cloudflare token if not configured
-            let cloudflareToken = configuredCloudflareToken;
-            if (!cloudflareToken) {
-                cloudflareToken = await vscode.window.showInputBox({
-                    prompt: 'Enter Cloudflare API token (optional, for authenticated tunnels)',
-                    placeHolder: 'Leave empty for anonymous tunnel',
-                    password: true
-                });
+                if (!cloudflareToken) {
+                    cloudflareToken = await vscode.window.showInputBox({
+                        prompt: 'Enter Cloudflare API token (required for named tunnel)',
+                        placeHolder: 'Paste your token',
+                        password: true
+                    });
+                    if (!cloudflareToken) {
+                        vscode.window.showWarningMessage('Cloudflare token is required for a named tunnel. Starting quick tunnel instead.');
+                        tunnelName = undefined;
+                    } else {
+                        const save = await vscode.window.showInformationMessage(
+                            'Save Cloudflare token securely for future use?',
+                            'Save',
+                            'Not now'
+                        );
+                        if (save === 'Save') {
+                            await context.secrets.store(secretKey, cloudflareToken);
+                        }
+                    }
+                }
             }
 
             const tunnelConfig: any = {};
@@ -184,7 +195,22 @@ export function activate(context: vscode.ExtensionContext) {
 
     console.log('Basic VSCode Extension registration complete');
 
-    // Auto-start the server (and tunnel if configured) on activation
+    // Show one-time deprecation/migration notice
+    const noticeKey = 'webAutomationTunnel.deprecationNotice.v1';
+    const shown = context.globalState.get<boolean>(noticeKey, false);
+    if (!shown) {
+        vscode.window.showInformationMessage(
+            'Web Automation Tunnel: Settings simplified. Only "httpPort" remains. Deprecated settings like websocketPort, allowedOrigins, enableCors, tunnelName, and cloudflareToken are ignored. Control auto-start and tunnel from the UI.',
+            'Open Settings'
+        ).then(action => {
+            if (action === 'Open Settings') {
+                vscode.commands.executeCommand('workbench.action.openSettings', 'webAutomationTunnel');
+            }
+        });
+        context.globalState.update(noticeKey, true);
+    }
+
+    // Auto-start the server on activation (UI will manage tunnel state)
     (async () => {
         try {
             await webviewProvider.startServer();

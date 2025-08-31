@@ -119,6 +119,20 @@ export class HttpServer {
 
             let pathname = parsedUrl.pathname || '/';
 
+            // Health endpoint (no SPA rewrite)
+            if (pathname === '/health') {
+                const body = JSON.stringify({
+                    ok: true,
+                    port: this.config.httpPort,
+                    requests: this.requestCount,
+                    errors: this.errorCount,
+                    timestamp: new Date().toISOString()
+                });
+                res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+                res.end(body);
+                return;
+            }
+
             // Handle React Router - serve index.html for client-side routes
             if (pathname !== '/' && !pathname.includes('.')) {
                 pathname = '/index.html';
@@ -524,5 +538,12 @@ export class HttpServer {
      */
     get isRunning(): boolean {
         return this.server !== null && this.server.listening;
+    }
+
+    /**
+     * Expose the underlying Node http.Server for upgrade handling (e.g., WebSocket)
+     */
+    public get nodeServer(): http.Server | null {
+        return this.server;
     }
 }

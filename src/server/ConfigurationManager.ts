@@ -41,41 +41,39 @@ export class ConfigurationManager {
     }
 
     /**
-     * Load and validate server configuration from VS Code settings (minimal schema)
+     * Load and validate server configuration from VS Code settings (simplified schema)
      */
     public async loadConfiguration(): Promise<ServerConfig> {
         const config = vscode.workspace.getConfiguration('webAutomationTunnel');
 
-        // Load configuration with defaults (minimal schema)
+        // Load configuration with defaults (simplified: only httpPort is honored)
         const rawConfig = {
-            httpPort: config.get<number>('httpPort'),
-            websocketPort: config.get<number>('websocketPort'),
-            tunnelName: config.get<string>('tunnelName'),
-            cloudflareToken: config.get<string>('cloudflareToken'),
-            autoStartTunnel: config.get<boolean>('autoStartTunnel')
-        };
+            httpPort: config.get<number>('httpPort')
+        } as const;
 
         // Apply defaults and validate
         const serverConfig = await this.applyDefaultsAndValidate(rawConfig);
 
-        return serverConfig;
+        // Return minimal shape of ServerConfig for backward compatibility
+        // Note: we intentionally omit deprecated optional fields to satisfy exactOptionalPropertyTypes
+        const cfg: ServerConfig = {
+            httpPort: serverConfig.httpPort,
+            autoStartTunnel: false
+        } as ServerConfig;
+        return cfg;
     }
 
     /**
      * Apply default values and validate configuration
      */
-    private async applyDefaultsAndValidate(rawConfig: any): Promise<ServerConfig> {
-        // Apply defaults (minimal schema)
-        const config: ServerConfig = {
-            httpPort: rawConfig.httpPort ?? 8080,
-            websocketPort: rawConfig.websocketPort ?? ((rawConfig.httpPort ?? 8080) + 1),
-            tunnelName: rawConfig.tunnelName?.trim() || undefined,
-            cloudflareToken: rawConfig.cloudflareToken?.trim() || undefined,
-            autoStartTunnel: rawConfig.autoStartTunnel ?? true
+    private async applyDefaultsAndValidate(rawConfig: any): Promise<Pick<ServerConfig, 'httpPort'>> {
+        // Apply defaults (simplified schema)
+        const config: Pick<ServerConfig, 'httpPort'> = {
+            httpPort: rawConfig.httpPort ?? 3900
         };
 
         // Validate configuration
-        await this.validateConfiguration(config);
+        await this.validateConfiguration({ httpPort: config.httpPort } as ServerConfig);
 
         return config;
     }
@@ -99,49 +97,11 @@ export class ConfigurationManager {
                     vscode.window.showWarningMessage(
                         `HTTP port ${config.httpPort} is not available. Using port ${alternativePort} instead.`
                     );
-                    config.httpPort = alternativePort;
+                    (config as any).httpPort = alternativePort;
                 } else {
                     errors.push(`HTTP port ${config.httpPort} is not available and no alternative port found`);
                 }
             }
-        }
-
-        // Validate WebSocket port
-        const websocketPort = config.websocketPort ?? (config.httpPort + 1);
-        if (!this.isValidPort(websocketPort)) {
-            errors.push('WebSocket port must be between 1024 and 65535');
-        } else {
-            // Check WebSocket port availability
-            const wsPortAvailable = await this.isPortAvailable(websocketPort);
-            if (!wsPortAvailable) {
-                // Try to find an alternative port
-                const alternativePort = await this.findAvailablePort(websocketPort);
-                if (alternativePort) {
-                    vscode.window.showWarningMessage(
-                        `WebSocket port ${websocketPort} is not available. Using port ${alternativePort} instead.`
-                    );
-                    config.websocketPort = alternativePort;
-                } else {
-                    errors.push(`WebSocket port ${websocketPort} is not available and no alternative port found`);
-                }
-            } else {
-                config.websocketPort = websocketPort;
-            }
-        }
-
-        // Validate port conflicts
-        if (config.httpPort === config.websocketPort) {
-            errors.push('HTTP and WebSocket ports cannot be the same');
-        }
-
-        // Validate tunnelName (if provided)
-        if (config.tunnelName && !/^[A-Za-z0-9-_]{1,128}$/.test(config.tunnelName)) {
-            errors.push('tunnelName may only contain letters, numbers, dashes and underscores (max 128 chars)');
-        }
-
-        // Validate cloudflareToken (basic check if provided)
-        if (config.cloudflareToken && config.cloudflareToken.length < 10) {
-            errors.push('cloudflareToken appears too short');
         }
 
         if (errors.length > 0) {
@@ -165,27 +125,8 @@ export class ConfigurationManager {
                 type: 'number',
                 minimum: 1024,
                 maximum: 65535,
-                default: 8080,
+                default: 3900,
                 description: 'Port number for the HTTP server'
-            },
-            websocketPort: {
-                type: 'number',
-                minimum: 1024,
-                maximum: 65535,
-                description: 'Port number for the WebSocket server (defaults to HTTP port + 1)'
-            },
-            tunnelName: {
-                type: 'string',
-                description: 'Optional Cloudflare named tunnel to use (leave empty to use a quick tunnel)'
-            },
-            cloudflareToken: {
-                type: 'string',
-                description: 'Optional Cloudflare API token for authenticated tunnels (recommended for named tunnels)'
-            },
-            autoStartTunnel: {
-                type: 'boolean',
-                default: true,
-                description: 'Automatically start Cloudflare tunnel when server starts'
             }
         };
     }
@@ -212,6 +153,14 @@ export class ConfigurationManager {
      * Update a specific configuration value after validating.
      */
     public async updateConfiguration(key: string, value: any): Promise<void> {
+        // Only httpPort is supported; deprecated keys are ignored with a warning
+        if (key !== 'httpPort') {
+            vscode.window.showWarningMessage(`Setting '${key}' is deprecated and ignored. Use 'httpPort' only.`);
+            // Still emit current config so UI can refresh
+            const cfg = await this.loadConfiguration();
+            this._onConfigurationChanged.fire(cfg);
+            return;
+        }
         await this.validateConfigurationValue(key, value);
         const config = vscode.workspace.getConfiguration('webAutomationTunnel');
         await config.update(key, value, vscode.ConfigurationTarget.Workspace);
@@ -224,6 +173,12 @@ export class ConfigurationManager {
      * Validate a specific configuration value
      */
     private async validateConfigurationValue(key: string, value: any): Promise<void> {
+        if (key !== 'httpPort') {
+            // Deprecated keys: warn and do not block
+            vscode.window.showWarningMessage(`Setting '${key}' is deprecated and will be ignored.`);
+            return;
+        }
+
         const schema = this.getConfigurationSchema();
         const fieldSchema = (schema as any)[key];
 
@@ -231,47 +186,20 @@ export class ConfigurationManager {
             throw new Error(`Unknown configuration key: ${key}`);
         }
 
-        switch (fieldSchema.type) {
-            case 'number':
-                if (typeof value !== 'number' || !Number.isInteger(value)) {
-                    throw new Error(`${key} must be an integer`);
-                }
-                if (fieldSchema.minimum !== undefined && value < fieldSchema.minimum) {
-                    throw new Error(`${key} must be at least ${fieldSchema.minimum}`);
-                }
-                if (fieldSchema.maximum !== undefined && value > fieldSchema.maximum) {
-                    throw new Error(`${key} must be at most ${fieldSchema.maximum}`);
-                }
+        if (typeof value !== 'number' || !Number.isInteger(value)) {
+            throw new Error(`${key} must be an integer`);
+        }
+        if (fieldSchema.minimum !== undefined && value < fieldSchema.minimum) {
+            throw new Error(`${key} must be at least ${fieldSchema.minimum}`);
+        }
+        if (fieldSchema.maximum !== undefined && value > fieldSchema.maximum) {
+            throw new Error(`${key} must be at most ${fieldSchema.maximum}`);
+        }
 
-                // Special validation for ports
-                if (key.includes('Port')) {
-                    const available = await this.isPortAvailable(value);
-                    if (!available) {
-                        throw new Error(`Port ${value} is not available`);
-                    }
-                }
-                break;
-
-            case 'boolean':
-                if (typeof value !== 'boolean') {
-                    throw new Error(`${key} must be a boolean`);
-                }
-                break;
-
-            case 'string':
-                if (typeof value !== 'string') {
-                    throw new Error(`${key} must be a string`);
-                }
-                if (key === 'tunnelName' && value && !/^[A-Za-z0-9-_]{1,128}$/.test(value)) {
-                    throw new Error('tunnelName may only contain letters, numbers, dashes and underscores (max 128 chars)');
-                }
-                if (key === 'cloudflareToken' && value && value.length < 10) {
-                    throw new Error('cloudflareToken appears too short');
-                }
-                break;
-
-            default:
-                throw new Error(`Unsupported configuration type: ${fieldSchema.type}`);
+        // Ensure port availability
+        const available = await this.isPortAvailable(value);
+        if (!available) {
+            throw new Error(`Port ${value} is not available`);
         }
     }
 

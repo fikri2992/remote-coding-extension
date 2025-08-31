@@ -54,6 +54,18 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
                     case 'openWebInterface':
                         this._handleOpenWebInterface();
                         break;
+                    case 'startTunnel':
+                        this._handleStartTunnel(message.data);
+                        break;
+                    case 'stopTunnel':
+                        this._handleStopTunnel();
+                        break;
+                    case 'installCloudflared':
+                        this._handleInstallCloudflared();
+                        break;
+                    case 'copyToClipboard':
+                        this._handleCopyToClipboard(message.data);
+                        break;
                     case 'updateConfiguration':
                         this._handleUpdateConfiguration(message.data);
                         break;
@@ -101,6 +113,7 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
         });
         this._tunnelStatusSubscription = this._serverManager.onTunnelStatusChanged(() => {
             this._sendServerStatus();
+            this._sendTunnelStatus();
         });
     }
 
@@ -130,6 +143,110 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
         } catch (error) {
             console.error('Failed to load panel HTML:', error);
             return this._getFallbackHtml(webview);
+        }
+    }
+
+    /**
+     * Handle starting Cloudflare tunnel from webview
+     */
+    private async _handleStartTunnel(data?: any): Promise<void> {
+        try {
+            // Ensure server is running; ServerManager will error if not
+            const mode = data?.mode as 'named' | 'quick' | undefined;
+            let tunnelName: string | undefined = data?.tunnelName;
+            let cloudflareToken: string | undefined = data?.cloudflareToken;
+
+            if (mode === 'named') {
+                // Try SecretStorage first
+                const secretKey = 'webAutomationTunnel.cloudflareToken';
+                const existing = await this._context?.secrets.get(secretKey);
+
+                if (!cloudflareToken) {
+                    cloudflareToken = existing || undefined;
+                }
+
+                if (!cloudflareToken) {
+                    cloudflareToken = await vscode.window.showInputBox({
+                        prompt: 'Enter Cloudflare token for named tunnel',
+                        placeHolder: 'Paste token (will be stored securely if you choose so)',
+                        password: true
+                    });
+                    if (!cloudflareToken) {
+                        throw new Error('Cloudflare token is required for named tunnel');
+                    }
+                    // Offer to save to SecretStorage
+                    const save = await vscode.window.showInformationMessage(
+                        'Save Cloudflare token securely for future use?',
+                        'Save',
+                        'Not now'
+                    );
+                    if (save === 'Save') {
+                        await this._context?.secrets.store(secretKey, cloudflareToken);
+                    }
+                }
+
+                if (!tunnelName) {
+                    tunnelName = await vscode.window.showInputBox({
+                        prompt: 'Enter tunnel name (optional)',
+                        placeHolder: 'my-vscode-tunnel'
+                    });
+                }
+            }
+
+            await this._serverManager.startTunnel({
+                tunnelName,
+                cloudflareToken
+            } as any);
+
+            this._sendTunnelStatus();
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+            vscode.window.showErrorMessage(`Failed to start tunnel: ${errorMessage}`);
+            // Also notify webview so UI can reflect error state
+            if (this._view) {
+                this._view.webview.postMessage({
+                    command: 'tunnelStatusUpdate',
+                    data: { isRunning: false, error: errorMessage }
+                });
+            }
+        }
+    }
+
+    /**
+     * Handle stopping Cloudflare tunnel from webview
+     */
+    private async _handleStopTunnel(): Promise<void> {
+        try {
+            await this._serverManager.stopTunnel();
+            this._sendTunnelStatus();
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+            vscode.window.showErrorMessage(`Failed to stop tunnel: ${errorMessage}`);
+        }
+    }
+
+    /**
+     * Handle install cloudflared request from webview
+     */
+    private async _handleInstallCloudflared(): Promise<void> {
+        try {
+            await this._serverManager.installCloudflared();
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+            vscode.window.showErrorMessage(`Installation error: ${errorMessage}`);
+        }
+    }
+
+    /**
+     * Handle copy to clipboard from webview
+     */
+    private async _handleCopyToClipboard(data: { text?: string }): Promise<void> {
+        if (!data?.text) return;
+        try {
+            await vscode.env.clipboard.writeText(data.text);
+            vscode.window.showInformationMessage('Copied to clipboard');
+        } catch {
+            // ignore
         }
     }
 
@@ -331,6 +448,7 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
 
         // Send initial status
         this._sendServerStatus();
+        this._sendTunnelStatus();
 
         // Set up periodic updates every 2 seconds
         this._statusUpdateInterval = setInterval(() => {
@@ -367,6 +485,21 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
      */
     public get serverManager(): ServerManager {
         return this._serverManager;
+    }
+
+    /**
+     * Send current tunnel status to webview
+     */
+    private _sendTunnelStatus(): void {
+        if (!this._view) return;
+
+        const t = this._serverManager.getTunnelStatus();
+        this._view.webview.postMessage({
+            command: 'tunnelStatusUpdate',
+            data: t
+                ? { isRunning: true, publicUrl: t.publicUrl || undefined, error: undefined }
+                : { isRunning: false }
+        });
     }
 
     /**

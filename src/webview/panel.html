@@ -308,6 +308,118 @@
             align-items: center;
             gap: 8px;
         }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            body {
+                padding: 12px;
+            }
+
+            .section {
+                padding: 12px;
+            }
+
+            .button-group {
+                flex-direction: column;
+                gap: 8px;
+            }
+
+            .action-button {
+                width: 100%;
+                justify-content: center;
+            }
+
+            .tab-buttons {
+                flex-wrap: wrap;
+            }
+
+            .tab-button {
+                flex: 1;
+                min-width: 120px;
+                padding: 10px 12px;
+                font-size: 12px;
+            }
+
+            .info-row {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 4px;
+            }
+
+            .server-info {
+                padding: 10px;
+            }
+
+            .clients-list {
+                max-height: 100px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            body {
+                padding: 8px;
+            }
+
+            .title {
+                font-size: 14px;
+            }
+
+            .section-title {
+                font-size: 13px;
+            }
+
+            .description {
+                font-size: 12px;
+            }
+
+            .section {
+                padding: 8px;
+            }
+
+            .status-text {
+                font-size: 12px;
+            }
+
+            .action-button {
+                padding: 6px 12px;
+                font-size: 12px;
+                min-height: 32px;
+            }
+
+            .tab-button {
+                padding: 8px 10px;
+                font-size: 11px;
+                min-width: 100px;
+            }
+
+            .form-input {
+                font-size: 12px;
+                padding: 5px 6px;
+            }
+
+            .form-description {
+                font-size: 11px;
+            }
+
+            .server-info {
+                padding: 8px;
+                font-size: 11px;
+            }
+
+            .client-item {
+                padding: 6px 10px;
+                font-size: 11px;
+            }
+
+            .client-time {
+                font-size: 10px;
+            }
+
+            .error-message {
+                padding: 6px 10px;
+                font-size: 11px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -364,10 +476,7 @@
                     <span class="info-label">HTTP Port:</span>
                     <span id="httpPort" class="info-value">-</span>
                 </div>
-                <div class="info-row">
-                    <span class="info-label">WebSocket Port:</span>
-                    <span id="websocketPort" class="info-value">-</span>
-                </div>
+                <!-- WebSocket Port removed in simplified model -->
                 <div class="info-row">
                     <span class="info-label">Uptime:</span>
                     <span id="uptime" class="info-value">-</span>
@@ -390,16 +499,39 @@
         <!-- Web Interface Section -->
         <div class="section">
             <div class="section-title">Web Interface</div>
-            <p class="description">Access the full React interface in your browser for advanced features.</p>
+            <p class="description">Access the server in your browser.</p>
             <div class="button-group">
                 <button id="openWebInterfaceBtn" class="action-button">
                     <span>🌐</span> Open Web Interface
                 </button>
-                <button id="executeActionBtn" class="action-button secondary-button">
-                    Execute Action
-                </button>
             </div>
+        </div>
+
+        <!-- Cloudflare Tunnel Section -->
+        <div class="section" id="cloudflareSection">
+            <div class="section-title">Cloudflare Tunnel</div>
+            <p class="description">Expose your local server securely. Quick Tunnel requires no account. Named Tunnel uses your Cloudflare account.</p>
+            <div class="server-info" aria-live="polite">
+                <div class="info-row">
+                    <span class="info-label">Status:</span>
+                    <span id="tunnelStatus" class="info-value">Inactive</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Public URL:</span>
+                    <span id="tunnelUrl" class="info-value">-</span>
+                </div>
             </div>
+            <div class="button-group" style="margin-top:8px;">
+                <button id="startQuickTunnelBtn" class="action-button"><span>⚡</span> Start Quick Tunnel</button>
+                <button id="startNamedTunnelBtn" class="action-button secondary-button"><span>🔐</span> Start Named Tunnel</button>
+                <button id="stopTunnelBtn" class="action-button secondary-button" disabled><span>⏹</span> Stop Tunnel</button>
+                <button id="installCloudflaredBtn" class="action-button secondary-button"><span>⬇</span> Install cloudflared</button>
+            </div>
+            <div class="button-group" style="margin-top:8px;">
+                <button id="copyTunnelUrlBtn" class="action-button" disabled>Copy URL</button>
+            </div>
+            <div id="tunnelError" class="error-message hidden" style="margin-top:8px;"></div>
+        </div>
 
             <!-- Close Main Tab Content -->
             </div>
@@ -407,47 +539,13 @@
             <!-- Tab Content: Settings -->
             <div id="settings-tab" class="tab-content" role="tabpanel" aria-labelledby="tab-settings">
                 <div class="section-title">Server Settings</div>
-                <p class="description">Configure server ports and connection settings.</p>
+                <p class="description">Only HTTP port is configurable. Other settings have been removed.</p>
                 
                 <form id="settingsForm">
                     <div class="form-group">
                         <label class="form-label" for="httpPortInput">HTTP Port</label>
-                        <input type="number" id="httpPortInput" class="form-input" min="1024" max="65535" placeholder="8080">
-                        <div class="form-description">Port for the HTTP server (1024-65535)</div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label" for="websocketPortInput">WebSocket Port</label>
-                        <input type="number" id="websocketPortInput" class="form-input" min="1024" max="65535" placeholder="8081">
-                        <div class="form-description">Port for the WebSocket server (defaults to HTTP port + 1)</div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label" for="maxConnectionsInput">Max Connections</label>
-                        <input type="number" id="maxConnectionsInput" class="form-input" min="1" max="1000" placeholder="10">
-                        <div class="form-description">Maximum number of concurrent WebSocket connections</div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label" for="allowedOriginsInput">Allowed Origins</label>
-                        <input type="text" id="allowedOriginsInput" class="form-input" placeholder="*">
-                        <div class="form-description">Comma-separated list of allowed origins (use * for all)</div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-checkbox-container">
-                            <input type="checkbox" id="enableCorsInput" class="form-checkbox">
-                            <span class="form-label">Enable CORS</span>
-                        </label>
-                        <div class="form-description">Allow cross-origin requests</div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-checkbox-container">
-                            <input type="checkbox" id="useEnhancedUIInput" class="form-checkbox" checked>
-                            <span class="form-label">Use Enhanced UI</span>
-                        </label>
-                        <div class="form-description">Use the enhanced chat-like interface instead of basic</div>
+                        <input type="number" id="httpPortInput" class="form-input" min="1024" max="65535" placeholder="3900">
+                        <div class="form-description">Port for the HTTP server (1024-65535). Default: 3900.</div>
                     </div>
                     
                     <div class="button-group" style="margin-top: 20px;">
@@ -470,7 +568,6 @@
         // Get UI elements
         const startServerBtn = document.getElementById('startServerBtn');
         const stopServerBtn = document.getElementById('stopServerBtn');
-        const executeButton = document.getElementById('executeActionBtn');
         const openWebInterfaceBtn = document.getElementById('openWebInterfaceBtn');
         const statusDot = document.getElementById('statusDot');
         const statusText = document.getElementById('statusText');
@@ -483,7 +580,7 @@
         const webInterfaceUrl = document.getElementById('webInterfaceUrl');
         const publicUrl = document.getElementById('publicUrl');
         const httpPort = document.getElementById('httpPort');
-        const websocketPort = document.getElementById('websocketPort');
+        // websocketPort removed
         const uptime = document.getElementById('uptime');
         const clientCount = document.getElementById('clientCount');
         const clientsList = document.getElementById('clientsList');
@@ -491,13 +588,18 @@
         // Settings elements
         const settingsForm = document.getElementById('settingsForm');
         const httpPortInput = document.getElementById('httpPortInput');
-        const websocketPortInput = document.getElementById('websocketPortInput');
-        const maxConnectionsInput = document.getElementById('maxConnectionsInput');
-        const allowedOriginsInput = document.getElementById('allowedOriginsInput');
-        const enableCorsInput = document.getElementById('enableCorsInput');
-        const useEnhancedUIInput = document.getElementById('useEnhancedUIInput');
         const resetSettingsBtn = document.getElementById('resetSettingsBtn');
         const settingsMessage = document.getElementById('settingsMessage');
+
+        // Cloudflare elements
+        const startQuickTunnelBtn = document.getElementById('startQuickTunnelBtn');
+        const startNamedTunnelBtn = document.getElementById('startNamedTunnelBtn');
+        const stopTunnelBtn = document.getElementById('stopTunnelBtn');
+        const installCloudflaredBtn = document.getElementById('installCloudflaredBtn');
+        const copyTunnelUrlBtn = document.getElementById('copyTunnelUrlBtn');
+        const tunnelStatus = document.getElementById('tunnelStatus');
+        const tunnelUrl = document.getElementById('tunnelUrl');
+        const tunnelError = document.getElementById('tunnelError');
 
         // Current server state
         let currentServerState = {
@@ -578,18 +680,9 @@
 
         function saveSettings() {
             const settings = {
-                'webAutomationTunnel.httpPort': parseInt(httpPortInput.value) || 8080,
-                'webAutomationTunnel.websocketPort': parseInt(websocketPortInput.value) || 8081,
-                'webAutomationTunnel.maxConnections': parseInt(maxConnectionsInput.value) || 10,
-                'webAutomationTunnel.allowedOrigins': allowedOriginsInput.value.split(',').map(s => s.trim()),
-                'webAutomationTunnel.enableCors': enableCorsInput.checked,
-                'webAutomationTunnel.useEnhancedUI': useEnhancedUIInput.checked
+                'webAutomationTunnel.httpPort': parseInt(httpPortInput.value) || 3900
             };
-
-            vscode.postMessage({
-                command: 'updateConfiguration',
-                data: settings
-            });
+            vscode.postMessage({ command: 'updateConfiguration', data: settings });
         }
 
         function resetSettings() {
@@ -601,12 +694,7 @@
         // Load current configuration
         function loadConfiguration(config) {
             if (config) {
-                httpPortInput.value = config.httpPort || 8080;
-                websocketPortInput.value = config.websocketPort || 8081;
-                maxConnectionsInput.value = config.maxConnections || 10;
-                allowedOriginsInput.value = Array.isArray(config.allowedOrigins) ? config.allowedOrigins.join(', ') : config.allowedOrigins || '*';
-                enableCorsInput.checked = config.enableCors !== false;
-                useEnhancedUIInput.checked = config.useEnhancedUI !== false;
+                httpPortInput.value = config.httpPort || 3900;
             }
         }
 
@@ -646,23 +734,24 @@
             });
         });
 
-        // Legacy execute action button
-        executeButton.addEventListener('click', function() {
-            executeButton.disabled = true;
-            executeButton.textContent = 'Executing...';
-            
-            vscode.postMessage({
-                command: 'executeAction',
-                data: {
-                    timestamp: new Date().toISOString(),
-                    source: 'webview-button'
-                }
-            });
-            
-            setTimeout(() => {
-                executeButton.disabled = false;
-                executeButton.textContent = 'Execute Action';
-            }, 1000);
+        // Cloudflare buttons
+        startQuickTunnelBtn.addEventListener('click', function() {
+            vscode.postMessage({ command: 'startTunnel', data: {} });
+        });
+        startNamedTunnelBtn.addEventListener('click', function() {
+            // Let the extension prompt for name/token
+            vscode.postMessage({ command: 'startTunnel', data: { mode: 'named' } });
+        });
+        stopTunnelBtn.addEventListener('click', function() {
+            vscode.postMessage({ command: 'stopTunnel' });
+        });
+        installCloudflaredBtn.addEventListener('click', function() {
+            vscode.postMessage({ command: 'installCloudflared' });
+        });
+        copyTunnelUrlBtn.addEventListener('click', function() {
+            if (tunnelUrl.textContent && tunnelUrl.textContent !== '-') {
+                vscode.postMessage({ command: 'copyToClipboard', data: { text: tunnelUrl.textContent } });
+            }
         });
         // Handle messages from extension
         window.addEventListener('message', event => {
@@ -678,6 +767,26 @@
                 case 'configurationUpdate':
                     // message.data contains { config, schema }
                     loadConfiguration(message.data?.config);
+                    break;
+                case 'tunnelStatusUpdate':
+                    // { publicUrl, isRunning, error }
+                    if (message.data?.error) {
+                        tunnelError.textContent = message.data.error;
+                        tunnelError.classList.remove('hidden');
+                    } else {
+                        tunnelError.classList.add('hidden');
+                    }
+                    if (message.data?.isRunning && message.data?.publicUrl) {
+                        tunnelStatus.textContent = 'Active';
+                        tunnelUrl.textContent = message.data.publicUrl;
+                        copyTunnelUrlBtn.disabled = false;
+                        stopTunnelBtn.disabled = false;
+                    } else {
+                        tunnelStatus.textContent = 'Inactive';
+                        tunnelUrl.textContent = '-';
+                        copyTunnelUrlBtn.disabled = true;
+                        stopTunnelBtn.disabled = true;
+                    }
                     break;
                 case 'configurationUpdated':
                     showSettingsMessage('Settings saved successfully!');
@@ -713,12 +822,24 @@
             if (status.isRunning) {
                 serverInfoSection.classList.remove('hidden');
                 serverStatus.textContent = 'Running';
-                webInterfaceUrl.textContent = status.webInterfaceUrl || 'http://localhost:8080';
-                publicUrl.textContent = status.publicUrl || 'Setting up tunnel...';
+                webInterfaceUrl.textContent = status.webInterfaceUrl || `http://localhost:${status.httpPort || 3900}`;
+                publicUrl.textContent = status.publicUrl || '-';
                 httpPort.textContent = status.httpPort || '-';
-                websocketPort.textContent = status.websocketPort || '-';
                 uptime.textContent = formatUptime(status.uptime);
                 clientCount.textContent = status.connectedClients || 0;
+
+                // Tunnel UI
+                if (status.publicUrl) {
+                    tunnelStatus.textContent = 'Active';
+                    tunnelUrl.textContent = status.publicUrl;
+                    copyTunnelUrlBtn.disabled = false;
+                    stopTunnelBtn.disabled = false;
+                } else {
+                    tunnelStatus.textContent = 'Inactive';
+                    tunnelUrl.textContent = '-';
+                    copyTunnelUrlBtn.disabled = true;
+                    stopTunnelBtn.disabled = true;
+                }
 
                 // Show clients section if there are connected clients
                 if (status.connectedClients > 0) {

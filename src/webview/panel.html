@@ -29,6 +29,15 @@
                 <span id="statusText" class="status-text">Server Stopped</span>
             </div>
 
+            <div class="form-group" style="margin: 12px 0;">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="autoStartTunnelCheckbox" class="checkbox-input">
+                    <span class="checkmark"></span>
+                    Auto-start Quick Tunnel with server
+                </label>
+                <div class="form-description">Automatically create a quick tunnel when starting the server.</div>
+            </div>
+
             <div class="button-group">
                 <button id="startServerBtn" class="action-button">
                     <span>▶</span> Start Server
@@ -94,28 +103,33 @@
 
         <!-- Cloudflare Tunnel Section -->
         <div class="section" id="cloudflareSection">
-            <div class="section-title">Cloudflare Tunnel</div>
-            <p class="description">Expose your local server securely. Quick Tunnel requires no account. Named Tunnel uses your Cloudflare account.</p>
-            <div class="server-info" aria-live="polite">
-                <div class="info-row">
-                    <span class="info-label">Status:</span>
-                    <span id="tunnelStatus" class="info-value">Inactive</span>
+            <div class="section-title collapsible-header" id="tunnelSectionHeader" style="cursor: pointer; display: flex; align-items: center; justify-content: space-between;">
+                <span>Cloudflare Tunnel</span>
+                <span class="accordion-icon">▶</span>
+            </div>
+            <div id="tunnelContent" class="collapsible-content" style="display: none;">
+                <p class="description">Expose your local server securely. Quick Tunnel requires no account. Named Tunnel uses your Cloudflare account.</p>
+                <div class="server-info" aria-live="polite">
+                    <div class="info-row">
+                        <span class="info-label">Status:</span>
+                        <span id="tunnelStatus" class="info-value">Inactive</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Public URL:</span>
+                        <span id="tunnelUrl" class="info-value">-</span>
+                    </div>
                 </div>
-                <div class="info-row">
-                    <span class="info-label">Public URL:</span>
-                    <span id="tunnelUrl" class="info-value">-</span>
+                <div class="button-group" style="margin-top:8px;">
+                    <button id="startQuickTunnelBtn" class="action-button"><span>⚡</span> Start Quick Tunnel</button>
+                    <button id="startNamedTunnelBtn" class="action-button secondary-button"><span>🔐</span> Start Named Tunnel</button>
+                    <button id="stopTunnelBtn" class="action-button secondary-button" disabled><span>⏹</span> Stop Tunnel</button>
+                    <button id="installCloudflaredBtn" class="action-button secondary-button"><span>⬇</span> Install cloudflared</button>
                 </div>
+                <div class="button-group" style="margin-top:8px;">
+                    <button id="copyTunnelUrlBtn" class="action-button" disabled>Copy URL</button>
+                </div>
+                <div id="tunnelError" class="error-message hidden" style="margin-top:8px;"></div>
             </div>
-            <div class="button-group" style="margin-top:8px;">
-                <button id="startQuickTunnelBtn" class="action-button"><span>⚡</span> Start Quick Tunnel</button>
-                <button id="startNamedTunnelBtn" class="action-button secondary-button"><span>🔐</span> Start Named Tunnel</button>
-                <button id="stopTunnelBtn" class="action-button secondary-button" disabled><span>⏹</span> Stop Tunnel</button>
-                <button id="installCloudflaredBtn" class="action-button secondary-button"><span>⬇</span> Install cloudflared</button>
-            </div>
-            <div class="button-group" style="margin-top:8px;">
-                <button id="copyTunnelUrlBtn" class="action-button" disabled>Copy URL</button>
-            </div>
-            <div id="tunnelError" class="error-message hidden" style="margin-top:8px;"></div>
         </div>
 
             <!-- Close Main Tab Content -->

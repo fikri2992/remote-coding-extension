@@ -41,6 +41,12 @@ const tunnelStatus = document.getElementById('tunnelStatus');
 const tunnelUrl = document.getElementById('tunnelUrl');
 const tunnelError = document.getElementById('tunnelError');
 
+// New elements for auto-start tunnel and collapsible tunnel section
+const autoStartTunnelCheckbox = document.getElementById('autoStartTunnelCheckbox');
+const tunnelSectionHeader = document.getElementById('tunnelSectionHeader');
+const tunnelContent = document.getElementById('tunnelContent');
+const accordionIcon = tunnelSectionHeader?.querySelector('.accordion-icon');
+
 // Current server state
 let currentServerState = {
     isRunning: false,
@@ -156,6 +162,13 @@ startServerBtn.addEventListener('click', function() {
     vscode.postMessage({
         command: 'startServer'
     });
+
+    // Auto-start tunnel if checkbox is checked
+    if (autoStartTunnelCheckbox && autoStartTunnelCheckbox.checked) {
+        setTimeout(() => {
+            vscode.postMessage({ command: 'startTunnel', data: {} });
+        }, 1000); // Small delay to ensure server is starting first
+    }
 });
 
 stopServerBtn.addEventListener('click', function() {
@@ -193,6 +206,36 @@ copyTunnelUrlBtn.addEventListener('click', function() {
         vscode.postMessage({ command: 'copyToClipboard', data: { text: tunnelUrl.textContent } });
     }
 });
+
+// Collapsible tunnel section handler
+if (tunnelSectionHeader && tunnelContent && accordionIcon) {
+    tunnelSectionHeader.addEventListener('click', function() {
+        const isExpanded = tunnelContent.style.display !== 'none';
+        
+        if (isExpanded) {
+            tunnelContent.style.display = 'none';
+            accordionIcon.textContent = '▶';
+            tunnelSectionHeader.setAttribute('aria-expanded', 'false');
+        } else {
+            tunnelContent.style.display = 'block';
+            accordionIcon.textContent = '▼';
+            tunnelSectionHeader.setAttribute('aria-expanded', 'true');
+        }
+    });
+    
+    // Initialize aria attributes
+    tunnelSectionHeader.setAttribute('aria-expanded', 'false');
+    tunnelSectionHeader.setAttribute('role', 'button');
+    tunnelSectionHeader.setAttribute('tabindex', '0');
+    
+    // Keyboard support for accordion
+    tunnelSectionHeader.addEventListener('keydown', function(event) {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            tunnelSectionHeader.click();
+        }
+    });
+}
 // Handle messages from extension
 window.addEventListener('message', event => {
     const message = event.data;

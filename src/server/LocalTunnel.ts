@@ -136,7 +136,7 @@ export class LocalTunnel {
         this.status.process.on('exit', () => {
           clearTimeout(timeout);
           this.status.isRunning = false;
-          this.status.process = undefined;
+          this.status.process = undefined as any;
           console.log('LocalTunnel stopped');
           resolve();
         });

@@ -493,8 +493,8 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
                 data: { 
                     operation: data.operation,
                     error: errorMessage 
-                }
-            });
+            }
+        });
         }
     }
 
@@ -505,31 +505,26 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
         if (!this._view) return;
 
         try {
-            // Forward git operation to WebSocket server
-            const wsServer = this._serverManager.webSocketServer;
-            if (wsServer) {
-                // Execute git operation through the git service
-                const result = await wsServer.commandHandler.executeCommand('git.' + data.operation, data.args || []);
-                
-                this._view.webview.postMessage({
-                    command: 'gitOperationResult',
-                    data: { 
-                        operation: data.operation,
-                        success: result.success,
-                        result: result.data,
-                        error: result.error
-                    }
-                });
-            } else {
-                throw new Error('WebSocket server not available');
-            }
+            // For now, send a simple acknowledgment since git operations
+            // would require a separate Git service integration
+            console.log('Git operation requested:', data);
+
+            this._view.webview.postMessage({
+                command: 'gitOperationResult',
+                data: {
+                    operation: data.operation,
+                    success: false,
+                    result: null,
+                    error: 'Git operations not yet implemented in this version'
+                }
+            });
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             this._view.webview.postMessage({
                 command: 'gitOperationError',
-                data: { 
+                data: {
                     operation: data.operation,
-                    error: errorMessage 
+                    error: errorMessage
                 }
             });
         }

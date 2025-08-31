@@ -191,6 +191,10 @@ export class WebSocketServer {
     return Date.now(); // Simple version based on timestamp
   }
 
+  get isRunning(): boolean {
+    return this._clientCount > 0 || this.wss !== null;
+  }
+
   public getConnectionCount(): number {
     return this.connections.size;
   }

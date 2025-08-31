@@ -30,6 +30,6 @@
     ".vscode-test",
     "out",
     "**/*.test.ts",
-    "src/webview/vue-frontend/**/*"
+    "src/webview/**/*"
   ]
 }

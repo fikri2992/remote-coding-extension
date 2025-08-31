@@ -524,8 +524,8 @@ export class ServerManager {
             // Use a different port for the webserver (frontend)
             const webServerConfig: WebServerConfig = {
                 port: 3000, // Use port 3000 for React frontend
-                host: 'localhost',
-                distPath: undefined // Will be set when building the React app
+                host: 'localhost'
+                // distPath will be set when building the React app
             };
 
             this._webServer = new WebServer(webServerConfig);
@@ -554,8 +554,8 @@ export class ServerManager {
             try {
                 const webServerConfig: WebServerConfig = {
                     port: currentPort + attempt,
-                    host: 'localhost',
-                    distPath: undefined
+                    host: 'localhost'
+                    // distPath will be set when building the React app
                 };
 
                 const testServer = new WebServer(webServerConfig);

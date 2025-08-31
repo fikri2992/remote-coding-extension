@@ -6,6 +6,7 @@ import * as vscode from 'vscode';
 import { ServerConfig, ServerStatus, ClientConnection, WebSocketMessage } from './interfaces';
 import { HttpServer } from './HttpServer';
 import { WebSocketServer } from './WebSocketServer';
+import { WebServer, WebServerConfig } from './WebServer';
 import { ConfigurationManager } from './ConfigurationManager';
 import { ErrorHandler, ErrorCategory, ErrorSeverity } from './ErrorHandler';
 import { ConnectionRecoveryManager, RecoveryConfig } from './ConnectionRecoveryManager';
@@ -18,6 +19,7 @@ export class ServerManager {
     private _lastError: string | null = null;
     private _httpServer: HttpServer | null = null;
     private _webSocketServer: WebSocketServer | null = null;
+    private _webServer: WebServer | null = null;
     private _configManager: ConfigurationManager;
     private _configChangeListener: vscode.Disposable | null = null;
     private _errorHandler: ErrorHandler;
@@ -93,6 +95,9 @@ export class ServerManager {
 
             // Initialize and start WebSocket server with recovery
             await this.startWebSocketServerWithRecovery(this._config);
+            
+            // Initialize and start webserver for React frontend
+            await this.startWebServerWithRecovery(this._config);
             
             this._isRunning = true;
             this._startTime = new Date();
@@ -508,6 +513,67 @@ export class ServerManager {
             }
         }
         
+        return false;
+    }
+
+    /**
+     * Start webserver for React frontend with recovery mechanisms
+     */
+    private async startWebServerWithRecovery(config: ServerConfig): Promise<void> {
+        try {
+            // Use a different port for the webserver (frontend)
+            const webServerConfig: WebServerConfig = {
+                port: 3000, // Use port 3000 for React frontend
+                host: 'localhost',
+                distPath: undefined // Will be set when building the React app
+            };
+
+            this._webServer = new WebServer(webServerConfig);
+            await this._webServer.start();
+        } catch (error) {
+            const { recovered } = await this._errorHandler.handleError(error as Error, {
+                tryAlternativePort: async () => {
+                    return await this.tryAlternativeWebServerPort(config);
+                }
+            });
+
+            if (!recovered) {
+                throw error;
+            }
+        }
+    }
+
+    /**
+     * Try alternative webserver port
+     */
+    private async tryAlternativeWebServerPort(config: ServerConfig): Promise<boolean> {
+        const maxAttempts = 10;
+        let currentPort = 3000; // Start from 3000
+
+        for (let attempt = 0; attempt < maxAttempts; attempt++) {
+            try {
+                const webServerConfig: WebServerConfig = {
+                    port: currentPort + attempt,
+                    host: 'localhost',
+                    distPath: undefined
+                };
+
+                const testServer = new WebServer(webServerConfig);
+                await testServer.start();
+                await testServer.stop();
+
+                // Port is available, update config and create actual server
+                this._webServer = new WebServer(webServerConfig);
+                await this._webServer.start();
+
+                console.log(`Webserver started on alternative port: ${currentPort + attempt}`);
+                return true;
+            } catch (portError) {
+                // Continue to next port
+                continue;
+            }
+        }
+
         return false;
     }
 

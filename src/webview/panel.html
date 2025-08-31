@@ -250,8 +250,12 @@
                     <span id="serverStatus" class="info-value">Stopped</span>
                 </div>
                 <div class="info-row">
-                    <span class="info-label">Web URL:</span>
-                    <span id="serverUrl" class="info-value">-</span>
+                    <span class="info-label">Web Interface:</span>
+                    <span id="webInterfaceUrl" class="info-value">-</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Public URL:</span>
+                    <span id="publicUrl" class="info-value">-</span>
                 </div>
                 <div class="info-row">
                     <span class="info-label">HTTP Port:</span>
@@ -312,7 +316,8 @@
         
         // Server info elements
         const serverStatus = document.getElementById('serverStatus');
-        const serverUrl = document.getElementById('serverUrl');
+        const webInterfaceUrl = document.getElementById('webInterfaceUrl');
+        const publicUrl = document.getElementById('publicUrl');
         const httpPort = document.getElementById('httpPort');
         const websocketPort = document.getElementById('websocketPort');
         const uptime = document.getElementById('uptime');
@@ -405,7 +410,8 @@
             if (status.isRunning) {
                 serverInfoSection.classList.remove('hidden');
                 serverStatus.textContent = 'Running';
-                serverUrl.textContent = status.serverUrl || '-';
+                webInterfaceUrl.textContent = status.webInterfaceUrl || 'http://localhost:3000';
+                publicUrl.textContent = status.publicUrl || 'Setting up tunnel...';
                 httpPort.textContent = status.httpPort || '-';
                 websocketPort.textContent = status.websocketPort || '-';
                 uptime.textContent = formatUptime(status.uptime);

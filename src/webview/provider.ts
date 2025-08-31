@@ -49,6 +49,9 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
                     case 'getServerStatus':
                         this._handleGetServerStatus();
                         break;
+                    case 'openWebInterface':
+                        this._handleOpenWebInterface();
+                        break;
                     case 'getConfiguration':
                         this._handleGetConfiguration();
                         break;

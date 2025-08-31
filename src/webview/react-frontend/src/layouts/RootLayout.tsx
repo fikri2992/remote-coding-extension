@@ -1,13 +1,17 @@
-import React from 'react';
-import { Outlet } from '@tanstack/react-router';
+import React, { useState } from 'react';
+import { Outlet, useNavigate } from '@tanstack/react-router';
+import { Menu, X } from 'lucide-react';
 import { AppHeader } from '../components/AppHeader';
 import { AppSidebar } from '../components/AppSidebar';
 import { AppFooter } from '../components/AppFooter';
 import { WebSocketProvider, useWebSocket } from '../components/WebSocketProvider';
+import { cn } from '../lib/utils';
 
 const LayoutContent: React.FC = () => {
   const { isConnected, connectionCount, lastActivity } = useWebSocket();
   const [activeItem, setActiveItem] = React.useState('home');
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const navigate = useNavigate();
 
   // Update active item based on current route
   React.useEffect(() => {
@@ -26,7 +30,10 @@ const LayoutContent: React.FC = () => {
 
   const handleItemClick = (item: string) => {
     setActiveItem(item);
-    // Navigate to the corresponding route
+    // Close mobile menu immediately for better UX
+    setIsMobileMenuOpen(false);
+
+    // Use TanStack Router navigation instead of window.location.href
     const routeMap: { [key: string]: string } = {
       'home': '/',
       'server': '/server',
@@ -36,34 +43,125 @@ const LayoutContent: React.FC = () => {
       'chat': '/chat',
       'settings': '/settings',
     };
-    window.location.href = routeMap[item] || '/';
+
+    // Navigate instantly without page reload
+    navigate({ to: routeMap[item] || '/' });
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      <AppHeader
-        isConnected={isConnected}
-        connectionCount={connectionCount}
-      />
+    <div className="min-h-screen bg-gray-50">
+      {/* Mobile Header with Hamburger Menu */}
+      <div className="lg:hidden bg-white border-b border-gray-200 px-4 py-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <button
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              className="p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-colors"
+              aria-label="Toggle menu"
+            >
+              {isMobileMenuOpen ? (
+                <X className="w-5 h-5" />
+              ) : (
+                <Menu className="w-5 h-5" />
+              )}
+            </button>
+            <h1 className="text-lg font-semibold text-gray-900">
+              Kiro Remote
+            </h1>
+          </div>
 
-      <div className="flex flex-1 overflow-hidden">
-        <AppSidebar
-          activeItem={activeItem}
-          onItemClick={handleItemClick}
+          {/* Mobile connection status - simplified */}
+          <div className={cn(
+            "flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium",
+            isConnected
+              ? "bg-green-100 text-green-800"
+              : "bg-red-100 text-red-800"
+          )}>
+            <div className={cn(
+              "w-2 h-2 rounded-full",
+              isConnected ? "bg-green-500" : "bg-red-500"
+            )} />
+            <span className="hidden sm:inline">
+              {isConnected ? `(${connectionCount})` : 'Offline'}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Desktop Header - Hidden on mobile */}
+      <div className="hidden lg:block">
+        <AppHeader
+          isConnected={isConnected}
+          connectionCount={connectionCount}
         />
+      </div>
 
-        <main className="flex-1 overflow-auto p-6">
-          <div className="max-w-7xl mx-auto">
-            <Outlet />
+      {/* Main Content Layout */}
+      <div className="flex flex-1 min-h-[calc(100vh-64px)] lg:min-h-[calc(100vh-80px)]">
+        {/* Mobile Overlay */}
+        {isMobileMenuOpen && (
+          <div
+            className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
+            onClick={() => setIsMobileMenuOpen(false)}
+          />
+        )}
+
+        {/* Sidebar - Mobile: Overlay, Desktop: Fixed */}
+        <div className={cn(
+          "fixed lg:static inset-y-0 left-0 z-50 lg:z-auto",
+          "w-64 lg:w-64 bg-white border-r border-gray-200",
+          "transform transition-transform duration-200 ease-out lg:transition-none",
+          isMobileMenuOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+        )}>
+          <div className="flex flex-col h-full">
+            <AppSidebar
+              activeItem={activeItem}
+              onItemClick={handleItemClick}
+            />
+          </div>
+        </div>
+
+        {/* Main Content Area */}
+        <main className="flex-1 overflow-auto">
+          <div className="p-4 sm:p-6 lg:p-6">
+            <div className="max-w-7xl mx-auto">
+              <Outlet />
+            </div>
           </div>
         </main>
       </div>
 
-      <AppFooter
-        isConnected={isConnected}
-        connectionCount={connectionCount}
-        lastActivity={lastActivity || undefined}
-      />
+      {/* Footer - Hidden on mobile, shown on desktop */}
+      <div className="hidden lg:block">
+        <AppFooter
+          isConnected={isConnected}
+          connectionCount={connectionCount}
+          lastActivity={lastActivity || undefined}
+        />
+      </div>
+
+      {/* Mobile Footer - Simplified */}
+      <div className="lg:hidden bg-white border-t border-gray-200 px-4 py-3">
+        <div className="flex items-center justify-between text-xs text-gray-500">
+          <div className="flex items-center space-x-3">
+            <span className={cn(
+              "flex items-center space-x-1",
+              isConnected ? "text-green-600" : "text-red-600"
+            )}>
+              <div className={cn(
+                "w-2 h-2 rounded-full",
+                isConnected ? "bg-green-500" : "bg-red-500"
+              )} />
+              <span>
+                {isConnected ? `Online (${connectionCount})` : 'Offline'}
+              </span>
+            </span>
+          </div>
+          <span className="text-gray-400">
+            v1.0
+          </span>
+        </div>
+      </div>
     </div>
   );
 };

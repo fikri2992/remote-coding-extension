@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import ReconnectingWebSocket from 'reconnecting-websocket';
 
 interface WebSocketContextType {
@@ -7,6 +7,9 @@ interface WebSocketContextType {
   lastActivity: string | null;
   connect: () => void;
   disconnect: () => void;
+  // New helpers for sending and subscribing to messages
+  sendJson: (message: any) => boolean;
+  addMessageListener: (handler: (data: any) => void) => () => void;
 }
 
 const WebSocketContext = createContext<WebSocketContextType | undefined>(undefined);
@@ -32,6 +35,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
   const [connectionCount, setConnectionCount] = useState(0);
   const [lastActivity, setLastActivity] = useState<string | null>(null);
   const [ws, setWs] = useState<ReconnectingWebSocket | null>(null);
+  const listenersRef = useRef<Array<(data: any) => void>>([]);
 
   useEffect(() => {
     const websocket = new ReconnectingWebSocket(url, [], {
@@ -62,6 +66,16 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
           setConnectionCount(prev => prev + 1);
           setLastActivity(new Date().toLocaleTimeString());
         }
+
+        // Notify subscribers
+        try {
+          listenersRef.current.forEach((handler) => handler(data));
+        } catch (err) {
+          console.error('Error in message listeners:', err);
+        }
+
+        // Update last activity on any message
+        setLastActivity(new Date().toLocaleTimeString());
       } catch (error) {
         console.error('Error parsing WebSocket message:', error);
       }
@@ -90,12 +104,35 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
     }
   };
 
+  const sendJson = (message: any): boolean => {
+    try {
+      if (!ws) return false;
+      if (ws.readyState !== WebSocket.OPEN) return false;
+      ws.send(JSON.stringify(message));
+      setLastActivity(new Date().toLocaleTimeString());
+      return true;
+    } catch (e) {
+      console.error('Failed to send over WebSocket:', e);
+      return false;
+    }
+  };
+
+  const addMessageListener = (handler: (data: any) => void) => {
+    listenersRef.current.push(handler);
+    // Return unsubscribe
+    return () => {
+      listenersRef.current = listenersRef.current.filter((h) => h !== handler);
+    };
+  };
+
   const value: WebSocketContextType = {
     isConnected,
     connectionCount,
     lastActivity,
     connect,
     disconnect,
+    sendJson,
+    addMessageListener,
   };
 
   return (

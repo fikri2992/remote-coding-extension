@@ -236,6 +236,23 @@ export class WebSocketServer {
         }));
       }
     }
+
+    // Handle chat messages
+    if (message.type === 'chat_message') {
+      const chatMessage = {
+        type: 'chat_message',
+        id: `srv_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        role: message.role || 'user',
+        text: message.text || '',
+        timestamp: new Date().toISOString(),
+        clientTs: message.clientTs || Date.now(),
+        senderId: connectionId
+      };
+
+      // Broadcast to all connected clients
+      this.broadcastMessage(chatMessage);
+      console.log(`Broadcasted chat message from ${connectionId}: ${message.text}`);
+    }
   }
 
   private generateConnectionId(): string {

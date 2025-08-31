@@ -13,8 +13,8 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
     private _serverStatusSubscription?: vscode.Disposable;
     private _tunnelStatusSubscription?: vscode.Disposable;
 
-    constructor(private readonly _extensionUri: vscode.Uri) {
-        this._serverManager = new ServerManager();
+    constructor(private readonly _extensionUri: vscode.Uri, private readonly _context?: vscode.ExtensionContext) {
+        this._serverManager = new ServerManager(_context);
     }
 
     public resolveWebviewView(

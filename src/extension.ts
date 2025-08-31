@@ -8,7 +8,7 @@ export function activate(context: vscode.ExtensionContext) {
     console.log('Basic VSCode Extension is now active!');
 
     // Register webview provider for extension view
-    const webviewProvider = new WebviewProvider(context.extensionUri);
+    const webviewProvider = new WebviewProvider(context.extensionUri, context);
     context.subscriptions.push(
         vscode.window.registerWebviewViewProvider(
             WebviewProvider.viewType,

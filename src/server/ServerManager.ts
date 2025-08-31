@@ -12,6 +12,7 @@ import { LocalTunnel, TunnelConfig, TunnelStatus } from './LocalTunnel';
 import { ErrorHandler, ErrorCategory, ErrorSeverity } from './ErrorHandler';
 import { ConnectionRecoveryManager, RecoveryConfig } from './ConnectionRecoveryManager';
 import * as path from 'path';
+import { ensureCloudflared } from './CloudflaredManager';
 
 export class ServerManager {
     private _isRunning: boolean = false;
@@ -35,8 +36,10 @@ export class ServerManager {
     public readonly onServerStatusChanged: vscode.Event<ServerStatus> = this._onServerStatusChanged.event;
     private _onTunnelStatusChanged: vscode.EventEmitter<TunnelStatus | null> = new vscode.EventEmitter<TunnelStatus | null>();
     public readonly onTunnelStatusChanged: vscode.Event<TunnelStatus | null> = this._onTunnelStatusChanged.event;
+    private _context: vscode.ExtensionContext | null = null;
 
-    constructor() {
+    constructor(context?: vscode.ExtensionContext) {
+        this._context = context || null;
         this._configManager = new ConfigurationManager();
         this._errorHandler = ErrorHandler.getInstance();
         this._recoveryManager = new ConnectionRecoveryManager(
@@ -891,6 +894,16 @@ export class ServerManager {
                 (config as any).host = tunnelConfig.host;
             }
 
+            // Ensure cloudflared is available and set binary path
+            try {
+                const bin = await ensureCloudflared(this._context || undefined);
+                (config as any).binaryPath = bin;
+            } catch (prepErr) {
+                const msg = prepErr instanceof Error ? prepErr.message : String(prepErr);
+                vscode.window.showErrorMessage(`Failed to prepare cloudflared: ${msg}`);
+                throw prepErr;
+            }
+
             this._tunnel = new LocalTunnel(config);
             await this._tunnel.start();
 
@@ -960,9 +973,8 @@ export class ServerManager {
      */
     async installCloudflared(): Promise<void> {
         try {
-            const tunnel = new LocalTunnel({ localPort: 8080 }); // Dummy config just for installation
-            await tunnel.installCloudflared();
-            vscode.window.showInformationMessage('Cloudflare tunnel installed successfully');
+            const bin = await ensureCloudflared(this._context || undefined);
+            vscode.window.showInformationMessage(`Cloudflared is ready: ${bin}`);
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Failed to install Cloudflare tunnel';
             vscode.window.showErrorMessage(`Installation error: ${errorMessage}`);

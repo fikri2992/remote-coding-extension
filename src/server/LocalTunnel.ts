@@ -9,6 +9,8 @@ export interface TunnelConfig {
   cloudflareToken?: string;
   subdomain?: string;
   host?: string;
+  // Optional resolved path to cloudflared binary; if not provided, will use PATH
+  binaryPath?: string;
 }
 
 export interface TunnelStatus {
@@ -23,15 +25,19 @@ export interface TunnelStatus {
 export class LocalTunnel {
   private status: TunnelStatus = { isRunning: false };
   private config: TunnelConfig;
+  private binaryPath: string | null = null;
 
   constructor(config: TunnelConfig) {
     this.config = config;
+    this.binaryPath = config.binaryPath ?? null;
   }
 
   public async start(): Promise<void> {
     try {
-      // Check if cloudflared is installed
-      const isInstalled = await this.checkCloudflaredInstalled();
+      // Resolve cloudflared CLI path
+      const cli = this.binaryPath || 'cloudflared';
+      // Check if cloudflared is available
+      const isInstalled = await this.checkCloudflaredInstalled(cli);
 
       if (!isInstalled) {
         throw new Error('cloudflared is not installed. Please install it from: https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/install-and-setup/tunnel-guide');
@@ -39,24 +45,25 @@ export class LocalTunnel {
 
       // Validate Cloudflare token if provided
       if (this.config.cloudflareToken) {
-        await this.authenticateCloudflare();
+        await this.authenticateCloudflare(cli);
       }
 
-      // Build command arguments for cloudflared tunnel
-      const args = ['tunnel'];
+      // Build command arguments for cloudflared
+      // Quick Tunnel (ephemeral): `cloudflared tunnel --url http://localhost:<port>`
+      // Named Tunnel: `cloudflared tunnel run <NAME|ID>` (requires prior setup/credentials)
+      const name = (this.config.tunnelName ?? '').trim();
+      const useNamed = name.length > 0;
+      const args: string[] = useNamed
+        ? ['--no-autoupdate', 'tunnel', 'run', name]
+        : ['--no-autoupdate', 'tunnel', '--url', `http://localhost:${this.config.localPort}`];
 
-      // Use named tunnel if specified, otherwise use temporary tunnel
-      if (this.config.tunnelName) {
-        args.push('--name', this.config.tunnelName);
-        args.push('run');
-      } else {
-        args.push('run', '--url', `http://localhost:${this.config.localPort}`);
-      }
+      console.log('Launching cloudflared with args:', args.join(' '));
 
       // Start cloudflared process
-      const tunnelProcess = cp.spawn('cloudflared', args, {
+      const tunnelProcess = cp.spawn(cli, args, {
         stdio: ['pipe', 'pipe', 'pipe'],
-        shell: true
+        shell: false,
+        windowsHide: true
       });
 
       this.status.process = tunnelProcess;
@@ -204,9 +211,9 @@ export class LocalTunnel {
     });
   }
 
-  private async checkCloudflaredInstalled(): Promise<boolean> {
+  private async checkCloudflaredInstalled(cli: string): Promise<boolean> {
     return new Promise((resolve) => {
-      cp.exec('cloudflared version', (error, stdout, stderr) => {
+      cp.exec(`"${cli}" version`, (error, stdout, stderr) => {
         if (error) {
           console.log('Cloudflared not found. Please install from: https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/install-and-setup/tunnel-guide');
           console.log('Installation command:', process.platform === 'win32'
@@ -224,15 +231,16 @@ export class LocalTunnel {
     });
   }
 
-  private async authenticateCloudflare(): Promise<void> {
+  private async authenticateCloudflare(cli: string): Promise<void> {
     if (!this.config.cloudflareToken) {
       return;
     }
 
     return new Promise((resolve, reject) => {
-      const authProcess = cp.spawn('cloudflared', ['tunnel', 'token', this.config.cloudflareToken!], {
+      const authProcess = cp.spawn(cli, ['tunnel', 'token', this.config.cloudflareToken!], {
         stdio: ['pipe', 'pipe', 'pipe'],
-        shell: true
+        shell: false,
+        windowsHide: true
       });
 
       authProcess.on('exit', (code) => {

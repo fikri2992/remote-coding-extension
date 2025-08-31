@@ -21,7 +21,7 @@
       'md:w-64': !uiStore.sidebarCollapsed && !isMobile
     }"
   >
-    <nav class="p-3 sm:p-4 space-y-1 sm:space-y-2 overflow-y-auto h-full">
+    <nav class="sm:pt-4 space-y-1 sm:space-y-2 overflow-y-auto h-full">
       <!-- Navigation Items -->
       <router-link
         v-for="item in navigationItems"
@@ -173,10 +173,4 @@ const getIconSvg = (iconName: string) => {
   }
 }
 
-/* Tablet-specific styles */
-@media (min-width: 768px) and (max-width: 1023px) {
-  .nav-item {
-    @apply justify-center;
-  }
-}
 </style>

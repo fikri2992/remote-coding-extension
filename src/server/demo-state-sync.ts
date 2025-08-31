@@ -18,9 +18,8 @@ export class StateSynchronizationDemo {
     constructor() {
         this.config = {
             httpPort: 8080,
-            allowedOrigins: ['*'],
-            maxConnections: 10,
-            enableCors: true
+            websocketPort: 8081,
+            autoStartTunnel: true
         };
 
         this.commandHandler = new CommandHandler();
@@ -64,8 +63,8 @@ export class StateSynchronizationDemo {
         console.log(`🌐 Server Configuration:`);
         console.log(`   HTTP Port: ${this.config.httpPort}`);
         console.log(`   WebSocket Port: ${this.config.websocketPort || this.config.httpPort + 1}`);
-        console.log(`   Max Connections: ${this.config.maxConnections}`);
-        console.log(`   CORS Enabled: ${this.config.enableCors}`);
+        console.log(`   Auto-start Tunnel: ${this.config.autoStartTunnel}`);
+        console.log(`   Tunnel Name: ${this.config.tunnelName || 'Quick tunnel'}`);
         console.log('');
 
         console.log(`📊 Server Status:`);

@@ -147,10 +147,7 @@ export class ServerManager {
             this._onServerStatusChanged.fire(this.getServerStatus());
 
             // Auto-start tunnel if configured
-            const autoStartTunnel = vscode.workspace
-                .getConfiguration('webAutomationTunnel')
-                .get<boolean>('autoStartTunnel', true);
-            if (autoStartTunnel) {
+            if (this._config?.autoStartTunnel) {
                 try {
                     await this.startTunnel();
                 } catch (tunnelError) {
@@ -287,13 +284,13 @@ export class ServerManager {
             const errorMessage = error instanceof Error ? error.message : 'Unknown configuration error';
             vscode.window.showErrorMessage(`Configuration error: ${errorMessage}`);
             
-            // Return a basic default configuration as fallback
-            return {
+            // Return a basic default configuration as fallback (minimal schema)
+            const fallbackConfig: ServerConfig = {
                 httpPort: 8080,
-                allowedOrigins: ['*'],
-                maxConnections: 10,
-                enableCors: true
+                websocketPort: 8081,
+                autoStartTunnel: true
             };
+            return fallbackConfig;
         }
     }
 
@@ -356,28 +353,28 @@ export class ServerManager {
     }
 
     /**
-     * Check if configuration changes require a server restart
+     * Check if configuration changes require a server restart (minimal schema)
      */
     private configurationRequiresRestart(oldConfig: ServerConfig, newConfig: ServerConfig): boolean {
         // Port changes require restart
         if (oldConfig.httpPort !== newConfig.httpPort) {
             return true;
         }
-        
+
         if (oldConfig.websocketPort !== newConfig.websocketPort) {
             return true;
         }
 
-        // CORS and origin changes require restart
-        if (oldConfig.enableCors !== newConfig.enableCors) {
+        // Tunnel configuration changes require restart
+        if (oldConfig.tunnelName !== newConfig.tunnelName) {
             return true;
         }
 
-        if (JSON.stringify(oldConfig.allowedOrigins) !== JSON.stringify(newConfig.allowedOrigins)) {
+        if (oldConfig.cloudflareToken !== newConfig.cloudflareToken) {
             return true;
         }
 
-        // Max connections can be changed without restart (handled by WebSocket server)
+        // Auto-start tunnel changes don't require restart
         return false;
     }
 
@@ -505,7 +502,7 @@ export class ServerManager {
     }
 
     /**
-     * Validate server configuration
+     * Validate server configuration (minimal schema)
      */
     private async validateConfiguration(config: ServerConfig): Promise<void> {
         // Validate port ranges
@@ -530,16 +527,24 @@ export class ServerManager {
             );
         }
 
-        // Validate allowed origins
-        if (!config.allowedOrigins || config.allowedOrigins.length === 0) {
-            console.warn('No allowed origins specified, defaulting to localhost only');
-            config.allowedOrigins = ['http://localhost:*'];
+        // Validate tunnelName format if provided
+        if (config.tunnelName && !/^[A-Za-z0-9-_]{1,128}$/.test(config.tunnelName)) {
+            throw this._errorHandler.createError(
+                'INVALID_TUNNEL_NAME',
+                'Tunnel name may only contain letters, numbers, dashes and underscores (max 128 chars)',
+                ErrorCategory.CONFIGURATION,
+                ErrorSeverity.MEDIUM
+            );
         }
 
-        // Validate max connections
-        if (config.maxConnections < 1 || config.maxConnections > 1000) {
-            console.warn(`Max connections ${config.maxConnections} is outside recommended range (1-1000), using default`);
-            config.maxConnections = 10;
+        // Validate cloudflareToken basic format if provided
+        if (config.cloudflareToken && config.cloudflareToken.length < 10) {
+            throw this._errorHandler.createError(
+                'INVALID_CLOUDFLARE_TOKEN',
+                'Cloudflare token appears too short',
+                ErrorCategory.CONFIGURATION,
+                ErrorSeverity.MEDIUM
+            );
         }
     }
 
@@ -875,17 +880,25 @@ export class ServerManager {
             // Get HTTP port from current config
             const httpPort = this._config?.httpPort || 8080;
 
-            // Create tunnel config with defaults (ephemeral by default)
+            // Create tunnel config with defaults from server config
             const config: TunnelConfig = {
                 localPort: httpPort
             };
 
-            // Add optional properties only if they exist
-            if (tunnelConfig?.cloudflareToken) {
-                (config as any).cloudflareToken = tunnelConfig.cloudflareToken;
+            // Add tunnel settings from server config if available
+            if (this._config?.tunnelName) {
+                (config as any).tunnelName = this._config.tunnelName;
             }
+            if (this._config?.cloudflareToken) {
+                (config as any).cloudflareToken = this._config.cloudflareToken;
+            }
+
+            // Override with any provided tunnel config
             if (tunnelConfig?.tunnelName) {
                 (config as any).tunnelName = tunnelConfig.tunnelName;
+            }
+            if (tunnelConfig?.cloudflareToken) {
+                (config as any).cloudflareToken = tunnelConfig.cloudflareToken;
             }
             if (tunnelConfig?.subdomain) {
                 (config as any).subdomain = tunnelConfig.subdomain;

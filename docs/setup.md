@@ -39,3 +39,9 @@ Alternatively install system-wide and rely on PATH:
 - Linux: download the binary from GitHub Releases and place it on PATH, chmod +x.
 
 When `cloudflared` is on PATH, the extension uses it directly and skips download.
+
+## Named Tunnel mode
+For persistent tunnels bound to a Cloudflare account, use Named Tunnels.
+- Ensure your account and tunnel are configured via `cloudflared`.
+- In the command palette, provide a Tunnel Name when starting.
+- Details and caveats: see `docs/tunnel.md` (Named Tunnel section).

@@ -8,12 +8,12 @@ export interface ServerConfig {
     httpPort: number;
     /** WebSocket server port (optional, defaults to httpPort + 1) */
     websocketPort?: number;
-    /** Allowed origins for CORS and WebSocket connections */
-    allowedOrigins: string[];
-    /** Maximum number of concurrent connections */
-    maxConnections: number;
-    /** Enable CORS support */
-    enableCors: boolean;
+    /** Optional Cloudflare named tunnel to use (fallback to quick tunnel if omitted) */
+    tunnelName?: string;
+    /** Optional Cloudflare API token for authenticated tunnels */
+    cloudflareToken?: string;
+    /** Whether to auto-start Cloudflare tunnel when server starts */
+    autoStartTunnel: boolean;
 }
 
 /**

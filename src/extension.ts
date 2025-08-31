@@ -88,16 +88,30 @@ export function activate(context: vscode.ExtensionContext) {
     // Tunnel management commands
     const startTunnelCommand = vscode.commands.registerCommand('webAutomationTunnel.startTunnel', async () => {
         try {
-            const tunnelName = await vscode.window.showInputBox({
-                prompt: 'Enter tunnel name (optional)',
-                placeHolder: 'vscode-web-automation'
-            });
+            const config = vscode.workspace.getConfiguration('webAutomationTunnel');
 
-            const cloudflareToken = await vscode.window.showInputBox({
-                prompt: 'Enter Cloudflare API token (optional, for authenticated tunnels)',
-                placeHolder: 'Leave empty for anonymous tunnel',
-                password: true
-            });
+            // Get configured values (may be undefined)
+            const configuredTunnelName = config.get<string>('tunnelName');
+            const configuredCloudflareToken = config.get<string>('cloudflareToken');
+
+            // Prompt for tunnel name if not configured
+            let tunnelName = configuredTunnelName;
+            if (!tunnelName) {
+                tunnelName = await vscode.window.showInputBox({
+                    prompt: 'Enter tunnel name (optional, leave empty for quick tunnel)',
+                    placeHolder: 'vscode-web-automation'
+                });
+            }
+
+            // Prompt for Cloudflare token if not configured
+            let cloudflareToken = configuredCloudflareToken;
+            if (!cloudflareToken) {
+                cloudflareToken = await vscode.window.showInputBox({
+                    prompt: 'Enter Cloudflare API token (optional, for authenticated tunnels)',
+                    placeHolder: 'Leave empty for anonymous tunnel',
+                    password: true
+                });
+            }
 
             const tunnelConfig: any = {};
             if (tunnelName) tunnelConfig.tunnelName = tunnelName;

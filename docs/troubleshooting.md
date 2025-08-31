@@ -31,3 +31,7 @@ where cloudflared
 cloudflared version
 ```
 Share error logs from the Output window: lines starting with `Cloudflared stdout/stderr` and `Failed to prepare cloudflared`.
+
+## Related docs
+- `docs/setup.md` — Quick start and building the extension.
+- `docs/tunnel.md` — Detailed tunnel modes, lifecycle, commands, and binary preparation.

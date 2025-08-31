@@ -107,32 +107,13 @@
                     "maximum": 65535,
                     "description": "Port number for the WebSocket server (defaults to HTTP port + 1)"
                 },
-                "webAutomationTunnel.allowedOrigins": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    },
-                    "default": [
-                        "*"
-                    ],
-                    "description": "List of allowed origins for CORS and WebSocket connections"
+                "webAutomationTunnel.tunnelName": {
+                    "type": "string",
+                    "description": "Optional Cloudflare named tunnel to use (leave empty to use a quick tunnel)"
                 },
-                "webAutomationTunnel.maxConnections": {
-                    "type": "number",
-                    "default": 10,
-                    "minimum": 1,
-                    "maximum": 100,
-                    "description": "Maximum number of concurrent WebSocket connections"
-                },
-                "webAutomationTunnel.enableCors": {
-                    "type": "boolean",
-                    "default": true,
-                    "description": "Enable Cross-Origin Resource Sharing (CORS) support"
-                },
-                "webAutomationTunnel.useEnhancedUI": {
-                    "type": "boolean",
-                    "default": true,
-                    "description": "Use the enhanced chat-like UI instead of the basic interface"
+                "webAutomationTunnel.cloudflareToken": {
+                    "type": "string",
+                    "description": "Optional Cloudflare API token for authenticated tunnels (recommended for named tunnels)"
                 },
                 "webAutomationTunnel.autoStartTunnel": {
                     "type": "boolean",

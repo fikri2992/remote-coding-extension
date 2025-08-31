@@ -89,10 +89,8 @@ export class HttpServer {
             // Log request for debugging
             console.log(`HTTP ${req.method} ${req.url} from ${req.socket.remoteAddress}`);
 
-            // Add CORS headers if enabled
-            if (this.config.enableCors) {
-                this.addCorsHeaders(res, req);
-            }
+            // Add CORS headers (always enabled with secure defaults)
+            this.addCorsHeaders(res, req);
 
             // Add security headers
             this.addSecurityHeaders(res);
@@ -326,16 +324,26 @@ export class HttpServer {
     }
 
     /**
-     * Add CORS headers to the response
+     * Add CORS headers to the response (fixed secure headers for local development)
      */
     private addCorsHeaders(res: http.ServerResponse, req: http.IncomingMessage): void {
         const origin = req.headers.origin;
-        
-        // Check if origin is allowed
-        if (this.isOriginAllowed(origin)) {
-            res.setHeader('Access-Control-Allow-Origin', origin || '*');
-        } else if (this.config.allowedOrigins.includes('*')) {
-            res.setHeader('Access-Control-Allow-Origin', '*');
+
+        // For local development, allow common development origins
+        const allowedOrigins = [
+            'http://localhost:3000',
+            'http://localhost:8080',
+            'http://127.0.0.1:3000',
+            'http://127.0.0.1:8080',
+            'http://localhost:8081',
+            'http://127.0.0.1:8081'
+        ];
+
+        if (origin && allowedOrigins.includes(origin)) {
+            res.setHeader('Access-Control-Allow-Origin', origin);
+        } else {
+            // Default to allowing localhost for development
+            res.setHeader('Access-Control-Allow-Origin', 'http://localhost:8080');
         }
 
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
@@ -356,20 +364,22 @@ export class HttpServer {
     }
 
     /**
-     * Check if origin is allowed
+     * Check if origin is allowed (simplified for local development)
      */
     private isOriginAllowed(origin: string | undefined): boolean {
         if (!origin) return false;
-        return this.config.allowedOrigins.some(allowed => {
-            if (allowed === '*') return true;
-            if (allowed === origin) return true;
-            // Support wildcard subdomains (e.g., *.example.com)
-            if (allowed.startsWith('*.')) {
-                const domain = allowed.substring(2);
-                return origin.endsWith(domain);
-            }
-            return false;
-        });
+
+        // For local development, allow common development origins
+        const allowedOrigins = [
+            'http://localhost:3000',
+            'http://localhost:8080',
+            'http://127.0.0.1:3000',
+            'http://127.0.0.1:8080',
+            'http://localhost:8081',
+            'http://127.0.0.1:8081'
+        ];
+
+        return allowedOrigins.includes(origin);
     }
 
     /**
@@ -493,8 +503,10 @@ export class HttpServer {
             frontendType: 'react', // Now serves React frontend
             useEnhancedUI: this.shouldUseEnhancedUI(),
             config: {
-                enableCors: this.config.enableCors,
-                allowedOrigins: this.config.allowedOrigins
+                corsEnabled: true, // Always enabled with secure defaults
+                tunnelName: this.config.tunnelName,
+                cloudflareToken: this.config.cloudflareToken ? 'configured' : 'not configured',
+                autoStartTunnel: this.config.autoStartTunnel
             }
         };
     }

@@ -20,23 +20,44 @@ export class ConfigurationManager {
     }
 
     /**
-     * Load and validate server configuration from VS Code settings
+     * Watch VS Code configuration changes and emit validated ServerConfig
+     */
+    private setupConfigurationWatcher(): void {
+        if (this._configChangeListener) {
+            this._configChangeListener.dispose();
+            this._configChangeListener = null;
+        }
+
+        this._configChangeListener = vscode.workspace.onDidChangeConfiguration(async (e) => {
+            if (!e.affectsConfiguration('webAutomationTunnel')) return;
+            try {
+                const cfg = await this.loadConfiguration();
+                this._onConfigurationChanged.fire(cfg);
+            } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                vscode.window.showErrorMessage(`Configuration update error: ${msg}`);
+            }
+        });
+    }
+
+    /**
+     * Load and validate server configuration from VS Code settings (minimal schema)
      */
     public async loadConfiguration(): Promise<ServerConfig> {
         const config = vscode.workspace.getConfiguration('webAutomationTunnel');
-        
-        // Load configuration with defaults
+
+        // Load configuration with defaults (minimal schema)
         const rawConfig = {
             httpPort: config.get<number>('httpPort'),
             websocketPort: config.get<number>('websocketPort'),
-            allowedOrigins: config.get<string[]>('allowedOrigins'),
-            maxConnections: config.get<number>('maxConnections'),
-            enableCors: config.get<boolean>('enableCors')
+            tunnelName: config.get<string>('tunnelName'),
+            cloudflareToken: config.get<string>('cloudflareToken'),
+            autoStartTunnel: config.get<boolean>('autoStartTunnel')
         };
 
         // Apply defaults and validate
         const serverConfig = await this.applyDefaultsAndValidate(rawConfig);
-        
+
         return serverConfig;
     }
 
@@ -44,20 +65,14 @@ export class ConfigurationManager {
      * Apply default values and validate configuration
      */
     private async applyDefaultsAndValidate(rawConfig: any): Promise<ServerConfig> {
-        // Apply defaults
+        // Apply defaults (minimal schema)
         const config: ServerConfig = {
             httpPort: rawConfig.httpPort ?? 8080,
-            allowedOrigins: rawConfig.allowedOrigins ?? ['*'],
-            maxConnections: rawConfig.maxConnections ?? 10,
-            enableCors: rawConfig.enableCors ?? true
+            websocketPort: rawConfig.websocketPort ?? ((rawConfig.httpPort ?? 8080) + 1),
+            tunnelName: rawConfig.tunnelName?.trim() || undefined,
+            cloudflareToken: rawConfig.cloudflareToken?.trim() || undefined,
+            autoStartTunnel: rawConfig.autoStartTunnel ?? true
         };
-
-        // Set WebSocket port default (HTTP port + 1)
-        if (rawConfig.websocketPort !== undefined) {
-            config.websocketPort = rawConfig.websocketPort;
-        } else {
-            config.websocketPort = config.httpPort + 1;
-        }
 
         // Validate configuration
         await this.validateConfiguration(config);
@@ -92,7 +107,7 @@ export class ConfigurationManager {
         }
 
         // Validate WebSocket port
-        const websocketPort = config.websocketPort ?? config.httpPort + 1;
+        const websocketPort = config.websocketPort ?? (config.httpPort + 1);
         if (!this.isValidPort(websocketPort)) {
             errors.push('WebSocket port must be between 1024 and 65535');
         } else {
@@ -119,22 +134,14 @@ export class ConfigurationManager {
             errors.push('HTTP and WebSocket ports cannot be the same');
         }
 
-        // Validate max connections
-        if (config.maxConnections < 1 || config.maxConnections > 100) {
-            errors.push('Max connections must be between 1 and 100');
+        // Validate tunnelName (if provided)
+        if (config.tunnelName && !/^[A-Za-z0-9-_]{1,128}$/.test(config.tunnelName)) {
+            errors.push('tunnelName may only contain letters, numbers, dashes and underscores (max 128 chars)');
         }
 
-        // Validate allowed origins
-        if (!Array.isArray(config.allowedOrigins) || config.allowedOrigins.length === 0) {
-            errors.push('At least one allowed origin must be specified');
-        } else {
-            // Validate origin format
-            for (const origin of config.allowedOrigins) {
-                if (typeof origin !== 'string' || origin.trim() === '') {
-                    errors.push('All allowed origins must be non-empty strings');
-                    break;
-                }
-            }
+        // Validate cloudflareToken (basic check if provided)
+        if (config.cloudflareToken && config.cloudflareToken.length < 10) {
+            errors.push('cloudflareToken appears too short');
         }
 
         if (errors.length > 0) {
@@ -147,55 +154,6 @@ export class ConfigurationManager {
      */
     private isValidPort(port: number): boolean {
         return Number.isInteger(port) && port >= 1024 && port <= 65535;
-    }
-
-    /**
-     * Check if a port is available for binding
-     */
-    private async isPortAvailable(port: number): Promise<boolean> {
-        return new Promise((resolve) => {
-            const server = net.createServer();
-            
-            server.listen(port, () => {
-                server.close(() => {
-                    resolve(true);
-                });
-            });
-
-            server.on('error', () => {
-                resolve(false);
-            });
-        });
-    }
-
-    /**
-     * Find an available port starting from the given port
-     */
-    private async findAvailablePort(startPort: number, maxAttempts: number = 10): Promise<number | null> {
-        for (let i = 0; i < maxAttempts; i++) {
-            const port = startPort + i;
-            if (this.isValidPort(port) && await this.isPortAvailable(port)) {
-                return port;
-            }
-        }
-        return null;
-    }
-
-    /**
-     * Setup configuration change watcher
-     */
-    private setupConfigurationWatcher(): void {
-        this._configChangeListener = vscode.workspace.onDidChangeConfiguration(async (event) => {
-            if (event.affectsConfiguration('webAutomationTunnel')) {
-                try {
-                    const newConfig = await this.loadConfiguration();
-                    this._onConfigurationChanged.fire(newConfig);
-                } catch (error) {
-                    const errorMessage = error instanceof Error ? error.message : 'Unknown configuration error';
-                    vscode.window.showErrorMessage(`Configuration validation failed: ${errorMessage}`);
-                }
-            }
-        });
     }
 
     /**
@@ -216,23 +174,18 @@ export class ConfigurationManager {
                 maximum: 65535,
                 description: 'Port number for the WebSocket server (defaults to HTTP port + 1)'
             },
-            allowedOrigins: {
-                type: 'array',
-                items: { type: 'string' },
-                default: ['*'],
-                description: 'List of allowed origins for CORS and WebSocket connections'
+            tunnelName: {
+                type: 'string',
+                description: 'Optional Cloudflare named tunnel to use (leave empty to use a quick tunnel)'
             },
-            maxConnections: {
-                type: 'number',
-                minimum: 1,
-                maximum: 100,
-                default: 10,
-                description: 'Maximum number of concurrent WebSocket connections'
+            cloudflareToken: {
+                type: 'string',
+                description: 'Optional Cloudflare API token for authenticated tunnels (recommended for named tunnels)'
             },
-            enableCors: {
+            autoStartTunnel: {
                 type: 'boolean',
                 default: true,
-                description: 'Enable Cross-Origin Resource Sharing (CORS) support'
+                description: 'Automatically start Cloudflare tunnel when server starts'
             }
         };
     }
@@ -247,6 +200,8 @@ export class ConfigurationManager {
         for (const [key, value] of Object.entries(schema)) {
             if (typeof value === 'object' && value !== null && 'default' in value) {
                 await config.update(key, (value as any).default, vscode.ConfigurationTarget.Workspace);
+            } else {
+                await config.update(key, undefined, vscode.ConfigurationTarget.Workspace);
             }
         }
 
@@ -254,16 +209,15 @@ export class ConfigurationManager {
     }
 
     /**
-     * Validate and update a specific configuration value
+     * Update a specific configuration value after validating.
      */
     public async updateConfiguration(key: string, value: any): Promise<void> {
-        const config = vscode.workspace.getConfiguration('webAutomationTunnel');
-        
-        // Validate the specific value
         await this.validateConfigurationValue(key, value);
-        
-        // Update the configuration
+        const config = vscode.workspace.getConfiguration('webAutomationTunnel');
         await config.update(key, value, vscode.ConfigurationTarget.Workspace);
+        // Reload and emit
+        const cfg = await this.loadConfiguration();
+        this._onConfigurationChanged.fire(cfg);
     }
 
     /**
@@ -271,7 +225,7 @@ export class ConfigurationManager {
      */
     private async validateConfigurationValue(key: string, value: any): Promise<void> {
         const schema = this.getConfigurationSchema();
-        const fieldSchema = schema[key];
+        const fieldSchema = (schema as any)[key];
 
         if (!fieldSchema) {
             throw new Error(`Unknown configuration key: ${key}`);
@@ -288,7 +242,7 @@ export class ConfigurationManager {
                 if (fieldSchema.maximum !== undefined && value > fieldSchema.maximum) {
                     throw new Error(`${key} must be at most ${fieldSchema.maximum}`);
                 }
-                
+
                 // Special validation for ports
                 if (key.includes('Port')) {
                     const available = await this.isPortAvailable(value);
@@ -304,18 +258,50 @@ export class ConfigurationManager {
                 }
                 break;
 
-            case 'array':
-                if (!Array.isArray(value)) {
-                    throw new Error(`${key} must be an array`);
+            case 'string':
+                if (typeof value !== 'string') {
+                    throw new Error(`${key} must be a string`);
                 }
-                if (key === 'allowedOrigins' && value.length === 0) {
-                    throw new Error('At least one allowed origin must be specified');
+                if (key === 'tunnelName' && value && !/^[A-Za-z0-9-_]{1,128}$/.test(value)) {
+                    throw new Error('tunnelName may only contain letters, numbers, dashes and underscores (max 128 chars)');
+                }
+                if (key === 'cloudflareToken' && value && value.length < 10) {
+                    throw new Error('cloudflareToken appears too short');
                 }
                 break;
 
             default:
                 throw new Error(`Unsupported configuration type: ${fieldSchema.type}`);
         }
+    }
+
+    /**
+     * Check if a port is available by attempting to bind to it.
+     */
+    private async isPortAvailable(port: number): Promise<boolean> {
+        return new Promise<boolean>((resolve) => {
+            const server = net.createServer();
+            server.unref();
+            server.on('error', () => resolve(false));
+            server.listen(port, () => {
+                server.close(() => resolve(true));
+            });
+        });
+    }
+
+    /**
+     * Find an available port starting from startPort.
+     */
+    private async findAvailablePort(startPort: number, maxAttempts: number = 20): Promise<number | null> {
+        for (let i = 0; i < maxAttempts; i++) {
+            const probe = startPort + i;
+            // Skip reserved or duplicate of http/websocket sanity
+            if (!this.isValidPort(probe)) continue;
+            // eslint-disable-next-line no-await-in-loop
+            const available = await this.isPortAvailable(probe);
+            if (available) return probe;
+        }
+        return null;
     }
 
     /**

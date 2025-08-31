@@ -28,3 +28,13 @@ Command IDs are declared in `package.json` and registered in `src/extension.ts`.
 
 - `webAutomationTunnel.tunnelStatus`
   Shows a modal with current tunnel and server status; offers to copy the public URL.
+
+## Cloudflare Tunnel commands (summary)
+| Command ID | Title | What it does |
+| --- | --- | --- |
+| `webAutomationTunnel.startTunnel` | Start Cloudflare Tunnel | Prompts for optional Tunnel Name and API token; starts Quick or Named Tunnel via `ServerManager.startTunnel()` |
+| `webAutomationTunnel.stopTunnel` | Stop Cloudflare Tunnel | Stops the running tunnel via `ServerManager.stopTunnel()` |
+| `webAutomationTunnel.installCloudflared` | Install Cloudflare Tunnel | Ensures `cloudflared` is available (`ensureCloudflared()`), downloading if needed |
+| `webAutomationTunnel.tunnelStatus` | Check Tunnel Status | Shows current server/tunnel state and lets you copy the public URL |
+
+See `docs/tunnel.md` for lifecycle, configuration, and binary resolution details.

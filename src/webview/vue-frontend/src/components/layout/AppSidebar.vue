@@ -28,7 +28,6 @@
         :key="item.name"
         :to="item.path"
         class="nav-item group"
-        :class="{ 'active': $route.name === item.name }"
         @click="handleNavClick(item.name.toLowerCase())"
       >
         <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -28,11 +28,8 @@
     <!-- App Footer -->
     <AppFooter />
     
-    <!-- Notifications -->
-    <NotificationToast />
-    
-    <!-- Debug Panel (Development Only) -->
-    <DebugPanel v-if="isDevelopment" />
+
+
   </div>
 </template>
 
@@ -42,14 +39,11 @@ import { useUIStore } from './stores'
 import AppHeader from './components/layout/AppHeader.vue'
 import AppSidebar from './components/layout/AppSidebar.vue'
 import AppFooter from './components/layout/AppFooter.vue'
-import NotificationToast from './components/common/NotificationToast.vue'
-import DebugPanel from './components/common/DebugPanel.vue'
 import { addBreadcrumb } from './services/error-handler'
 
 const uiStore = useUIStore()
 
 // Development mode detection
-const isDevelopment = computed(() => import.meta.env.DEV)
 
 // Responsive breakpoint detection
 const windowWidth = ref(window.innerWidth)

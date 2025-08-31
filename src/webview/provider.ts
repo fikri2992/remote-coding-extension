@@ -88,7 +88,7 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
 
     private _getHtmlForWebview(webview: vscode.Webview): string {
         // Use Vue frontend for VS Code webview - modern unified interface
-        return this._getUnifiedHtmlForWebview(webview);
+        return this._getPanelHtmlForWebview(webview);
     }
 
     private _getPanelHtmlForWebview(webview: vscode.Webview): string {

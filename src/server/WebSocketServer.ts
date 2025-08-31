@@ -27,6 +27,8 @@ interface EnhancedClientConnection extends ClientConnection {
         includeDiagnostics: boolean;
         throttleMs: number;
     };
+    /** Arbitrary client metadata (e.g., layout prefs) */
+    metadata?: Record<string, any>;
 }
 
 export class WebSocketServer {
@@ -2031,7 +2033,6 @@ export class WebSocketServer {
             // Send acknowledgment
             const response: WebSocketMessage = {
                 type: 'response',
-                id: message.id,
                 data: { 
                     success: true, 
                     gestureType: gestureData.gestureType,
@@ -2039,8 +2040,11 @@ export class WebSocketServer {
                 },
                 timestamp: Date.now()
             };
+            if (message.id) {
+                response.id = message.id;
+            }
 
-            this.sendMessage(clientId, response);
+            this.sendToClient(clientId, response);
 
         } catch (error) {
             console.error('Error handling mobile gesture message:', error);
@@ -2074,12 +2078,14 @@ export class WebSocketServer {
             // Send acknowledgment
             const response: WebSocketMessage = {
                 type: 'response',
-                id: message.id,
                 data: { success: true, layout: layoutData },
                 timestamp: Date.now()
             };
+            if (message.id) {
+                response.id = message.id;
+            }
 
-            this.sendMessage(clientId, response);
+            this.sendToClient(clientId, response);
 
         } catch (error) {
             console.error('Error handling mobile layout message:', error);
@@ -2104,7 +2110,6 @@ export class WebSocketServer {
             // Send response
             const response: WebSocketMessage = {
                 type: 'response',
-                id: message.id,
                 data: { 
                     success: true, 
                     action: previewData.action,
@@ -2112,8 +2117,11 @@ export class WebSocketServer {
                 },
                 timestamp: Date.now()
             };
+            if (message.id) {
+                response.id = message.id;
+            }
 
-            this.sendMessage(clientId, response);
+            this.sendToClient(clientId, response);
 
         } catch (error) {
             console.error('Error handling mobile preview message:', error);
@@ -2138,7 +2146,6 @@ export class WebSocketServer {
             // Send acknowledgment
             const response: WebSocketMessage = {
                 type: 'response',
-                id: message.id,
                 data: { 
                     success: true, 
                     hapticType: hapticData.type,
@@ -2146,8 +2153,11 @@ export class WebSocketServer {
                 },
                 timestamp: Date.now()
             };
+            if (message.id) {
+                response.id = message.id;
+            }
 
-            this.sendMessage(clientId, response);
+            this.sendToClient(clientId, response);
 
         } catch (error) {
             console.error('Error handling mobile haptic message:', error);
@@ -2172,15 +2182,17 @@ export class WebSocketServer {
             // Send response
             const response: WebSocketMessage = {
                 type: 'response',
-                id: message.id,
                 data: { 
                     success: true, 
                     syncType: syncData.syncType
                 },
                 timestamp: Date.now()
             };
+            if (message.id) {
+                response.id = message.id;
+            }
 
-            this.sendMessage(clientId, response);
+            this.sendToClient(clientId, response);
 
         } catch (error) {
             console.error('Error handling mobile sync message:', error);

@@ -43,7 +43,21 @@ export interface ServerStatus {
  */
 export interface WebSocketMessage {
     /** Message type for routing */
-    type: 'command' | 'response' | 'broadcast' | 'status' | 'fileSystem' | 'prompt' | 'git' | 'config';
+    type:
+        | 'command'
+        | 'response'
+        | 'broadcast'
+        | 'status'
+        | 'fileSystem'
+        | 'prompt'
+        | 'git'
+        | 'config'
+        // Extended mobile message types
+        | 'mobile_gesture'
+        | 'mobile_layout'
+        | 'mobile_preview'
+        | 'mobile_haptic'
+        | 'mobile_sync';
     /** Unique identifier for request/response correlation */
     id?: string;
     /** VS Code command name to execute */
@@ -54,6 +68,8 @@ export interface WebSocketMessage {
     data?: any;
     /** Error information (if applicable) */
     error?: string;
+    /** Optional timestamp for message events */
+    timestamp?: number;
 }
 
 /**

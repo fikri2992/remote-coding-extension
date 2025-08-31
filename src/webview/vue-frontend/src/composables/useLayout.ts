@@ -1,4 +1,4 @@
-import { ref, computed, reactive, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, reactive, watch, onMounted, onUnmounted, nextTick, readonly } from 'vue'
 import { useBreakpoints, type Breakpoint, type Orientation } from './useBreakpoints'
 
 export type LayoutMode = 'single-column' | 'two-column' | 'three-column' | 'sidebar' | 'overlay' | 'split'

@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self' 'unsafe-inline' vscode-resource:; script-src 'self' 'unsafe-inline' vscode-resource:; connect-src ws: wss:;">
-    <title>Web Automation Tunnel</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -25,11 +24,12 @@
             <div class="section-title">Server Control</div>
             
             <div class="status-indicator">
-                <div id="statusDot" class="status-dot stopped"></div>
-                <span id="statusText" class="status-text">Server Stopped</span>
+                <div id="statusDot" class="status-dot stopped" aria-hidden="true"></div>
+                <span id="statusText" class="status-text" aria-live="polite" aria-atomic="true">Server Stopped</span>
+                <span id="statusBadge" class="badge badge-error" aria-label="Server status">STOPPED</span>
             </div>
 
-            <div class="form-group" style="margin: 12px 0;">
+            <div class="form-group mt-12">
                 <label class="checkbox-label">
                     <input type="checkbox" id="autoStartTunnelCheckbox" class="checkbox-input">
                     <span class="checkmark"></span>
@@ -42,7 +42,7 @@
                 <button id="startServerBtn" class="action-button">
                     <span>▶</span> Start Server
                 </button>
-                <button id="stopServerBtn" class="action-button secondary-button" disabled>
+                <button id="stopServerBtn" class="action-button secondary-button danger-button" disabled>
                     <span>⏹</span> Stop Server
                 </button>
             </div>
@@ -60,11 +60,17 @@
                 </div>
                 <div class="info-row">
                     <span class="info-label">Web Interface:</span>
-                    <span id="webInterfaceUrl" class="info-value">-</span>
+                    <div class="row">
+                        <span id="webInterfaceUrl" class="info-value">-</span>
+                        <button id="copyWebInterfaceUrlBtn" class="copy-button" title="Copy URL" disabled aria-label="Copy web interface URL">📋</button>
+                    </div>
                 </div>
                 <div class="info-row">
                     <span class="info-label">Public URL:</span>
-                    <span id="publicUrl" class="info-value">-</span>
+                    <div class="row">
+                        <span id="publicUrl" class="info-value">-</span>
+                        <button id="copyPublicUrlBtn" class="copy-button" title="Copy URL" disabled aria-label="Copy public URL">📋</button>
+                    </div>
                 </div>
                 <div class="info-row">
                     <span class="info-label">HTTP Port:</span>
@@ -103,11 +109,11 @@
 
         <!-- Cloudflare Tunnel Section -->
         <div class="section" id="cloudflareSection">
-            <div class="section-title collapsible-header" id="tunnelSectionHeader" style="cursor: pointer; display: flex; align-items: center; justify-content: space-between;">
+            <div class="section-title collapsible-header row-between" id="tunnelSectionHeader">
                 <span>Cloudflare Tunnel</span>
                 <span class="accordion-icon">▶</span>
             </div>
-            <div id="tunnelContent" class="collapsible-content" style="display: none;">
+            <div id="tunnelContent" class="collapsible-content">
                 <p class="description">Expose your local server securely. Quick Tunnel requires no account. Named Tunnel uses your Cloudflare account.</p>
                 <div class="server-info" aria-live="polite">
                     <div class="info-row">
@@ -119,16 +125,16 @@
                         <span id="tunnelUrl" class="info-value">-</span>
                     </div>
                 </div>
-                <div class="button-group" style="margin-top:8px;">
+                <div class="button-group mt-8">
                     <button id="startQuickTunnelBtn" class="action-button"><span>⚡</span> Start Quick Tunnel</button>
                     <button id="startNamedTunnelBtn" class="action-button secondary-button"><span>🔐</span> Start Named Tunnel</button>
                     <button id="stopTunnelBtn" class="action-button secondary-button" disabled><span>⏹</span> Stop Tunnel</button>
                     <button id="installCloudflaredBtn" class="action-button secondary-button"><span>⬇</span> Install cloudflared</button>
                 </div>
-                <div class="button-group" style="margin-top:8px;">
+                <div class="button-group mt-8">
                     <button id="copyTunnelUrlBtn" class="action-button" disabled>Copy URL</button>
                 </div>
-                <div id="tunnelError" class="error-message hidden" style="margin-top:8px;"></div>
+                <div id="tunnelError" class="error-message hidden mt-8"></div>
             </div>
         </div>
 
@@ -143,17 +149,17 @@
                 <form id="settingsForm">
                     <div class="form-group">
                         <label class="form-label" for="httpPortInput">HTTP Port</label>
-                        <input type="number" id="httpPortInput" class="form-input" min="1024" max="65535" placeholder="3900">
-                        <div class="form-description">Port for the HTTP server (1024-65535). Default: 3900.</div>
+                        <input type="number" id="httpPortInput" class="form-input" min="1024" max="65535" placeholder="3900" aria-describedby="httpPortDescription">
+                        <div class="form-description" id="httpPortDescription">Port for the HTTP server (1024-65535). Default: 3900.</div>
                     </div>
                     
-                    <div class="button-group" style="margin-top: 20px;">
+                    <div class="button-group mt-20">
                         <button type="submit" class="action-button">Save Settings</button>
                         <button type="button" id="resetSettingsBtn" class="action-button secondary-button">Reset to Defaults</button>
                     </div>
                 </form>
                 
-                <div id="settingsMessage" class="error-message hidden" style="margin-top: 16px;"></div>
+                <div id="settingsMessage" class="error-message hidden mt-16"></div>
             </div>
         </div>
         <script src="script.js"></script>

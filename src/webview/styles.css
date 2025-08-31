@@ -14,6 +14,20 @@ body {
     gap: 16px;
 }
 
+/* Desktop two-column layout */
+@media (min-width: 1024px) {
+    .container {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+        align-items: start;
+    }
+    
+    .container > .section:first-child {
+        grid-column: 1 / -1; /* Full width for first section */
+    }
+}
+
 .section {
     border: 1px solid var(--vscode-panel-border);
     border-radius: 4px;
@@ -161,6 +175,17 @@ body {
 
 .secondary-button:hover:not(:disabled) {
     background-color: var(--vscode-button-secondaryHoverBackground);
+}
+
+.danger-button {
+    background-color: var(--vscode-errorForeground);
+    color: var(--vscode-button-foreground);
+    border-color: var(--vscode-errorForeground);
+}
+
+.danger-button:hover:not(:disabled) {
+    background-color: var(--vscode-errorForeground);
+    opacity: 0.8;
 }
 
 .error-message {
@@ -497,4 +522,125 @@ body {
 .collapsible-header:focus {
     outline: 1px solid var(--vscode-focusBorder);
     outline-offset: 2px;
+}
+
+/* Utility Classes */
+.mt-4 { margin-top: 4px !important; }
+.mt-8 { margin-top: 8px !important; }
+.mt-12 { margin-top: 12px !important; }
+.mt-16 { margin-top: 16px !important; }
+.mt-20 { margin-top: 20px !important; }
+
+.mb-4 { margin-bottom: 4px !important; }
+.mb-8 { margin-bottom: 8px !important; }
+.mb-12 { margin-bottom: 12px !important; }
+.mb-16 { margin-bottom: 16px !important; }
+.mb-20 { margin-bottom: 20px !important; }
+
+.row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.row-between {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.stack-4 { display: flex; flex-direction: column; gap: 4px; }
+.stack-8 { display: flex; flex-direction: column; gap: 8px; }
+.stack-12 { display: flex; flex-direction: column; gap: 12px; }
+.stack-16 { display: flex; flex-direction: column; gap: 16px; }
+
+.badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 6px;
+    font-size: 11px;
+    font-weight: 500;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+}
+
+.badge-success {
+    background-color: var(--vscode-testing-iconPassed);
+    color: var(--vscode-button-foreground);
+}
+
+.badge-error {
+    background-color: var(--vscode-testing-iconFailed);
+    color: var(--vscode-button-foreground);
+}
+
+.badge-warning {
+    background-color: var(--vscode-testing-iconQueued);
+    color: var(--vscode-button-foreground);
+}
+
+.kbd {
+    display: inline-block;
+    padding: 1px 4px;
+    font-size: 11px;
+    font-family: var(--vscode-editor-font-family);
+    background-color: var(--vscode-input-background);
+    border: 1px solid var(--vscode-input-border);
+    border-radius: 2px;
+    color: var(--vscode-input-foreground);
+    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.1);
+}
+
+.spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--vscode-panel-border);
+    border-top: 2px solid var(--vscode-textLink-foreground);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Copy button styles */
+.copy-button {
+    background: none;
+    border: none;
+    padding: 2px 4px;
+    cursor: pointer;
+    color: var(--vscode-descriptionForeground);
+    font-size: 12px;
+    border-radius: 2px;
+    transition: all 0.1s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.copy-button:hover {
+    background-color: var(--vscode-toolbar-hoverBackground);
+    color: var(--vscode-foreground);
+}
+
+.copy-button:focus {
+    outline: 1px solid var(--vscode-focusBorder);
+    outline-offset: 1px;
+}
+
+/* Improved accordion */
+.collapsible-content {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease, padding 0.3s ease;
+    padding: 0 16px;
+}
+
+.collapsible-content.is-open {
+    max-height: 500px; /* Adjust based on content height */
+    padding: 16px;
 }

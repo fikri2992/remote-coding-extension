@@ -11,6 +11,7 @@ const stopServerBtn = document.getElementById('stopServerBtn');
 const openWebInterfaceBtn = document.getElementById('openWebInterfaceBtn');
 const statusDot = document.getElementById('statusDot');
 const statusText = document.getElementById('statusText');
+const statusBadge = document.getElementById('statusBadge');
 const errorMessage = document.getElementById('errorMessage');
 const serverInfoSection = document.getElementById('serverInfoSection');
 const clientsSection = document.getElementById('clientsSection');
@@ -41,10 +42,11 @@ const tunnelStatus = document.getElementById('tunnelStatus');
 const tunnelUrl = document.getElementById('tunnelUrl');
 const tunnelError = document.getElementById('tunnelError');
 
-// New elements for auto-start tunnel and collapsible tunnel section
-const autoStartTunnelCheckbox = document.getElementById('autoStartTunnelCheckbox');
-const tunnelSectionHeader = document.getElementById('tunnelSectionHeader');
-const tunnelContent = document.getElementById('tunnelContent');
+// New copy button elements
+const copyWebInterfaceUrlBtn = document.getElementById('copyWebInterfaceUrlBtn');
+const copyPublicUrlBtn = document.getElementById('copyPublicUrlBtn');
+
+// New elements for accordion
 const accordionIcon = tunnelSectionHeader?.querySelector('.accordion-icon');
 
 // Current server state
@@ -107,6 +109,38 @@ function onTabKeydown(e) {
     const newTabName = buttons[newIndex].getAttribute('data-tab');
     switchTab(newTabName);
     buttons[newIndex].focus();
+}
+
+// Initialize UI state from VS Code state
+function initializeUIState() {
+    const state = vscode.getState() || {};
+    
+    // Restore tunnel expansion state
+    if (tunnelSectionHeader && tunnelContent) {
+        const isExpanded = state.tunnelExpanded || false;
+        if (isExpanded) {
+            tunnelContent.classList.add('is-open');
+            accordionIcon.textContent = '▼';
+            tunnelSectionHeader.setAttribute('aria-expanded', 'true');
+        }
+    }
+    
+    // Restore auto-start checkbox state
+    if (autoStartTunnelCheckbox && state.autoStartTunnel !== undefined) {
+        autoStartTunnelCheckbox.checked = state.autoStartTunnel;
+    }
+}
+
+// Call initialization
+initializeUIState();
+
+// Persist auto-start checkbox state
+if (autoStartTunnelCheckbox) {
+    autoStartTunnelCheckbox.addEventListener('change', function() {
+        const currentState = vscode.getState() || {};
+        const newState = { ...currentState, autoStartTunnel: this.checked };
+        vscode.setState(newState);
+    });
 }
 
 // Initialize tabs accessibility state for the default active tab
@@ -207,24 +241,59 @@ copyTunnelUrlBtn.addEventListener('click', function() {
     }
 });
 
-// Collapsible tunnel section handler
+// Copy button event handlers
+if (copyWebInterfaceUrlBtn) {
+    copyWebInterfaceUrlBtn.addEventListener('click', function() {
+        if (webInterfaceUrl.textContent && webInterfaceUrl.textContent !== '-') {
+            vscode.postMessage({ command: 'copyToClipboard', data: { text: webInterfaceUrl.textContent } });
+        }
+    });
+}
+
+if (copyPublicUrlBtn) {
+    copyPublicUrlBtn.addEventListener('click', function() {
+        if (publicUrl.textContent && publicUrl.textContent !== '-') {
+            vscode.postMessage({ command: 'copyToClipboard', data: { text: publicUrl.textContent } });
+        }
+    });
+}
+
+// Improved accordion handler with state persistence
 if (tunnelSectionHeader && tunnelContent && accordionIcon) {
+    // Initialize state from VS Code state
+    const initialState = vscode.getState() || {};
+    const isExpanded = initialState.tunnelExpanded || false;
+    
+    if (isExpanded) {
+        tunnelContent.classList.add('is-open');
+        accordionIcon.textContent = '▼';
+        tunnelSectionHeader.setAttribute('aria-expanded', 'true');
+    } else {
+        tunnelContent.classList.remove('is-open');
+        accordionIcon.textContent = '▶';
+        tunnelSectionHeader.setAttribute('aria-expanded', 'false');
+    }
+    
     tunnelSectionHeader.addEventListener('click', function() {
-        const isExpanded = tunnelContent.style.display !== 'none';
+        const currentlyExpanded = tunnelContent.classList.contains('is-open');
         
-        if (isExpanded) {
-            tunnelContent.style.display = 'none';
+        if (currentlyExpanded) {
+            tunnelContent.classList.remove('is-open');
             accordionIcon.textContent = '▶';
             tunnelSectionHeader.setAttribute('aria-expanded', 'false');
         } else {
-            tunnelContent.style.display = 'block';
+            tunnelContent.classList.add('is-open');
             accordionIcon.textContent = '▼';
             tunnelSectionHeader.setAttribute('aria-expanded', 'true');
         }
+        
+        // Persist state
+        const newState = { ...vscode.getState(), tunnelExpanded: !currentlyExpanded };
+        vscode.setState(newState);
     });
     
     // Initialize aria attributes
-    tunnelSectionHeader.setAttribute('aria-expanded', 'false');
+    tunnelSectionHeader.setAttribute('aria-expanded', isExpanded.toString());
     tunnelSectionHeader.setAttribute('role', 'button');
     tunnelSectionHeader.setAttribute('tabindex', '0');
     
@@ -294,6 +363,8 @@ function updateServerStatus(status, clients) {
     // Update status indicator
     statusDot.className = 'status-dot ' + (status.isRunning ? 'running' : 'stopped');
     statusText.textContent = status.isRunning ? 'Server Running' : 'Server Stopped';
+    statusBadge.textContent = status.isRunning ? 'RUNNING' : 'STOPPED';
+    statusBadge.className = 'badge ' + (status.isRunning ? 'badge-success' : 'badge-error');
 
     // Update button states
     startServerBtn.disabled = status.isRunning;
@@ -310,6 +381,10 @@ function updateServerStatus(status, clients) {
         httpPort.textContent = status.httpPort || '-';
         uptime.textContent = formatUptime(status.uptime);
         clientCount.textContent = status.connectedClients || 0;
+
+        // Enable copy buttons when URLs are available
+        copyWebInterfaceUrlBtn.disabled = !status.webInterfaceUrl;
+        copyPublicUrlBtn.disabled = !status.publicUrl;
 
         // Tunnel UI
         if (status.publicUrl) {
@@ -369,7 +444,11 @@ function setLoadingState(isLoading, message = '') {
         statusText.textContent = message;
         startServerBtn.disabled = true;
         stopServerBtn.disabled = true;
-        startServerBtn.innerHTML = '<span>⏳</span> ' + message;
+        startServerBtn.innerHTML = '<span class="spinner"></span> ' + message;
+        stopServerBtn.innerHTML = '<span>⏹</span> Stop Server';
+    } else {
+        startServerBtn.innerHTML = '<span>▶</span> Start Server';
+        stopServerBtn.innerHTML = '<span>⏹</span> Stop Server';
     }
 }
 
@@ -425,7 +504,7 @@ function formatTime(dateString) {
 }
 
 // Handle keyboard events for accessibility
-[startServerBtn, stopServerBtn, executeButton, openWebInterfaceBtn].forEach(button => {
+[startServerBtn, stopServerBtn, openWebInterfaceBtn].forEach(button => {
     button.addEventListener('keydown', function(event) {
         if (event.key === 'Enter' || event.key === ' ') {
             event.preventDefault();

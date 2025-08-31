@@ -210,14 +210,14 @@ export function activate(context: vscode.ExtensionContext) {
         context.globalState.update(noticeKey, true);
     }
 
-    // Auto-start the server on activation (UI will manage tunnel state)
-    (async () => {
-        try {
-            await webviewProvider.startServer();
-        } catch (err) {
-            console.warn('Auto-start server failed:', err);
-        }
-    })();
+    // Auto-start the server on activation (UI will manage tunnel state) - DISABLED
+    // (async () => {
+    //     try {
+    //         await webviewProvider.startServer();
+    //     } catch (err) {
+    //         console.warn('Auto-start server failed:', err);
+    //     }
+    // })();
 }
 
 export function deactivate() {

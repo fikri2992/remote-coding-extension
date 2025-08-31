@@ -8,12 +8,15 @@ import { HttpServer } from './HttpServer';
 import { WebSocketServer } from './WebSocketServer';
 import { WebServer, WebServerConfig } from './WebServer';
 import { ConfigurationManager } from './ConfigurationManager';
+import { LocalTunnel, TunnelConfig, TunnelStatus } from './LocalTunnel';
 import { ErrorHandler, ErrorCategory, ErrorSeverity } from './ErrorHandler';
 import { ConnectionRecoveryManager, RecoveryConfig } from './ConnectionRecoveryManager';
 import * as path from 'path';
 
 export class ServerManager {
     private _isRunning: boolean = false;
+    private _isStarting: boolean = false;
+    private _isStopping: boolean = false;
     private _config: ServerConfig | null = null;
     private _startTime: Date | null = null;
     private _connectedClients: Map<string, ClientConnection> = new Map();
@@ -27,6 +30,11 @@ export class ServerManager {
     private _recoveryManager: ConnectionRecoveryManager;
     private _startupAttempts: number = 0;
     private _maxStartupAttempts: number = 3;
+    private _tunnel: LocalTunnel | null = null;
+    private _onServerStatusChanged: vscode.EventEmitter<ServerStatus> = new vscode.EventEmitter<ServerStatus>();
+    public readonly onServerStatusChanged: vscode.Event<ServerStatus> = this._onServerStatusChanged.event;
+    private _onTunnelStatusChanged: vscode.EventEmitter<TunnelStatus | null> = new vscode.EventEmitter<TunnelStatus | null>();
+    public readonly onTunnelStatusChanged: vscode.Event<TunnelStatus | null> = this._onTunnelStatusChanged.event;
 
     constructor() {
         this._configManager = new ConfigurationManager();
@@ -65,6 +73,18 @@ export class ServerManager {
         this._startupAttempts++;
         
         try {
+            // If a stop is in progress, wait briefly for it to finish
+            await this.waitForStopCompletion();
+
+            if (this._isStarting) {
+                const info = this._errorHandler.createError(
+                    'SERVER_START_IN_PROGRESS',
+                    'Server start is already in progress',
+                    ErrorCategory.SERVER_STARTUP,
+                    ErrorSeverity.LOW
+                );
+                throw info;
+            }
             if (this._isRunning) {
                 const errorInfo = this._errorHandler.createError(
                     'SERVER_ALREADY_RUNNING',
@@ -90,6 +110,8 @@ export class ServerManager {
 
             // Validate configuration before starting
             await this.validateConfiguration(this._config);
+
+            this._isStarting = true;
 
             // Initialize and start HTTP server with recovery
             await this.startHttpServerWithRecovery(this._config);
@@ -118,8 +140,25 @@ export class ServerManager {
                 }
             });
             
+            // Emit server status changed immediately
+            this._onServerStatusChanged.fire(this.getServerStatus());
+
+            // Auto-start tunnel if configured
+            const autoStartTunnel = vscode.workspace
+                .getConfiguration('webAutomationTunnel')
+                .get<boolean>('autoStartTunnel', true);
+            if (autoStartTunnel) {
+                try {
+                    await this.startTunnel();
+                } catch (tunnelError) {
+                    console.warn('Auto-start tunnel failed:', tunnelError);
+                }
+            }
+            
         } catch (error) {
             await this.handleStartupError(error);
+        } finally {
+            this._isStarting = false;
         }
     }
 
@@ -131,6 +170,10 @@ export class ServerManager {
             if (!this._isRunning) {
                 return; // Already stopped
             }
+
+            this._isStopping = true;
+            // Mark not running early to avoid immediate restart throwing "already running"
+            this._isRunning = false;
 
             // Stop HTTP server
             if (this._httpServer) {
@@ -144,22 +187,42 @@ export class ServerManager {
                 this._webSocketServer = null;
             }
             
+            // Stop tunnel if running
+            if (this._tunnel) {
+                try {
+                    await this.stopTunnel();
+                } catch (tunnelStopError) {
+                    console.warn('Error stopping tunnel during server stop:', tunnelStopError);
+                }
+            }
+            
             // WebServer removed
             // if (this._webServer) {
             //     await this._webServer.stop();
             //     this._webServer = null;
             // }
 
-            this._isRunning = false;
             this._startTime = null;
             this._connectedClients.clear();
             this._lastError = null;
 
             console.log('Web Automation Server stopped');
             
+            // Emit server status changed on stop
+            this._onServerStatusChanged.fire(this.getServerStatus());
+            
         } catch (error) {
             this._lastError = error instanceof Error ? error.message : 'Error during server shutdown';
             throw error;
+        } finally {
+            this._isStopping = false;
+        }
+    }
+
+    private async waitForStopCompletion(timeoutMs: number = 5000): Promise<void> {
+        const start = Date.now();
+        while (this._isStopping && Date.now() - start < timeoutMs) {
+            await new Promise((r) => setTimeout(r, 100));
         }
     }
 
@@ -194,15 +257,19 @@ export class ServerManager {
             }
         }
 
+        // Include tunnel status if tunnel is running
+        const tunnelStatus = this.getTunnelStatus();
+        if (tunnelStatus && tunnelStatus.isRunning && tunnelStatus.publicUrl) {
+            status.publicUrl = tunnelStatus.publicUrl;
+            status.tunnelStatus = tunnelStatus;
+        }
+
         // If no web interface URL set, use HTTP server URL
         if (!status.webInterfaceUrl && status.serverUrl) {
             status.webInterfaceUrl = status.serverUrl;
         }
 
-        // If no public URL set, use local server URL (no tunnel)
-        if (!status.publicUrl && status.serverUrl) {
-            status.publicUrl = status.serverUrl;
-        }
+        // Do NOT set publicUrl when no tunnel is active; keep it undefined so UI can reflect "no tunnel"
 
         return status;
     }
@@ -783,6 +850,127 @@ export class ServerManager {
     }
 
     /**
+     * Get tunnel instance
+     */
+    get tunnel(): LocalTunnel | null {
+        return this._tunnel;
+    }
+
+    /**
+     * Start Cloudflare tunnel
+     */
+    async startTunnel(tunnelConfig?: Partial<TunnelConfig>): Promise<void> {
+        try {
+            if (!this._isRunning) {
+                throw new Error('Server must be running before starting tunnel');
+            }
+
+            if (this._tunnel) {
+                throw new Error('Tunnel is already running');
+            }
+
+            // Get HTTP port from current config
+            const httpPort = this._config?.httpPort || 8080;
+
+            // Create tunnel config with defaults (ephemeral by default)
+            const config: TunnelConfig = {
+                localPort: httpPort
+            };
+
+            // Add optional properties only if they exist
+            if (tunnelConfig?.cloudflareToken) {
+                (config as any).cloudflareToken = tunnelConfig.cloudflareToken;
+            }
+            if (tunnelConfig?.tunnelName) {
+                (config as any).tunnelName = tunnelConfig.tunnelName;
+            }
+            if (tunnelConfig?.subdomain) {
+                (config as any).subdomain = tunnelConfig.subdomain;
+            }
+            if (tunnelConfig?.host) {
+                (config as any).host = tunnelConfig.host;
+            }
+
+            this._tunnel = new LocalTunnel(config);
+            await this._tunnel.start();
+
+            const tunnelStatus = this._tunnel.getStatus();
+            console.log(`Cloudflare tunnel started: ${tunnelStatus.publicUrl}`);
+
+            // Emit tunnel and server status changes
+            this._onTunnelStatusChanged.fire(tunnelStatus);
+            this._onServerStatusChanged.fire(this.getServerStatus());
+
+            vscode.window.showInformationMessage(
+                `Cloudflare tunnel started: ${tunnelStatus.publicUrl}`,
+                'Copy URL'
+            ).then(action => {
+                if (action === 'Copy URL' && tunnelStatus.publicUrl) {
+                    vscode.env.clipboard.writeText(tunnelStatus.publicUrl);
+                }
+            });
+
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Failed to start tunnel';
+            vscode.window.showErrorMessage(`Tunnel error: ${errorMessage}`);
+            // Emit tunnel status change (null) and server status for immediate UI update on error
+            this._onTunnelStatusChanged.fire(null);
+            this._onServerStatusChanged.fire(this.getServerStatus());
+            // Clear stale tunnel reference so user can retry
+            this._tunnel = null;
+            throw error;
+        }
+    }
+
+    /**
+     * Stop Cloudflare tunnel
+     */
+    async stopTunnel(): Promise<void> {
+        try {
+            if (!this._tunnel) {
+                return; // Already stopped
+            }
+
+            await this._tunnel.stop();
+            this._tunnel = null;
+
+            console.log('Cloudflare tunnel stopped');
+            vscode.window.showInformationMessage('Cloudflare tunnel stopped');
+
+            // Emit tunnel stopped and server status changed
+            this._onTunnelStatusChanged.fire(null);
+            this._onServerStatusChanged.fire(this.getServerStatus());
+
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Failed to stop tunnel';
+            vscode.window.showErrorMessage(`Tunnel stop error: ${errorMessage}`);
+            throw error;
+        }
+    }
+
+    /**
+     * Get tunnel status
+     */
+    getTunnelStatus(): TunnelStatus | null {
+        return this._tunnel ? this._tunnel.getStatus() : null;
+    }
+
+    /**
+     * Install Cloudflare tunnel
+     */
+    async installCloudflared(): Promise<void> {
+        try {
+            const tunnel = new LocalTunnel({ localPort: 8080 }); // Dummy config just for installation
+            await tunnel.installCloudflared();
+            vscode.window.showInformationMessage('Cloudflare tunnel installed successfully');
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Failed to install Cloudflare tunnel';
+            vscode.window.showErrorMessage(`Installation error: ${errorMessage}`);
+            throw error;
+        }
+    }
+
+    /**
      * Dispose of resources
      */
     dispose(): void {
@@ -790,13 +978,22 @@ export class ServerManager {
             this._configChangeListener.dispose();
             this._configChangeListener = null;
         }
-        
+
         if (this._configManager) {
             this._configManager.dispose();
         }
-        
+
         if (this._recoveryManager) {
             this._recoveryManager.dispose();
         }
+
+        if (this._tunnel) {
+            this._tunnel.stop();
+            this._tunnel = null;
+        }
+
+        // Dispose event emitters
+        this._onServerStatusChanged.dispose();
+        this._onTunnelStatusChanged.dispose();
     }
 }

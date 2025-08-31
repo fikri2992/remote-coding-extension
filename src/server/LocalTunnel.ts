@@ -5,6 +5,8 @@ import * as vscode from 'vscode';
 
 export interface TunnelConfig {
   localPort: number;
+  tunnelName?: string;
+  cloudflareToken?: string;
   subdomain?: string;
   host?: string;
 }
@@ -28,32 +30,38 @@ export class LocalTunnel {
 
   public async start(): Promise<void> {
     try {
-      // Check if localtunnel is installed globally
-      const isInstalled = await this.checkLocalTunnelInstalled();
+      // Check if cloudflared is installed
+      const isInstalled = await this.checkCloudflaredInstalled();
 
       if (!isInstalled) {
-        throw new Error('localtunnel is not installed. Please install it globally: npm install -g localtunnel');
+        throw new Error('cloudflared is not installed. Please install it from: https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/install-and-setup/tunnel-guide');
       }
 
-      // Build command arguments
-      const args = [this.config.localPort.toString()];
-
-      if (this.config.subdomain) {
-        args.push('--subdomain', this.config.subdomain);
+      // Validate Cloudflare token if provided
+      if (this.config.cloudflareToken) {
+        await this.authenticateCloudflare();
       }
 
-      if (this.config.host) {
-        args.push('--host', this.config.host);
+      // Build command arguments for cloudflared tunnel
+      const args = ['tunnel'];
+
+      // Use named tunnel if specified, otherwise use temporary tunnel
+      if (this.config.tunnelName) {
+        args.push('--name', this.config.tunnelName);
+        args.push('run');
+      } else {
+        args.push('run', '--url', `http://localhost:${this.config.localPort}`);
       }
 
-      // Start localtunnel process
-      const tunnelProcess = cp.spawn('lt', args, {
+      // Start cloudflared process
+      const tunnelProcess = cp.spawn('cloudflared', args, {
         stdio: ['pipe', 'pipe', 'pipe'],
         shell: true
       });
 
       this.status.process = tunnelProcess;
       this.status.startTime = new Date();
+      this.status.localUrl = `http://localhost:${this.config.localPort}`;
 
       return new Promise((resolve, reject) => {
         let tunnelUrl = '';
@@ -62,31 +70,81 @@ export class LocalTunnel {
         // Handle stdout to capture the tunnel URL
         tunnelProcess.stdout?.on('data', (data) => {
           const output = data.toString();
-          console.log('LocalTunnel stdout:', output);
+          console.log('Cloudflared stdout:', output);
 
-          // Look for the tunnel URL in the output
-          const urlMatch = output.match(/https:\/\/[^\s]+/);
-          if (urlMatch) {
-            tunnelUrl = urlMatch[0];
-            this.status.publicUrl = tunnelUrl;
-            this.status.localUrl = `http://localhost:${this.config.localPort}`;
-            this.status.isRunning = true;
+          // Look for the tunnel URL in the output (try multiple patterns)
+          if (!tunnelUrl) { // Only process if we haven't found URL yet
+            // Try different Cloudflare URL patterns
+            const patterns = [
+              /https:\/\/[^\s]+\.trycloudflare\.com[^\s]*/g,
+              /https:\/\/[^\s]+\.cloudflaretunnel\.com[^\s]*/g,
+              /https:\/\/[^\s]+\.cfargotunnel\.com[^\s]*/g,
+              /tunnel.*started.*https:\/\/[^\s]+/gi,
+              /https:\/\/[^\s]+\.tunnel\.cloudflare\.com[^\s]*/g
+            ];
 
-            console.log(`LocalTunnel started: ${tunnelUrl}`);
-            resolve();
+            for (const pattern of patterns) {
+              const match = output.match(pattern);
+              if (match) {
+                // Extract URL from the match
+                const urlMatch = match[0].match(/https:\/\/[^\s]+/);
+                if (urlMatch) {
+                  tunnelUrl = urlMatch[0];
+                  console.log(`Found tunnel URL: ${tunnelUrl}`);
+                  break;
+                }
+              }
+            }
+
+            if (tunnelUrl) {
+              this.status.publicUrl = tunnelUrl;
+              this.status.isRunning = true;
+              console.log(`Cloudflare tunnel started: ${tunnelUrl}`);
+              resolve();
+            }
           }
         });
 
-        // Handle stderr for error messages
+        // Also check for alternative tunnel output formats
         tunnelProcess.stderr?.on('data', (data) => {
-          const error = data.toString();
-          console.error('LocalTunnel stderr:', error);
-          errorMessage += error;
+          const output = data.toString();
+          console.log('Cloudflared stderr:', output);
+
+          // Sometimes tunnel URL appears in stderr
+          if (!tunnelUrl) {
+            const patterns = [
+              /https:\/\/[^\s]+\.trycloudflare\.com[^\s]*/g,
+              /https:\/\/[^\s]+\.cloudflaretunnel\.com[^\s]*/g,
+              /https:\/\/[^\s]+\.cfargotunnel\.com[^\s]*/g,
+              /https:\/\/[^\s]+\.tunnel\.cloudflare\.com[^\s]*/g
+            ];
+
+            for (const pattern of patterns) {
+              const match = output.match(pattern);
+              if (match) {
+                const urlMatch = match[0].match(/https:\/\/[^\s]+/);
+                if (urlMatch) {
+                  tunnelUrl = urlMatch[0];
+                  console.log(`Found tunnel URL in stderr: ${tunnelUrl}`);
+                  break;
+                }
+              }
+            }
+
+            if (tunnelUrl) {
+              this.status.publicUrl = tunnelUrl;
+              this.status.isRunning = true;
+              console.log(`Cloudflare tunnel started: ${tunnelUrl}`);
+              resolve();
+            }
+          }
+
+          errorMessage += output;
         });
 
         // Handle process exit
         tunnelProcess.on('exit', (code) => {
-          console.log(`LocalTunnel process exited with code ${code}`);
+          console.log(`Cloudflared process exited with code ${code}`);
           this.status.isRunning = false;
 
           if (code !== 0 && !tunnelUrl) {
@@ -97,26 +155,26 @@ export class LocalTunnel {
 
         // Handle process errors
         tunnelProcess.on('error', (error) => {
-          console.error('LocalTunnel process error:', error);
+          console.error('Cloudflared process error:', error);
           this.status.lastError = error.message;
           this.status.isRunning = false;
           reject(error);
         });
 
-        // Timeout after 30 seconds if no URL is found
+        // Timeout after 60 seconds if no URL is found
         setTimeout(() => {
           if (!tunnelUrl) {
             tunnelProcess.kill();
             this.status.lastError = 'Timeout: Could not establish tunnel connection';
             reject(new Error(this.status.lastError));
           }
-        }, 30000);
+        }, 60000); // Cloudflare tunnels take longer to establish
       });
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       this.status.lastError = errorMessage;
-      throw new Error(`Failed to start localtunnel: ${errorMessage}`);
+      throw new Error(`Failed to start Cloudflare tunnel: ${errorMessage}`);
     }
   }
 
@@ -146,38 +204,103 @@ export class LocalTunnel {
     });
   }
 
-  private async checkLocalTunnelInstalled(): Promise<boolean> {
+  private async checkCloudflaredInstalled(): Promise<boolean> {
     return new Promise((resolve) => {
-      cp.exec('lt --version', (error) => {
-        resolve(!error);
+      cp.exec('cloudflared version', (error, stdout, stderr) => {
+        if (error) {
+          console.log('Cloudflared not found. Please install from: https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/install-and-setup/tunnel-guide');
+          console.log('Installation command:', process.platform === 'win32'
+            ? 'winget install --id Cloudflare.cloudflared'
+            : process.platform === 'darwin'
+            ? 'brew install cloudflared'
+            : 'curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o cloudflared && sudo mv cloudflared /usr/local/bin/ && chmod +x /usr/local/bin/cloudflared'
+          );
+          resolve(false);
+        } else {
+          console.log('Cloudflared version:', stdout.trim());
+          resolve(true);
+        }
+      });
+    });
+  }
+
+  private async authenticateCloudflare(): Promise<void> {
+    if (!this.config.cloudflareToken) {
+      return;
+    }
+
+    return new Promise((resolve, reject) => {
+      const authProcess = cp.spawn('cloudflared', ['tunnel', 'token', this.config.cloudflareToken!], {
+        stdio: ['pipe', 'pipe', 'pipe'],
+        shell: true
+      });
+
+      authProcess.on('exit', (code) => {
+        if (code === 0) {
+          console.log('Cloudflare authentication successful');
+          resolve();
+        } else {
+          reject(new Error(`Cloudflare authentication failed with code ${code}`));
+        }
+      });
+
+      authProcess.on('error', (error) => {
+        reject(new Error(`Cloudflare authentication error: ${error.message}`));
       });
     });
   }
 
   public getStatus(): TunnelStatus {
+    console.log('Tunnel status requested:', {
+      isRunning: this.status.isRunning,
+      publicUrl: this.status.publicUrl,
+      localUrl: this.status.localUrl,
+      lastError: this.status.lastError,
+      startTime: this.status.startTime
+    });
     return { ...this.status };
   }
 
-  public async installLocalTunnel(): Promise<void> {
+  public async installCloudflared(): Promise<void> {
     return new Promise((resolve, reject) => {
-      console.log('Installing localtunnel globally...');
+      console.log('Installing cloudflared...');
 
-      const installProcess = cp.spawn('npm', ['install', '-g', 'localtunnel'], {
-        stdio: 'inherit',
-        shell: true
-      });
+      // Determine the platform and architecture for the correct download
+      const platform = process.platform;
+      const arch = process.arch;
 
-      installProcess.on('exit', (code) => {
-        if (code === 0) {
-          console.log('localtunnel installed successfully');
-          resolve();
-        } else {
-          reject(new Error(`Failed to install localtunnel (exit code: ${code})`));
+      let downloadUrl = '';
+      let installCommand = '';
+
+      if (platform === 'win32') {
+        downloadUrl = 'https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe';
+        installCommand = `powershell -Command "Invoke-WebRequest -Uri '${downloadUrl}' -OutFile 'cloudflared.exe'; Move-Item -Path 'cloudflared.exe' -Destination 'C:\\Windows\\System32\\cloudflared.exe'"`;
+      } else if (platform === 'darwin') {
+        downloadUrl = arch === 'arm64'
+          ? 'https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-darwin-arm64.tgz'
+          : 'https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-darwin-amd64.tgz';
+        installCommand = `curl -L ${downloadUrl} | tar -xz && sudo mv cloudflared /usr/local/bin/cloudflared`;
+      } else if (platform === 'linux') {
+        downloadUrl = arch === 'arm64'
+          ? 'https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-arm64'
+          : 'https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64';
+        installCommand = `curl -L ${downloadUrl} -o cloudflared && chmod +x cloudflared && sudo mv cloudflared /usr/local/bin/cloudflared`;
+      } else {
+        reject(new Error(`Unsupported platform: ${platform}-${arch}`));
+        return;
+      }
+
+      console.log(`Downloading cloudflared for ${platform}-${arch}...`);
+
+      const installProcess = cp.exec(installCommand, (error, stdout, stderr) => {
+        if (error) {
+          console.error('Installation error:', error);
+          reject(new Error(`Failed to install cloudflared: ${error.message}`));
+          return;
         }
-      });
 
-      installProcess.on('error', (error) => {
-        reject(new Error(`Installation error: ${error.message}`));
+        console.log('cloudflared installed successfully');
+        resolve();
       });
     });
   }

@@ -1,6 +1,4 @@
-/**
- * Core interfaces for the Web Automation Tunnel server infrastructure
- */
+import { TunnelStatus } from './LocalTunnel';
 
 /**
  * Configuration interface for the web automation server
@@ -40,6 +38,8 @@ export interface ServerStatus {
     webInterfaceUrl?: string;
     /** Publicly accessible URL if a tunnel is active */
     publicUrl?: string;
+    /** Tunnel status if a tunnel is running */
+    tunnelStatus?: TunnelStatus;
 }
 
 /**

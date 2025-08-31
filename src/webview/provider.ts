@@ -10,6 +10,8 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
     private _view?: vscode.WebviewView;
     private _serverManager: ServerManager;
     private _statusUpdateInterval?: NodeJS.Timeout;
+    private _serverStatusSubscription?: vscode.Disposable;
+    private _tunnelStatusSubscription?: vscode.Disposable;
 
     constructor(private readonly _extensionUri: vscode.Uri) {
         this._serverManager = new ServerManager();
@@ -90,6 +92,16 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
 
         // Start periodic status updates
         this._startStatusUpdates();
+
+        // Subscribe to immediate server/tunnel status changes
+        this._serverStatusSubscription?.dispose();
+        this._tunnelStatusSubscription?.dispose();
+        this._serverStatusSubscription = this._serverManager.onServerStatusChanged(() => {
+            this._sendServerStatus();
+        });
+        this._tunnelStatusSubscription = this._serverManager.onTunnelStatusChanged(() => {
+            this._sendServerStatus();
+        });
     }
 
     private _getHtmlForWebview(webview: vscode.Webview): string {
@@ -732,6 +744,8 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
      */
     public dispose(): void {
         this._stopStatusUpdates();
+        this._serverStatusSubscription?.dispose();
+        this._tunnelStatusSubscription?.dispose();
         this._serverManager.dispose();
     }
 }

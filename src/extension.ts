@@ -85,18 +85,99 @@ export function activate(context: vscode.ExtensionContext) {
         }
     });
 
+    // Tunnel management commands
+    const startTunnelCommand = vscode.commands.registerCommand('webAutomationTunnel.startTunnel', async () => {
+        try {
+            const tunnelName = await vscode.window.showInputBox({
+                prompt: 'Enter tunnel name (optional)',
+                placeHolder: 'vscode-web-automation'
+            });
+
+            const cloudflareToken = await vscode.window.showInputBox({
+                prompt: 'Enter Cloudflare API token (optional, for authenticated tunnels)',
+                placeHolder: 'Leave empty for anonymous tunnel',
+                password: true
+            });
+
+            const tunnelConfig: any = {};
+            if (tunnelName) tunnelConfig.tunnelName = tunnelName;
+            if (cloudflareToken) tunnelConfig.cloudflareToken = cloudflareToken;
+
+            await webviewProvider.serverManager.startTunnel(tunnelConfig);
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+            vscode.window.showErrorMessage(`Failed to start tunnel: ${errorMessage}`);
+        }
+    });
+
+    const stopTunnelCommand = vscode.commands.registerCommand('webAutomationTunnel.stopTunnel', async () => {
+        try {
+            await webviewProvider.serverManager.stopTunnel();
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+            vscode.window.showErrorMessage(`Failed to stop tunnel: ${errorMessage}`);
+        }
+    });
+
+    const installCloudflaredCommand = vscode.commands.registerCommand('webAutomationTunnel.installCloudflared', async () => {
+        try {
+            await webviewProvider.serverManager.installCloudflared();
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+            vscode.window.showErrorMessage(`Installation error: ${errorMessage}`);
+        }
+    });
+
+    const tunnelStatusCommand = vscode.commands.registerCommand('webAutomationTunnel.tunnelStatus', async () => {
+        try {
+            const status = webviewProvider.serverManager.getTunnelStatus();
+            const serverStatus = webviewProvider.serverManager.getServerStatus();
+
+            const message = [
+                `Tunnel Status: ${status ? 'Active' : 'Inactive'}`,
+                status ? `Public URL: ${status.publicUrl || 'Not available'}` : '',
+                status ? `Local URL: ${status.localUrl || 'Not available'}` : '',
+                status ? `Started: ${status.startTime ? new Date(status.startTime).toLocaleString() : 'Unknown'}` : '',
+                `Server Running: ${serverStatus.isRunning}`,
+                `Server URL: ${serverStatus.serverUrl || 'Not available'}`
+            ].filter(Boolean).join('\n');
+
+            vscode.window.showInformationMessage(message, { modal: true }, 'Copy URL').then(action => {
+                if (action === 'Copy URL' && status?.publicUrl) {
+                    vscode.env.clipboard.writeText(status.publicUrl);
+                }
+            });
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+            vscode.window.showErrorMessage(`Status check error: ${errorMessage}`);
+        }
+    });
+
     context.subscriptions.push(
         startServerCommand, 
         stopServerCommand, 
         openConfigurationCommand, 
         resetConfigurationCommand,
-        toggleUICommand
+        toggleUICommand,
+        startTunnelCommand,
+        stopTunnelCommand,
+        installCloudflaredCommand,
+        tunnelStatusCommand
     );
 
     // Register integration test command
     registerIntegrationTestCommand(context);
 
     console.log('Basic VSCode Extension registration complete');
+
+    // Auto-start the server (and tunnel if configured) on activation
+    (async () => {
+        try {
+            await webviewProvider.startServer();
+        } catch (err) {
+            console.warn('Auto-start server failed:', err);
+        }
+    })();
 }
 
 export function deactivate() {

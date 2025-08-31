@@ -1,161 +1,183 @@
 {
-  "name": "vscode-extension-basic",
-  "displayName": "Basic VSCode Extension",
-  "description": "A basic VSCode extension with activity bar and button functionality",
-  "version": "0.0.1",
-  "publisher": "basic-extension-publisher",
-  "engines": {
-    "vscode": "^1.75.0"
-  },
-  "categories": [
-    "Other"
-  ],
-  "activationEvents": [],
-  "main": "./out/extension.js",
-  "contributes": {
-    "viewsContainers": {
-      "activitybar": [
-        {
-          "id": "basicExtension",
-          "title": "Basic Extension",
-          "icon": "./src/assets/icon.svg"
-        }
-      ]
+    "name": "vscode-extension-basic",
+    "displayName": "Basic VSCode Extension",
+    "description": "A basic VSCode extension with activity bar and button functionality",
+    "version": "0.0.1",
+    "publisher": "basic-extension-publisher",
+    "engines": {
+        "vscode": "^1.75.0"
     },
-    "views": {
-      "basicExtension": [
-        {
-          "id": "basicExtensionView",
-          "name": "Web Automation Tunnel",
-          "type": "webview"
-        }
-      ]
-    },
-    "commands": [
-      {
-        "command": "basicExtension.executeAction",
-        "title": "Execute Action",
-        "category": "Basic Extension"
-      },
-      {
-        "command": "basicExtension.focusAuxiliaryBar",
-        "title": "Focus Auxiliary Bar",
-        "category": "Basic Extension"
-      },
-      {
-        "command": "webAutomationTunnel.startServer",
-        "title": "Start Web Automation Server",
-        "category": "Web Automation Tunnel"
-      },
-      {
-        "command": "webAutomationTunnel.stopServer",
-        "title": "Stop Web Automation Server",
-        "category": "Web Automation Tunnel"
-      },
-      {
-        "command": "webAutomationTunnel.openConfiguration",
-        "title": "Open Configuration",
-        "category": "Web Automation Tunnel"
-      },
-      {
-        "command": "webAutomationTunnel.resetConfiguration",
-        "title": "Reset Configuration to Defaults",
-        "category": "Web Automation Tunnel"
-      },
-      {
-        "command": "webAutomationTunnel.toggleUI",
-        "title": "Toggle Enhanced/Basic UI",
-        "category": "Web Automation Tunnel"
-      },
-      {
-        "command": "webAutomationTunnel.runIntegrationTest",
-        "title": "Run Enhanced UI Integration Test",
-        "category": "Web Automation Tunnel"
-      }
+    "categories": [
+        "Other"
     ],
-    "configuration": {
-      "title": "Web Automation Tunnel",
-      "properties": {
-        "webAutomationTunnel.httpPort": {
-          "type": "number",
-          "default": 8080,
-          "minimum": 1024,
-          "maximum": 65535,
-          "description": "Port number for the HTTP server"
+    "activationEvents": [
+        "onStartupFinished"
+    ],
+    "main": "./out/extension.js",
+    "contributes": {
+        "viewsContainers": {
+            "activitybar": [{
+                "id": "basicExtension",
+                "title": "Basic Extension",
+                "icon": "./src/assets/icon.svg"
+            }]
         },
-        "webAutomationTunnel.websocketPort": {
-          "type": "number",
-          "default": 8081,
-          "minimum": 1024,
-          "maximum": 65535,
-          "description": "Port number for the WebSocket server (defaults to HTTP port + 1)"
+        "views": {
+            "basicExtension": [{
+                "id": "basicExtensionView",
+                "name": "Web Automation Tunnel",
+                "type": "webview"
+            }]
         },
-        "webAutomationTunnel.allowedOrigins": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "default": [
-            "*"
-          ],
-          "description": "List of allowed origins for CORS and WebSocket connections"
-        },
-        "webAutomationTunnel.maxConnections": {
-          "type": "number",
-          "default": 10,
-          "minimum": 1,
-          "maximum": 100,
-          "description": "Maximum number of concurrent WebSocket connections"
-        },
-        "webAutomationTunnel.enableCors": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable Cross-Origin Resource Sharing (CORS) support"
-        },
-        "webAutomationTunnel.useEnhancedUI": {
-          "type": "boolean",
-          "default": true,
-          "description": "Use the enhanced chat-like UI instead of the basic interface"
+        "commands": [{
+                "command": "basicExtension.executeAction",
+                "title": "Execute Action",
+                "category": "Basic Extension"
+            },
+            {
+                "command": "basicExtension.focusAuxiliaryBar",
+                "title": "Focus Auxiliary Bar",
+                "category": "Basic Extension"
+            },
+            {
+                "command": "webAutomationTunnel.startServer",
+                "title": "Start Web Automation Server",
+                "category": "Web Automation Tunnel"
+            },
+            {
+                "command": "webAutomationTunnel.stopServer",
+                "title": "Stop Web Automation Server",
+                "category": "Web Automation Tunnel"
+            },
+            {
+                "command": "webAutomationTunnel.openConfiguration",
+                "title": "Open Configuration",
+                "category": "Web Automation Tunnel"
+            },
+            {
+                "command": "webAutomationTunnel.resetConfiguration",
+                "title": "Reset Configuration to Defaults",
+                "category": "Web Automation Tunnel"
+            },
+            {
+                "command": "webAutomationTunnel.toggleUI",
+                "title": "Toggle Enhanced/Basic UI",
+                "category": "Web Automation Tunnel"
+            },
+            {
+                "command": "webAutomationTunnel.runIntegrationTest",
+                "title": "Run Enhanced UI Integration Test",
+                "category": "Web Automation Tunnel"
+            },
+            {
+                "command": "webAutomationTunnel.startTunnel",
+                "title": "Start Cloudflare Tunnel",
+                "category": "Web Automation Tunnel"
+            },
+            {
+                "command": "webAutomationTunnel.stopTunnel",
+                "title": "Stop Cloudflare Tunnel",
+                "category": "Web Automation Tunnel"
+            },
+            {
+                "command": "webAutomationTunnel.installCloudflared",
+                "title": "Install Cloudflare Tunnel",
+                "category": "Web Automation Tunnel"
+            },
+            {
+                "command": "webAutomationTunnel.tunnelStatus",
+                "title": "Check Tunnel Status",
+                "category": "Web Automation Tunnel"
+            }
+        ],
+        "configuration": {
+            "title": "Web Automation Tunnel",
+            "properties": {
+                "webAutomationTunnel.httpPort": {
+                    "type": "number",
+                    "default": 8080,
+                    "minimum": 1024,
+                    "maximum": 65535,
+                    "description": "Port number for the HTTP server"
+                },
+                "webAutomationTunnel.websocketPort": {
+                    "type": "number",
+                    "default": 8081,
+                    "minimum": 1024,
+                    "maximum": 65535,
+                    "description": "Port number for the WebSocket server (defaults to HTTP port + 1)"
+                },
+                "webAutomationTunnel.allowedOrigins": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "default": [
+                        "*"
+                    ],
+                    "description": "List of allowed origins for CORS and WebSocket connections"
+                },
+                "webAutomationTunnel.maxConnections": {
+                    "type": "number",
+                    "default": 10,
+                    "minimum": 1,
+                    "maximum": 100,
+                    "description": "Maximum number of concurrent WebSocket connections"
+                },
+                "webAutomationTunnel.enableCors": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Enable Cross-Origin Resource Sharing (CORS) support"
+                },
+                "webAutomationTunnel.useEnhancedUI": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Use the enhanced chat-like UI instead of the basic interface"
+                },
+                "webAutomationTunnel.autoStartTunnel": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Automatically start Cloudflare tunnel when server starts"
+                }
+            }
         }
-      }
+    },
+    "scripts": {
+        "vscode:prepublish": "npm run build",
+        "compile": "tsc -p ./",
+        "compile:watch": "tsc -watch -p ./",
+"copy-assets": "xcopy /Y \"src\\webview\\panel.html\" \"out\\webview\\\"",
+"copy-react-dist": "xcopy /E /I /Y \"src\\webview\\react-frontend\\dist\" \"out\\webview\\react-frontend\\dist\\\"",
+        "build:vue": "cd src/webview/react-frontend && npm run build",
+        "build:vue:dev": "cd src/webview/react-frontend && npm run build",
+        "build:vue:prod": "cd src/webview/react-frontend && npm run build",
+        "dev:vue": "cd src/webview/vue-frontend && npm run dev",
+        "start:vue": "cd src/webview/vue-frontend && npm run dev",
+        "pretest": "npm run build",
+        "lint": "eslint src --ext ts",
+        "lint:vue": "cd src/webview/vue-frontend && npm run lint",
+        "clean": "rimraf out",
+        "clean:vue": "cd src/webview/vue-frontend && npm run clean",
+        "build": "npm run clean && npm run compile && npm run copy-assets && npm run build:vue:prod && npm run copy-react-dist",
+        "dev": "npm run compile && npm run copy-assets && npm run build:vue:dev && npm run copy-react-dist",
+        "package": "npm run build && vsce package"
+    },
+    "devDependencies": {
+        "@types/node": "16.x",
+        "@types/vscode": "^1.74.0",
+        "@typescript-eslint/eslint-plugin": "^5.45.0",
+        "@typescript-eslint/parser": "^5.45.0",
+        "autoprefixer": "^10.4.21",
+        "eslint": "^8.28.0",
+        "postcss": "^8.5.6",
+        "rimraf": "^3.0.2",
+        "tailwindcss": "^4.1.12",
+        "typescript": "^5.0.0"
+    },
+    "dependencies": {
+        "@types/uuid": "^10.0.0",
+        "@types/ws": "^8.18.1",
+        "uuid": "^11.1.0",
+        "ws": "^8.18.3"
     }
-  },
-  "scripts": {
-    "vscode:prepublish": "npm run build",
-    "compile": "tsc -p ./",
-    "compile:watch": "tsc -watch -p ./",
-    "copy-assets": "xcopy /Y \"src\\webview\\panel.html\" \"out\\webview\\\"",
-    "copy-react-dist": "xcopy /E /I /Y \"src\\webview\\react-frontend\\dist\" \"out\\webview\\react-frontend\\dist\\\"",
-    "build:vue": "cd src/webview/react-frontend && npm run build",
-    "build:vue:dev": "cd src/webview/react-frontend && npm run build",
-    "build:vue:prod": "cd src/webview/react-frontend && npm run build",
-    "dev:vue": "cd src/webview/vue-frontend && npm run dev",
-    "start:vue": "cd src/webview/vue-frontend && npm run dev",
-    "pretest": "npm run build",
-    "lint": "eslint src --ext ts",
-    "lint:vue": "cd src/webview/vue-frontend && npm run lint",
-    "clean": "rimraf out",
-    "clean:vue": "cd src/webview/vue-frontend && npm run clean",
-    "build": "npm run clean && npm run compile && npm run copy-assets && npm run build:vue:prod && npm run copy-react-dist",
-    "dev": "npm run compile && npm run copy-assets && npm run build:vue:dev && npm run copy-react-dist",
-    "package": "npm run build && vsce package"
-  },
-  "devDependencies": {
-    "@types/node": "16.x",
-    "@types/vscode": "^1.74.0",
-    "@typescript-eslint/eslint-plugin": "^5.45.0",
-    "@typescript-eslint/parser": "^5.45.0",
-    "autoprefixer": "^10.4.21",
-    "eslint": "^8.28.0",
-    "postcss": "^8.5.6",
-    "rimraf": "^3.0.2",
-    "tailwindcss": "^4.1.12",
-    "typescript": "^5.0.0"
-  },
-  "dependencies": {
-    "@types/uuid": "^10.0.0",
-    "@types/ws": "^8.18.1",
-    "uuid": "^11.1.0",
-    "ws": "^8.18.3"
-  }
 }

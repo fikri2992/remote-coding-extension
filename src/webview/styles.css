@@ -1,0 +1,414 @@
+body {
+    font-family: var(--vscode-font-family);
+    font-size: var(--vscode-font-size);
+    font-weight: var(--vscode-font-weight);
+    color: var(--vscode-foreground);
+    background-color: var(--vscode-editor-background);
+    margin: 0;
+    padding: 16px;
+}
+
+.container {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.section {
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 4px;
+    padding: 16px;
+    background-color: var(--vscode-panel-background);
+}
+.title {
+    font-size: 16px;
+    font-weight: 600;
+    margin: 0 0 8px 0;
+    color: var(--vscode-foreground);
+}
+
+.section-title {
+    font-size: 14px;
+    font-weight: 600;
+    margin: 0 0 12px 0;
+    color: var(--vscode-foreground);
+}
+.description {
+    font-size: 13px;
+    color: var(--vscode-descriptionForeground);
+    margin: 0 0 16px 0;
+    line-height: 1.4;
+}
+
+.status-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.status-dot.running {
+    background-color: var(--vscode-testing-iconPassed);
+}
+
+.status-dot.stopped {
+    background-color: var(--vscode-testing-iconFailed);
+}
+
+.status-dot.loading {
+    background-color: var(--vscode-testing-iconQueued);
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+.status-dot.error {
+    background-color: var(--vscode-errorForeground);
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.status-text {
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.server-info {
+    background-color: var(--vscode-textCodeBlock-background);
+    border: 1px solid var(--vscode-textBlockQuote-border);
+    border-radius: 3px;
+    padding: 12px;
+    margin: 12px 0;
+    font-family: var(--vscode-editor-font-family);
+    font-size: 12px;
+}
+
+.info-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 6px;
+}
+
+.info-row:last-child {
+    margin-bottom: 0;
+}
+
+.info-label {
+    color: var(--vscode-descriptionForeground);
+    font-weight: 500;
+}
+
+.info-value {
+    color: var(--vscode-foreground);
+    font-family: monospace;
+}
+.action-button {
+    background-color: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    border: 1px solid var(--vscode-button-border, transparent);
+    border-radius: 2px;
+    padding: 8px 16px;
+    font-size: 13px;
+    font-family: var(--vscode-font-family);
+    cursor: pointer;
+    outline: none;
+    transition: background-color 0.1s ease;
+    min-height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.action-button:hover:not(:disabled) {
+    background-color: var(--vscode-button-hoverBackground);
+}
+
+.action-button:active:not(:disabled) {
+    background-color: var(--vscode-button-background);
+    transform: translateY(1px);
+}
+
+.action-button:focus {
+    outline: 1px solid var(--vscode-focusBorder);
+    outline-offset: 2px;
+}
+
+.action-button:disabled {
+    background-color: var(--vscode-button-secondaryBackground);
+    color: var(--vscode-button-secondaryForeground);
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.button-group {
+    display: flex;
+    gap: 8px;
+}
+
+.secondary-button {
+    background-color: var(--vscode-button-secondaryBackground);
+    color: var(--vscode-button-secondaryForeground);
+}
+
+.secondary-button:hover:not(:disabled) {
+    background-color: var(--vscode-button-secondaryHoverBackground);
+}
+
+.error-message {
+    background-color: var(--vscode-inputValidation-errorBackground);
+    border: 1px solid var(--vscode-inputValidation-errorBorder);
+    color: var(--vscode-errorForeground);
+    padding: 8px 12px;
+    border-radius: 3px;
+    font-size: 12px;
+    margin-top: 8px;
+}
+
+.clients-list {
+    max-height: 120px;
+    overflow-y: auto;
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 3px;
+    background-color: var(--vscode-editor-background);
+}
+
+.client-item {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--vscode-panel-border);
+    font-size: 12px;
+}
+
+.client-item:last-child {
+    border-bottom: none;
+}
+
+.client-id {
+    font-family: monospace;
+    color: var(--vscode-textLink-foreground);
+}
+
+.client-time {
+    color: var(--vscode-descriptionForeground);
+    font-size: 11px;
+}
+
+.hidden {
+    display: none;
+}
+
+/* Tab styles */
+.tab-container {
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 4px;
+    background-color: var(--vscode-panel-background);
+}
+
+.tab-buttons {
+    display: flex;
+    border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.tab-button {
+    background: none;
+    border: none;
+    padding: 12px 16px;
+    font-size: 13px;
+    font-family: var(--vscode-font-family);
+    color: var(--vscode-foreground);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.1s ease;
+}
+
+.tab-button:hover {
+    background-color: var(--vscode-toolbar-hoverBackground);
+}
+
+.tab-button.active {
+    color: var(--vscode-textLink-foreground);
+    border-bottom-color: var(--vscode-textLink-foreground);
+}
+
+.tab-content {
+    display: none;
+    padding: 16px;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+/* Form styles */
+.form-group {
+    margin-bottom: 16px;
+}
+
+.form-label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--vscode-foreground);
+    margin-bottom: 4px;
+}
+
+.form-input {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid var(--vscode-input-border);
+    border-radius: 2px;
+    background-color: var(--vscode-input-background);
+    color: var(--vscode-input-foreground);
+    font-family: var(--vscode-font-family);
+    font-size: 13px;
+}
+
+.form-input:focus {
+    outline: 1px solid var(--vscode-focusBorder);
+}
+
+.form-checkbox {
+    margin-right: 8px;
+}
+
+.form-description {
+    font-size: 12px;
+    color: var(--vscode-descriptionForeground);
+    margin-top: 4px;
+}
+
+.success-message {
+    background-color: var(--vscode-notificationsInfoIcon-foreground, #3794ff);
+    border: 1px solid var(--vscode-notificationsInfoIcon-foreground, #3794ff);
+    color: var(--vscode-button-foreground);
+    padding: 8px 12px;
+    border-radius: 3px;
+    font-size: 12px;
+    margin-top: 8px;
+}
+
+.form-checkbox-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    body {
+        padding: 12px;
+    }
+
+    .section {
+        padding: 12px;
+    }
+
+    .button-group {
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .action-button {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .tab-buttons {
+        flex-wrap: wrap;
+    }
+
+    .tab-button {
+        flex: 1;
+        min-width: 120px;
+        padding: 10px 12px;
+        font-size: 12px;
+    }
+
+    .info-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+    }
+
+    .server-info {
+        padding: 10px;
+    }
+
+    .clients-list {
+        max-height: 100px;
+    }
+}
+
+@media (max-width: 480px) {
+    body {
+        padding: 8px;
+    }
+
+    .title {
+        font-size: 14px;
+    }
+
+    .section-title {
+        font-size: 13px;
+    }
+
+    .description {
+        font-size: 12px;
+    }
+
+    .section {
+        padding: 8px;
+    }
+
+    .status-text {
+        font-size: 12px;
+    }
+
+    .action-button {
+        padding: 6px 12px;
+        font-size: 12px;
+        min-height: 32px;
+    }
+
+    .tab-button {
+        padding: 8px 10px;
+        font-size: 11px;
+        min-width: 100px;
+    }
+
+    .form-input {
+        font-size: 12px;
+        padding: 5px 6px;
+    }
+
+    .form-description {
+        font-size: 11px;
+    }
+
+    .server-info {
+        padding: 8px;
+        font-size: 11px;
+    }
+
+    .client-item {
+        padding: 6px 10px;
+        font-size: 11px;
+    }
+
+    .client-time {
+        font-size: 10px;
+    }
+
+    .error-message {
+        padding: 6px 10px;
+        font-size: 11px;
+    }
+}

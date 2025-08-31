@@ -127,7 +127,7 @@
         "vscode:prepublish": "npm run build",
         "compile": "tsc -p ./",
         "compile:watch": "tsc -watch -p ./",
-"copy-assets": "xcopy /Y \"src\\webview\\panel.html\" \"out\\webview\\\"",
+"copy-assets": "xcopy /Y \"src\\webview\\panel.html\" \"out\\webview\\\" && xcopy /Y \"src\\webview\\styles.css\" \"out\\webview\\\" && xcopy /Y \"src\\webview\\script.js\" \"out\\webview\\\"",
 "copy-react-dist": "xcopy /E /I /Y \"src\\webview\\react-frontend\\dist\" \"out\\webview\\react-frontend\\dist\\\"",
         "build:vue": "cd src/webview/react-frontend && npm run build",
         "build:vue:dev": "cd src/webview/react-frontend && npm run build",

@@ -128,6 +128,14 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
             const htmlPath = path.join(this._extensionUri.fsPath, 'out', 'webview', 'panel.html');
             let html = fs.readFileSync(htmlPath, 'utf8');
             
+            // Convert CSS and JS file paths to webview URIs
+            const stylesUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'out', 'webview', 'styles.css'));
+            const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'out', 'webview', 'script.js'));
+            
+            // Replace the relative paths with webview URIs
+            html = html.replace('href="styles.css"', `href="${stylesUri}"`);
+            html = html.replace('src="script.js"', `src="${scriptUri}"`);
+            
             // Add VS Code webview API script
             const vscodeApiScript = 
                 '<script>' +

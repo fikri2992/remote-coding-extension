@@ -5,14 +5,14 @@ import App from './App.vue'
 import { 
   createPersistencePlugin, 
   createDebugPlugin, 
-  createErrorHandlingPlugin,
+  // createErrorHandlingPlugin, // Temporarily unused
   createInitializationPlugin 
 } from './stores/plugins'
 
 // Error handling and debugging services
 import { errorHandler, captureError, addBreadcrumb, createAppError } from './services/error-handler'
 import { debugService } from './services/debug'
-import { AppError } from './types/errors'
+// import { AppError } from './types/errors' // Temporarily unused
 
 // Tailwind CSS
 import './style.css'
@@ -21,7 +21,7 @@ import './style.css'
 errorHandler.initialize({
   enableConsoleLogging: import.meta.env.DEV,
   enableErrorReporting: !import.meta.env.DEV,
-  enableUserNotifications: true,
+  enableUserNotifications: false, // Temporarily disable to prevent notification spam
   maxBreadcrumbs: 100,
   reportingEndpoint: import.meta.env['VITE_ERROR_REPORTING_ENDPOINT'],
   beforeSend: (errorReport) => {
@@ -50,22 +50,23 @@ pinia.use(createPersistencePlugin({
 
 pinia.use(createDebugPlugin())
 
-pinia.use(createErrorHandlingPlugin({
-  onError: (error, store, action) => {
-    // Capture store errors with enhanced error handler
-    captureError(createAppError(
-      `Store error in ${store}.${action}: ${error.message}`,
-      'unknown',
-      'medium',
-      { store, action },
-      {
-        title: 'Application State Error',
-        message: 'An error occurred while updating the application state. The app will continue to work, but some features may not function correctly.',
-        reportable: true
-      }
-    ))
-  }
-}))
+// Temporarily disable Pinia error handling plugin to prevent notification loops
+// pinia.use(createErrorHandlingPlugin({
+//   onError: (error, store, action) => {
+//     // Capture store errors with enhanced error handler
+//     captureError(createAppError(
+//       `Store error in ${store}.${action}: ${error.message}`,
+//       'unknown',
+//       'medium',
+//       { store, action },
+//       {
+//         title: 'Application State Error',
+//         message: 'An error occurred while updating the application state. The app will continue to work, but some features may not function correctly.',
+//         reportable: true
+//       }
+//     ))
+//   }
+// }))
 
 pinia.use(createInitializationPlugin({
   settings: async () => {
@@ -98,43 +99,55 @@ app.use(router)
 app.config.errorHandler = (err, instance, info) => {
   const componentName = instance?.$options.name || instance?.$options.__name || 'Unknown'
   
-  // Create enhanced error with context
-  const appError = createAppError(
-    (err as Error).message || 'Unknown Vue error',
-    'ui',
-    'high',
-    {
-      component: componentName,
-      action: 'vue_error_handler',
-      errorInfo: info
-    },
-    {
-      title: 'Interface Error',
-      message: 'An error occurred in the user interface. The page will try to recover automatically.',
-      showTechnicalDetails: import.meta.env.DEV,
-      reportable: true,
-      recoveryActions: [
-        {
-          label: 'Refresh Component',
-          action: async () => {
-            // Try to force re-render the component
-            if (instance && instance.$forceUpdate) {
-              instance.$forceUpdate()
-            }
-          },
-          primary: true
-        },
-        {
-          label: 'Reload Page',
-          action: () => {
-            window.location.reload()
-          }
-        }
-      ]
-    }
-  )
+  // Log the error for debugging but don't show notifications repeatedly
+  console.error(`Vue error in component ${componentName}:`, err)
+  console.error('Error info:', info)
+  console.error('Component instance:', instance)
   
-  captureError(appError)
+  // Only capture error for reporting, don't show user notifications for now
+  // to prevent infinite notification loops
+  addBreadcrumb('vue', `Error in ${componentName}: ${(err as Error).message}`, 'error', {
+    component: componentName,
+    errorInfo: info
+  })
+  
+  // Uncomment this if you want to re-enable user notifications after fixing the root cause
+  // const appError = createAppError(
+  //   (err as Error).message || 'Unknown Vue error',
+  //   'ui',
+  //   'high',
+  //   {
+  //     component: componentName,
+  //     action: 'vue_error_handler',
+  //     errorInfo: info
+  //   },
+  //   {
+  //     title: 'Interface Error',
+  //     message: 'An error occurred in the user interface. The page will try to recover automatically.',
+  //     showTechnicalDetails: import.meta.env.DEV,
+  //     reportable: true,
+  //     recoveryActions: [
+  //       {
+  //         label: 'Refresh Component',
+  //         action: async () => {
+  //           // Try to force re-render the component
+  //           if (instance && instance.$forceUpdate) {
+  //             instance.$forceUpdate()
+  //           }
+  //         },
+  //         primary: true
+  //       },
+  //       {
+  //         label: 'Reload Page',
+  //         action: () => {
+  //           window.location.reload()
+  //         }
+  //       }
+  //     ]
+  //   }
+  // )
+  // 
+  // captureError(appError)
 }
 
 // Enhanced warning handler
@@ -152,48 +165,50 @@ app.config.warnHandler = (msg, instance, trace) => {
   }
 }
 
-// Global event listeners for enhanced error handling
-window.addEventListener('app-error', async (event: Event) => {
-  const customEvent = event as CustomEvent
-  const { error } = customEvent.detail
-  if (error instanceof AppError) {
-    // Show user notification for AppErrors
-    try {
-      const { useUIStore } = await import('./stores/ui')
-      const uiStore = useUIStore()
-      
-      if (error.userFriendly) {
-        uiStore.addNotification(
-          error.userFriendly.message,
-          'error',
-          error.severity !== 'critical', // Don't auto-close critical errors
-          error.severity === 'critical' ? 0 : 5000
-        )
-      }
-    } catch (importError) {
-      console.error('Failed to import UI store for error notification:', importError)
-    }
-  }
-})
+// Global event listeners for enhanced error handling - TEMPORARILY DISABLED
+// to prevent infinite notification loops while debugging
 
-window.addEventListener('app-notification', async (event: Event) => {
-  const customEvent = event as CustomEvent
-  const { type, message, duration } = customEvent.detail
-  
-  try {
-    const { useUIStore } = await import('./stores/ui')
-    const uiStore = useUIStore()
-    
-    uiStore.addNotification(
-      message,
-      type,
-      true, // autoClose
-      duration || 5000
-    )
-  } catch (importError) {
-    console.error('Failed to import UI store for notification:', importError)
-  }
-})
+// window.addEventListener('app-error', async (event: Event) => {
+//   const customEvent = event as CustomEvent
+//   const { error } = customEvent.detail
+//   if (error instanceof AppError) {
+//     // Show user notification for AppErrors
+//     try {
+//       const { useUIStore } = await import('./stores/ui')
+//       const uiStore = useUIStore()
+//       
+//       if (error.userFriendly) {
+//         uiStore.addNotification(
+//           error.userFriendly.message,
+//           'error',
+//           error.severity !== 'critical', // Don't auto-close critical errors
+//           error.severity === 'critical' ? 0 : 5000
+//         )
+//       }
+//     } catch (importError) {
+//       console.error('Failed to import UI store for error notification:', importError)
+//     }
+//   }
+// })
+
+// window.addEventListener('app-notification', async (event: Event) => {
+//   const customEvent = event as CustomEvent
+//   const { type, message, duration } = customEvent.detail
+//   
+//   try {
+//     const { useUIStore } = await import('./stores/ui')
+//     const uiStore = useUIStore()
+//     
+//     uiStore.addNotification(
+//       message,
+//       type,
+//       true, // autoClose
+//       duration || 5000
+//     )
+//   } catch (importError) {
+//     console.error('Failed to import UI store for notification:', importError)
+//   }
+// })
 
 // Add breadcrumb for app initialization
 addBreadcrumb('initialization', 'Vue application starting', 'info', {
@@ -206,19 +221,5 @@ app.mount('#app')
 // Add breadcrumb for successful mount
 addBreadcrumb('initialization', 'Vue application mounted successfully', 'info')
 
-// Initialize connection service after app is mounted
-import('./services/connection').then(({ connectionService }) => {
-  connectionService.initialize().catch(error => {
-    captureError(createAppError(
-      'Failed to initialize connection service',
-      'websocket',
-      'high',
-      { errorInfo: error.message },
-      {
-        title: 'Connection Service Error',
-        message: 'Failed to initialize the connection to VS Code extension. Some features may not work.',
-        reportable: true
-      }
-    ))
-  })
-})
+// Connection service is available but not auto-initialized
+// Users can manually connect via the UI when needed

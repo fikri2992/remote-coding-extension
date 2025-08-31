@@ -6,6 +6,7 @@ export class ConnectionService {
   private isInitialized = false
   private isConnected = false
   private connectionUrl = ''
+  private hasShownConnectionError = false // Track if we've already shown the connection error
   private eventHandlers: {
     onConnect?: () => void
     onDisconnect?: () => void
@@ -35,8 +36,8 @@ export class ConnectionService {
 
     addBreadcrumb('connection', 'Initializing connection service', 'info')
 
-    // Attempt initial connection
-    await this.connect()
+    // Don't automatically connect - let users connect manually
+    // await this.connect()
 
     this.isInitialized = true
     addBreadcrumb('connection', 'Connection service initialized', 'info')
@@ -56,6 +57,7 @@ export class ConnectionService {
       
       this.ws.onopen = () => {
         this.isConnected = true
+        this.hasShownConnectionError = false // Reset error flag on successful connection
         addBreadcrumb('connection', 'WebSocket connection established', 'info')
         this.eventHandlers.onConnect?.()
         
@@ -90,30 +92,34 @@ export class ConnectionService {
       const errorMessage = error instanceof Error ? error.message : 'Unknown connection error'
       addBreadcrumb('connection', `Connection failed: ${errorMessage}`, 'error')
       
-      captureError(createAppError(
-        `Failed to connect to WebSocket server: ${errorMessage}`,
-        'websocket',
-        'high',
-        { url: this.getWebSocketUrl() },
-        {
-          title: 'Connection Error',
-          message: 'Unable to connect to the VS Code extension server. Some features may not work properly.',
-          reportable: true,
-          recoveryActions: [
-            {
-              label: 'Retry Connection',
-              action: () => this.connect(),
-              primary: true
-            },
-            {
-              label: 'Check Extension Status',
-              action: () => {
-                console.log('Check if the Web Automation Tunnel extension is running')
+      // Only show the error notification once, not on every retry
+      if (!this.hasShownConnectionError) {
+        this.hasShownConnectionError = true
+        captureError(createAppError(
+          `Failed to connect to WebSocket server: ${errorMessage}`,
+          'websocket',
+          'high',
+          { url: this.getWebSocketUrl() },
+          {
+            title: 'Connection Error',
+            message: 'Unable to connect to the VS Code extension server. Some features may not work properly.',
+            reportable: true,
+            recoveryActions: [
+              {
+                label: 'Retry Connection',
+                action: () => this.connect(),
+                primary: true
+              },
+              {
+                label: 'Check Extension Status',
+                action: () => {
+                  console.log('Check if the Web Automation Tunnel extension is running')
+                }
               }
-            }
-          ]
-        }
-      ))
+            ]
+          }
+        ))
+      }
 
       this.scheduleReconnect()
     }
@@ -136,6 +142,7 @@ export class ConnectionService {
     }
     
     this.isConnected = false
+    this.hasShownConnectionError = false // Reset error flag on manual disconnect
   }
 
   /**

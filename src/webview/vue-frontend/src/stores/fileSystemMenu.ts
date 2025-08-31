@@ -103,14 +103,12 @@ export const useFileSystemMenuStore = defineStore('fileSystemMenu', () => {
         try {
           isLoading.value = true
           
-          // Wait for connection if not connected
-          if (!isConnected.value) {
-            console.log('Waiting for WebSocket connection...')
-            await performanceMonitor.measure(
-              'websocket-connection-wait',
-              () => waitForConnection()
-            )
-          }
+          // Temporarily skip connection check to prevent infinite loops
+          console.log('File system menu initialization - skipping connection check')
+          // TODO: Re-enable connection handling after fixing the notification loop issue
+          // if (!isConnected.value) {
+          //   console.log('WebSocket not connected - file system menu will work in offline mode')
+          // }
           
           // Load persisted state
           loadPersistedState()
@@ -895,8 +893,8 @@ export const useFileSystemMenuStore = defineStore('fileSystemMenu', () => {
     }
   }
 
-  // Watch for connection changes
-  watch(isConnected, handleConnectionChange)
+  // Watch for connection changes - TEMPORARILY DISABLED
+  // watch(isConnected, handleConnectionChange)
 
   // Cleanup on unmount
   onUnmounted(() => {

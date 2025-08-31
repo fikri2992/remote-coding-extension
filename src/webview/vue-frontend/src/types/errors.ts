@@ -27,6 +27,7 @@ export interface ErrorReport {
   category: ErrorCategory
   fingerprint?: string
   breadcrumbs: Breadcrumb[]
+  suppressUserNotification?: boolean
 }
 
 export type ErrorSeverity = 'low' | 'medium' | 'high' | 'critical'

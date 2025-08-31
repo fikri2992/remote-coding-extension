@@ -103,20 +103,16 @@ export const useFileSystemMenuStore = defineStore('fileSystemMenu', () => {
         try {
           isLoading.value = true
           
-          // Temporarily skip connection check to prevent infinite loops
-          console.log('File system menu initialization - skipping connection check')
-          // TODO: Re-enable connection handling after fixing the notification loop issue
-          // if (!isConnected.value) {
-          //   console.log('WebSocket not connected - file system menu will work in offline mode')
-          // }
+          // File system menu now works independently of WebSocket connection
+          console.log('File system menu initialization - working in offline mode')
           
           // Load persisted state
           loadPersistedState()
           
-          // Set up file change event handling
+          // Set up file change event handling (will work when connection is available)
           setupFileWatching()
           
-          // Load file tree with performance monitoring
+          // Load file tree with performance monitoring - works offline
           const nodes = await performanceMonitor.measureFileTreeLoad(
             initialPath || '.',
             () => fileSystem.loadFileTree(initialPath)
@@ -132,9 +128,13 @@ export const useFileSystemMenuStore = defineStore('fileSystemMenu', () => {
             }
           })
           
-          // Start watching the root path
-          if (initialPath) {
-            await startWatchingPath(initialPath)
+          // Only start watching if connected (optional enhancement)
+          if (isConnected.value && initialPath) {
+            try {
+              await startWatchingPath(initialPath)
+            } catch (error) {
+              console.log('File watching not available - continuing without it')
+            }
           }
           
           lastSync.value = new Date()
@@ -143,7 +143,8 @@ export const useFileSystemMenuStore = defineStore('fileSystemMenu', () => {
           memoryMonitor.logMemoryUsage('After File System Menu Initialization')
         } catch (error) {
           console.error('Failed to initialize file system menu:', error)
-          throw error
+          // Don't throw error - allow menu to work in degraded mode
+          console.log('File system menu will continue in degraded mode')
         } finally {
           isLoading.value = false
         }
@@ -233,17 +234,19 @@ export const useFileSystemMenuStore = defineStore('fileSystemMenu', () => {
   }
 
   const performSearch = async (query: string) => {
-    if (!isConnected.value) {
-      searchError.value = 'Not connected to server'
-      return
-    }
-
     return performanceMonitor.measure(
       'file-search',
       async () => {
         try {
           searchLoading.value = true
           searchError.value = null
+          
+          if (!isConnected.value) {
+            // Perform local search when not connected
+            const localResults = performLocalSearch(query)
+            searchResults.value = localResults
+            return
+          }
           
           const results = await fileSystem.searchFiles({
             query,
@@ -269,14 +272,35 @@ export const useFileSystemMenuStore = defineStore('fileSystemMenu', () => {
           })
         } catch (error) {
           console.error('Search failed:', error)
-          searchError.value = error instanceof Error ? error.message : 'Search failed'
-          searchResults.value = []
+          // Fallback to local search on error
+          const localResults = performLocalSearch(query)
+          searchResults.value = localResults
+          if (localResults.length === 0) {
+            searchError.value = isConnected.value 
+              ? (error instanceof Error ? error.message : 'Search failed')
+              : 'Search limited to loaded files (not connected to server)'
+          }
         } finally {
           searchLoading.value = false
         }
       },
       { query, resultCount: searchResults.value.length }
     )
+  }
+
+  const performLocalSearch = (query: string): FileSystemNode[] => {
+    const lowerQuery = query.toLowerCase()
+    const results: FileSystemNode[] = []
+    
+    for (const node of fileTree.value.values()) {
+      if (node.name.toLowerCase().includes(lowerQuery) || 
+          node.path.toLowerCase().includes(lowerQuery)) {
+        results.push(node)
+        if (results.length >= 50) break // Limit local search results
+      }
+    }
+    
+    return results
   }
 
   const clearSearch = () => {
@@ -475,12 +499,19 @@ export const useFileSystemMenuStore = defineStore('fileSystemMenu', () => {
   }
 
   const openInEditor = async (path: string) => {
-    if (!isConnected.value) {
-      throw new Error('Not connected to VS Code. Please ensure the extension is running and the connection is established.')
-    }
-
     if (!path) {
       throw new Error('No file path provided')
+    }
+
+    if (!isConnected.value) {
+      const fileName = fileSystem.getFileName(path)
+      uiStore.addNotification(
+        `Cannot open "${fileName}" - not connected to VS Code. Please connect first.`, 
+        'warning', 
+        true, 
+        5000
+      )
+      throw new Error('Not connected to VS Code. Please ensure the extension is running and connect manually.')
     }
 
     try {
@@ -548,12 +579,19 @@ export const useFileSystemMenuStore = defineStore('fileSystemMenu', () => {
   }
 
   const revealInExplorer = async (path: string) => {
-    if (!isConnected.value) {
-      throw new Error('Not connected to VS Code. Please ensure the extension is running and the connection is established.')
-    }
-
     if (!path) {
       throw new Error('No file path provided')
+    }
+
+    if (!isConnected.value) {
+      const fileName = fileSystem.getFileName(path)
+      uiStore.addNotification(
+        `Cannot reveal "${fileName}" - not connected to VS Code. Please connect first.`, 
+        'warning', 
+        true, 
+        5000
+      )
+      throw new Error('Not connected to VS Code. Please ensure the extension is running and connect manually.')
     }
 
     try {
@@ -621,25 +659,37 @@ export const useFileSystemMenuStore = defineStore('fileSystemMenu', () => {
   }
 
   const refreshFileTree = async () => {
-    if (!isConnected.value) {
-      throw new Error('Not connected to server')
-    }
-
     try {
       isLoading.value = true
-      await fileSystem.refreshFileTree()
       
-      // Update file tree from file system
-      const allNodes = Array.from(fileSystem.fileTree.value.nodes.values())
-      fileTree.value.clear()
-      allNodes.forEach(node => {
-        fileTree.value.set(node.path, node)
-      })
+      if (!isConnected.value) {
+        // In offline mode, just refresh from local file system
+        console.log('Refreshing file tree in offline mode')
+        const nodes = await fileSystem.loadFileTree('.')
+        fileTree.value.clear()
+        nodes.forEach(node => {
+          fileTree.value.set(node.path, node)
+          if (node.children) {
+            addChildrenToMap(node.children)
+          }
+        })
+      } else {
+        // Connected mode - refresh from server
+        await fileSystem.refreshFileTree()
+        
+        // Update file tree from file system
+        const allNodes = Array.from(fileSystem.fileTree.value.nodes.values())
+        fileTree.value.clear()
+        allNodes.forEach(node => {
+          fileTree.value.set(node.path, node)
+        })
+      }
       
       lastSync.value = new Date()
     } catch (error) {
       console.error('Failed to refresh file tree:', error)
-      throw error
+      // Don't throw error - allow graceful degradation
+      uiStore.addNotification('Failed to refresh file tree', 'warning', true, 3000)
     } finally {
       isLoading.value = false
     }

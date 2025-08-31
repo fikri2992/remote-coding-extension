@@ -1,10 +1,15 @@
 <template>
-  <div class="min-h-screen bg-secondary-50 p-6">
-    <div class="max-w-7xl mx-auto">
-      <div class="mb-6">
-        <h1 class="text-3xl font-bold text-secondary-900 mb-2">Automation</h1>
-        <p class="text-secondary-600">Execute VS Code commands and manage server operations</p>
-      </div>
+  <ErrorBoundary
+    :fallback-component="AutomationErrorFallback"
+    @error="handleAutomationError"
+    @retry="retryAutomation"
+  >
+    <div class="min-h-screen bg-secondary-50 p-6">
+      <div class="max-w-7xl mx-auto">
+        <div class="mb-6">
+          <h1 class="text-3xl font-bold text-secondary-900 mb-2">Automation</h1>
+          <p class="text-secondary-600">Execute VS Code commands and manage server operations</p>
+        </div>
 
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <!-- Command Panel -->
@@ -17,15 +22,21 @@
                   v-model="commandInput"
                   placeholder="Enter VS Code command..."
                   class="input-field flex-1"
+                  :class="{ 'opacity-50': !connectionStore.isConnected }"
+                  :disabled="!connectionStore.isConnected"
                   @keyup.enter="executeCommand"
                 />
                 <button
                   class="btn-primary"
                   @click="executeCommand"
-                  :disabled="!commandInput.trim()"
+                  :disabled="!commandInput.trim() || !connectionStore.isConnected"
                 >
                   Execute
                 </button>
+              </div>
+
+              <div v-if="!connectionStore.isConnected" class="text-sm text-amber-600 bg-amber-50 p-2 rounded">
+                ⚠️ Not connected to VS Code. Commands cannot be executed. Please connect first.
               </div>
 
               <div class="text-sm text-secondary-600">
@@ -35,6 +46,8 @@
                     v-for="cmd in quickCommands"
                     :key="cmd.command"
                     class="btn-secondary text-xs"
+                    :class="{ 'opacity-50 cursor-not-allowed': !connectionStore.isConnected }"
+                    :disabled="!connectionStore.isConnected"
                     @click="executeQuickCommand(cmd.command)"
                   >
                     {{ cmd.label }}
@@ -101,14 +114,19 @@
             </div>
           </div>
         </div>
+        </div>
       </div>
     </div>
-  </div>
+  </ErrorBoundary>
 </template>
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useConnectionStore, useUIStore } from '../stores'
+import { connectionService } from '../services/connection'
+import { captureError, createAppError } from '../services/error-handler'
+import ErrorBoundary from '../components/common/ErrorBoundary.vue'
+import FallbackComponents from '../components/common/FallbackComponents.vue'
 
 const connectionStore = useConnectionStore()
 const uiStore = useUIStore()
@@ -139,6 +157,17 @@ const executeCommand = () => {
     return
   }
 
+  // Check connection status
+  if (!connectionStore.isConnected) {
+    uiStore.addNotification(
+      'Cannot execute command - not connected to VS Code. Please connect first.',
+      'warning',
+      true,
+      5000
+    )
+    return
+  }
+
   // Add to history
   commandHistory.value.unshift({
     command: commandInput.value,
@@ -162,6 +191,8 @@ const executeQuickCommand = (command: string) => {
 }
 
 const connect = () => {
+  // Reset connection state before attempting to connect
+  connectionService.resetConnectionState()
   connectionStore.connect('ws://localhost:8081')
   uiStore.addNotification('Connecting to server...', 'info')
 }
@@ -173,5 +204,61 @@ const disconnect = () => {
 
 const formatTime = (date: Date) => {
   return date.toLocaleTimeString()
+}
+
+// Error Fallback Component
+const AutomationErrorFallback = {
+  components: { FallbackComponents },
+  template: `
+    <FallbackComponents 
+      type="automation" 
+      @retry="$emit('retry')" 
+      @reload="$emit('reload')" 
+    />
+  `,
+  emits: ['retry', 'reload']
+}
+
+// Error handling methods
+const handleAutomationError = (error: Error, errorInfo: any) => {
+  const appError = createAppError(
+    `Automation View Error: ${error.message}`,
+    'ui',
+    'medium',
+    {
+      component: 'AutomationView',
+      action: 'automation_view_error',
+      errorInfo
+    },
+    {
+      title: 'Automation Panel Error',
+      message: 'The automation panel encountered an error. You can try refreshing or continue using other features.',
+      reportable: true,
+      recoveryActions: [
+        {
+          label: 'Retry Loading',
+          action: () => retryAutomation(),
+          primary: true
+        },
+        {
+          label: 'Reload Page',
+          action: () => window.location.reload()
+        }
+      ]
+    }
+  )
+  
+  captureError(appError)
+}
+
+const retryAutomation = () => {
+  // Reset component state
+  commandInput.value = ''
+  commandHistory.value = []
+  
+  // Try to reconnect if needed
+  if (!connectionStore.isConnected && connectionStore.canReconnect) {
+    connect()
+  }
 }
 </script>

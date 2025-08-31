@@ -65,12 +65,42 @@ export const useUIStore = defineStore('ui', () => {
     }
   }
 
+  // Notification throttling state
+  const notificationThrottleMap = ref<Map<string, { count: number; lastShown: number }>>(new Map())
+  const THROTTLE_WINDOW_MS = 3000 // 3 seconds
+  const MAX_SAME_NOTIFICATIONS = 1 // Only allow 1 of the same notification per window
+
   const addNotification = (
     message: string,
     type: 'info' | 'success' | 'warning' | 'error' = 'info',
     autoClose = true,
     duration = 5000
   ) => {
+    // Create throttle key based on message and type
+    const throttleKey = `${type}:${message}`
+    const now = Date.now()
+    const existing = notificationThrottleMap.value.get(throttleKey)
+
+    // Check if we should throttle this notification
+    if (existing) {
+      // If within throttle window and already shown max times, skip
+      if (now - existing.lastShown < THROTTLE_WINDOW_MS && existing.count >= MAX_SAME_NOTIFICATIONS) {
+        console.debug(`Throttled notification: ${message}`)
+        return null // Return null to indicate throttled
+      }
+      
+      // If outside window, reset counter
+      if (now - existing.lastShown >= THROTTLE_WINDOW_MS) {
+        existing.count = 0
+      }
+    }
+
+    // Update throttle tracking
+    notificationThrottleMap.value.set(throttleKey, {
+      count: (existing?.count || 0) + 1,
+      lastShown: now
+    })
+
     const id = `notification-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
     const notification: NotificationItem = {
       id,
@@ -89,7 +119,25 @@ export const useUIStore = defineStore('ui', () => {
       }, duration)
     }
 
+    // Clean up old throttle entries periodically
+    if (notificationThrottleMap.value.size > 50) {
+      cleanupThrottleMap()
+    }
+
     return id
+  }
+
+  const cleanupThrottleMap = () => {
+    const now = Date.now()
+    const keysToDelete: string[] = []
+    
+    for (const [key, entry] of notificationThrottleMap.value.entries()) {
+      if (now - entry.lastShown > THROTTLE_WINDOW_MS * 2) {
+        keysToDelete.push(key)
+      }
+    }
+    
+    keysToDelete.forEach(key => notificationThrottleMap.value.delete(key))
   }
 
   const removeNotification = (id: string) => {

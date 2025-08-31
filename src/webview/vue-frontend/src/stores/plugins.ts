@@ -85,20 +85,76 @@ export function createDebugPlugin() {
 }
 
 /**
- * Pinia plugin for error handling
+ * Pinia plugin for error handling with throttling
  */
 export function createErrorHandlingPlugin(options: {
   onError?: (error: Error, store: string, action: string) => void
+  enableThrottling?: boolean
+  throttleWindowMs?: number
 } = {}) {
+  const { 
+    onError, 
+    enableThrottling = true, 
+    throttleWindowMs = 5000 
+  } = options
+  
+  // Simple throttling mechanism for store errors
+  const errorThrottleMap = new Map<string, { count: number; lastOccurrence: number }>()
+  
+  const shouldThrottleError = (storeId: string, actionName: string, error: Error): boolean => {
+    if (!enableThrottling) return false
+    
+    const errorKey = `${storeId}.${actionName}:${error.message}`
+    const now = Date.now()
+    const existing = errorThrottleMap.get(errorKey)
+    
+    if (!existing) {
+      errorThrottleMap.set(errorKey, { count: 1, lastOccurrence: now })
+      return false
+    }
+    
+    // If within throttle window and already occurred, throttle it
+    if (now - existing.lastOccurrence < throttleWindowMs) {
+      existing.count++
+      existing.lastOccurrence = now
+      return existing.count > 1 // Throttle after first occurrence
+    }
+    
+    // Outside window, reset
+    errorThrottleMap.set(errorKey, { count: 1, lastOccurrence: now })
+    return false
+  }
+  
+  // Cleanup old entries periodically
+  setInterval(() => {
+    const now = Date.now()
+    for (const [key, entry] of errorThrottleMap.entries()) {
+      if (now - entry.lastOccurrence > throttleWindowMs * 2) {
+        errorThrottleMap.delete(key)
+      }
+    }
+  }, throttleWindowMs)
+
   return ({ store }: PiniaPluginContext) => {
-    store.$onAction(({ name, onError }) => {
-      onError((error) => {
-        // Default error handling
-        console.error(`Store action error in ${store.$id}.${name}:`, error)
+    store.$onAction(({ name, onError: actionOnError }) => {
+      actionOnError((error: unknown) => {
+        // Ensure error is an Error instance
+        const errorInstance = error instanceof Error ? error : new Error(String(error))
         
-        // Custom error handler
-        if (options.onError && error instanceof Error) {
-          options.onError(error, store.$id, name)
+        // Check if this error should be throttled
+        const shouldThrottle = shouldThrottleError(store.$id, name, errorInstance)
+        
+        if (!shouldThrottle) {
+          // Default error handling - only log if not throttled
+          console.error(`Store action error in ${store.$id}.${name}:`, errorInstance)
+          
+          // Custom error handler - only call if not throttled
+          if (onError) {
+            onError(errorInstance, store.$id, name)
+          }
+        } else {
+          // Throttled error - only log at debug level
+          console.debug(`Throttled store error in ${store.$id}.${name}:`, errorInstance.message)
         }
       })
     })

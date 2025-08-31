@@ -9,12 +9,17 @@ import type {
   UserFriendlyError
 } from '../types/errors'
 import { AppError } from '../types/errors'
+import { errorThrottler } from './error-throttler'
 
 class ErrorHandlerService {
   private config: ErrorHandlerConfig
   private breadcrumbs: Breadcrumb[] = []
   private errorReports: ErrorReport[] = []
   private sessionId: string
+  private circuitBreakerCount = 0
+  private circuitBreakerResetTime = 0
+  private readonly CIRCUIT_BREAKER_THRESHOLD = 10
+  private readonly CIRCUIT_BREAKER_RESET_INTERVAL = 30000 // 30 seconds
   
   public isInitialized = ref(false)
   public stats = reactive({
@@ -54,7 +59,21 @@ class ErrorHandlerService {
           }
           return errorReport.error.message.includes(pattern)
         })
-        return shouldIgnore ? null : errorReport
+        
+        if (shouldIgnore) {
+          return null
+        }
+
+        // Apply throttling for user notifications
+        const errorKey = errorThrottler.generateErrorKey(errorReport.error, errorReport.context)
+        const shouldShow = errorThrottler.shouldShowError(errorKey, errorReport.severity)
+        
+        if (!shouldShow) {
+          // Still log and report, but don't show user notification
+          return { ...errorReport, suppressUserNotification: true } as any
+        }
+
+        return errorReport
       }
     }
   }
@@ -115,27 +134,47 @@ class ErrorHandlerService {
       fingerprint?: string
     } = {}
   ): string {
-    const errorReport = this.createErrorReport(error, options)
-    
-    if (this.config.beforeSend) {
-      const processedReport = this.config.beforeSend(errorReport)
-      if (!processedReport) {
-        return errorReport.id // Error was filtered out
-      }
+    // Circuit breaker to prevent infinite error loops
+    const now = Date.now()
+    if (now > this.circuitBreakerResetTime) {
+      this.circuitBreakerCount = 0
+      this.circuitBreakerResetTime = now + this.CIRCUIT_BREAKER_RESET_INTERVAL
     }
 
-    this.errorReports.push(errorReport)
-    this.updateStats(errorReport)
+    this.circuitBreakerCount++
+    if (this.circuitBreakerCount > this.CIRCUIT_BREAKER_THRESHOLD) {
+      console.warn('Error handler circuit breaker activated - too many errors in short time')
+      return 'circuit-breaker-active'
+    }
+
+    const errorReport = this.createErrorReport(error, options)
+    let processedReport = errorReport
+    
+    if (this.config.beforeSend) {
+      const result = this.config.beforeSend(errorReport)
+      if (!result) {
+        return errorReport.id // Error was filtered out
+      }
+      processedReport = result
+    }
+
+    this.errorReports.push(processedReport)
+    this.updateStats(processedReport)
 
     if (this.config.enableConsoleLogging) {
-      this.logToConsole(errorReport)
+      this.logToConsole(processedReport)
     }
 
     if (this.config.enableErrorReporting) {
-      this.sendToReportingService(errorReport)
+      this.sendToReportingService(processedReport)
     }
 
-    if (this.config.enableUserNotifications && error instanceof AppError) {
+    // Check if user notifications should be shown (respecting throttling)
+    const shouldShowNotification = this.config.enableUserNotifications && 
+      error instanceof AppError && 
+      !(processedReport as any).suppressUserNotification
+
+    if (shouldShowNotification) {
       this.showUserNotification(error)
     }
 
@@ -304,6 +343,19 @@ class ErrorHandlerService {
   public clearBreadcrumbs(): void {
     this.breadcrumbs = []
   }
+
+  public resetCircuitBreaker(): void {
+    this.circuitBreakerCount = 0
+    this.circuitBreakerResetTime = Date.now() + this.CIRCUIT_BREAKER_RESET_INTERVAL
+  }
+
+  public getThrottlingStats(): { total: number; suppressed: number; active: number } {
+    return errorThrottler.getErrorStats()
+  }
+
+  public resetThrottling(): void {
+    errorThrottler.resetThrottling()
+  }
 }
 
 // Create singleton instance
@@ -327,4 +379,16 @@ export const createAppError = (
   recoverable = true
 ) => {
   return new AppError(message, category, severity, context, userFriendly, recoverable)
+}
+
+export const resetCircuitBreaker = () => {
+  errorHandler.resetCircuitBreaker()
+}
+
+export const getThrottlingStats = () => {
+  return errorHandler.getThrottlingStats()
+}
+
+export const resetThrottling = () => {
+  errorHandler.resetThrottling()
 }

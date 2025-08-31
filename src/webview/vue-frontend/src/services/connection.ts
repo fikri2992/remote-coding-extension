@@ -7,6 +7,9 @@ export class ConnectionService {
   private isConnected = false
   private connectionUrl = ''
   private hasShownConnectionError = false // Track if we've already shown the connection error
+  private connectionAttempts = 0
+  private maxConnectionAttempts = 3
+  private isManualConnection = false // Track if connection was initiated manually
   private eventHandlers: {
     onConnect?: () => void
     onDisconnect?: () => void
@@ -46,18 +49,22 @@ export class ConnectionService {
   /**
    * Connect to the WebSocket server
    */
-  async connect(): Promise<void> {
+  async connect(isManual = false): Promise<void> {
+    this.isManualConnection = isManual
+    this.connectionAttempts++
+    
     try {
       // Determine WebSocket URL
       const wsUrl = this.getWebSocketUrl()
       this.connectionUrl = wsUrl
-      addBreadcrumb('connection', `Attempting to connect to ${wsUrl}`, 'info')
+      addBreadcrumb('connection', `Attempting to connect to ${wsUrl} (attempt ${this.connectionAttempts})`, 'info')
 
       this.ws = new WebSocket(wsUrl)
       
       this.ws.onopen = () => {
         this.isConnected = true
         this.hasShownConnectionError = false // Reset error flag on successful connection
+        this.connectionAttempts = 0 // Reset attempts on successful connection
         addBreadcrumb('connection', 'WebSocket connection established', 'info')
         this.eventHandlers.onConnect?.()
         
@@ -67,11 +74,15 @@ export class ConnectionService {
         }
       }
 
-      this.ws.onclose = () => {
+      this.ws.onclose = (event) => {
         this.isConnected = false
-        addBreadcrumb('connection', 'WebSocket disconnected', 'warning')
+        addBreadcrumb('connection', `WebSocket disconnected (code: ${event.code})`, 'warning')
         this.eventHandlers.onDisconnect?.()
-        this.scheduleReconnect()
+        
+        // Only auto-reconnect if it was a manual connection or if we haven't exceeded max attempts
+        if (this.isManualConnection && this.connectionAttempts < this.maxConnectionAttempts) {
+          this.scheduleReconnect()
+        }
       }
 
       this.ws.onerror = (error) => {
@@ -92,22 +103,30 @@ export class ConnectionService {
       const errorMessage = error instanceof Error ? error.message : 'Unknown connection error'
       addBreadcrumb('connection', `Connection failed: ${errorMessage}`, 'error')
       
-      // Only show the error notification once, not on every retry
-      if (!this.hasShownConnectionError) {
+      // Only show error notification for manual connections or first automatic attempt
+      if ((this.isManualConnection || this.connectionAttempts === 1) && !this.hasShownConnectionError) {
         this.hasShownConnectionError = true
         captureError(createAppError(
           `Failed to connect to WebSocket server: ${errorMessage}`,
           'websocket',
-          'high',
-          { url: this.getWebSocketUrl() },
+          'medium', // Reduced from 'high' to allow throttling
+          { 
+            url: this.getWebSocketUrl(),
+            additionalData: {
+              attempt: this.connectionAttempts,
+              isManual: this.isManualConnection
+            }
+          },
           {
             title: 'Connection Error',
-            message: 'Unable to connect to the VS Code extension server. Some features may not work properly.',
+            message: this.isManualConnection 
+              ? 'Unable to connect to the VS Code extension server. Please ensure the extension is running.'
+              : 'Unable to connect to the VS Code extension server. Some features may not work properly.',
             reportable: true,
             recoveryActions: [
               {
                 label: 'Retry Connection',
-                action: () => this.connect(),
+                action: () => this.connect(true),
                 primary: true
               },
               {
@@ -121,7 +140,10 @@ export class ConnectionService {
         ))
       }
 
-      this.scheduleReconnect()
+      // Only schedule reconnect for manual connections and within attempt limits
+      if (this.isManualConnection && this.connectionAttempts < this.maxConnectionAttempts) {
+        this.scheduleReconnect()
+      }
     }
   }
 
@@ -143,6 +165,8 @@ export class ConnectionService {
     
     this.isConnected = false
     this.hasShownConnectionError = false // Reset error flag on manual disconnect
+    this.connectionAttempts = 0 // Reset attempts on manual disconnect
+    this.isManualConnection = false // Reset manual flag
   }
 
   /**
@@ -162,7 +186,22 @@ export class ConnectionService {
   getConnectionStatus() {
     return {
       isConnected: this.isConnected,
-      url: this.connectionUrl
+      url: this.connectionUrl,
+      attempts: this.connectionAttempts,
+      maxAttempts: this.maxConnectionAttempts,
+      isManual: this.isManualConnection
+    }
+  }
+
+  /**
+   * Reset connection state (useful for manual retry)
+   */
+  resetConnectionState(): void {
+    this.hasShownConnectionError = false
+    this.connectionAttempts = 0
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer)
+      this.reconnectTimer = null
     }
   }
 
@@ -192,16 +231,17 @@ export class ConnectionService {
    * Schedule reconnection attempt
    */
   private scheduleReconnect(): void {
-    if (this.reconnectTimer) {
+    if (this.reconnectTimer || this.connectionAttempts >= this.maxConnectionAttempts) {
       return
     }
 
-    const delay = 3000 // 3 seconds
-    addBreadcrumb('connection', `Scheduling reconnect in ${delay}ms`, 'info')
+    // Exponential backoff: 3s, 6s, 12s
+    const delay = Math.min(3000 * Math.pow(2, this.connectionAttempts - 1), 12000)
+    addBreadcrumb('connection', `Scheduling reconnect in ${delay}ms (attempt ${this.connectionAttempts + 1}/${this.maxConnectionAttempts})`, 'info')
 
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null
-      this.connect()
+      this.connect(this.isManualConnection)
     }, delay)
   }
 

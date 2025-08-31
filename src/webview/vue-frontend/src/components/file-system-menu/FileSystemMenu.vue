@@ -30,6 +30,8 @@
       <ErrorBoundary
         :fallback-component="TreePanelErrorFallback"
         @error="handleTreePanelError"
+        @retry="retryTreePanel"
+        @connect="handleReconnect"
       >
         <div 
           class="file-tree-panel border-r border-gray-200 dark:border-gray-700"
@@ -62,6 +64,7 @@
       <ErrorBoundary
         :fallback-component="PreviewPanelErrorFallback"
         @error="handlePreviewPanelError"
+        @retry="retryPreviewPanel"
       >
         <div class="file-preview-panel flex-1 min-w-0">
           <FilePreviewPanel
@@ -112,6 +115,7 @@ import FilePreviewPanel from './FilePreviewPanel.vue'
 import ContextMenu from './ContextMenu.vue'
 import ErrorBoundary from '../common/ErrorBoundary.vue'
 import LoadingSpinner from '../common/LoadingSpinner.vue'
+import FallbackComponents from '../common/FallbackComponents.vue'
 
 // Props
 const props = withDefaults(defineProps<FileSystemMenuProps>(), {
@@ -223,44 +227,30 @@ const contextMenuActions = computed((): ContextMenuAction[] => {
 
 // Error Fallback Components
 const TreePanelErrorFallback = {
+  components: { FallbackComponents },
   template: `
-    <div class="h-full flex items-center justify-center p-4">
-      <div class="text-center">
-        <svg class="w-12 h-12 mx-auto text-red-500 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z" />
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 1v6m8-6v6" />
-        </svg>
-        <h3 class="text-sm font-medium text-gray-900 dark:text-white mb-1">File Tree Error</h3>
-        <p class="text-xs text-gray-600 dark:text-gray-400 mb-3">Unable to load file tree</p>
-        <button
-          @click="$emit('retry')"
-          class="text-xs px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-        >
-          Retry
-        </button>
-      </div>
+    <div class="h-full">
+      <FallbackComponents 
+        type="file-system" 
+        @retry="$emit('retry')" 
+        @connect="$emit('connect')" 
+      />
     </div>
-  `
+  `,
+  emits: ['retry', 'connect']
 }
 
 const PreviewPanelErrorFallback = {
+  components: { FallbackComponents },
   template: `
-    <div class="h-full flex items-center justify-center p-4">
-      <div class="text-center">
-        <svg class="w-12 h-12 mx-auto text-red-500 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-        </svg>
-        <h3 class="text-sm font-medium text-gray-900 dark:text-white mb-1">Preview Error</h3>
-        <p class="text-xs text-gray-600 dark:text-gray-400 mb-3">Unable to load file preview</p>
-        <button
-          @click="$emit('retry')"
-          class="text-xs px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-        >
-          Retry
-        </button>
-      </div>
+    <div class="h-full">
+      <FallbackComponents 
+        type="generic" 
+        @retry="$emit('retry')" 
+      />
     </div>
-  `
+  `,
+  emits: ['retry']
 }
 
 // Methods
@@ -358,6 +348,29 @@ const handlePreviewPanelError = (error: Error, errorInfo: any) => {
   )
   
   captureError(appError)
+}
+
+// Error recovery methods
+const retryTreePanel = async () => {
+  try {
+    await fileSystemMenuStore.refreshFileTree()
+    uiStore.addNotification('File tree refreshed successfully', 'success', true, 3000)
+  } catch (error) {
+    console.error('Failed to retry tree panel:', error)
+    uiStore.addNotification('Failed to refresh file tree', 'error', true, 5000)
+  }
+}
+
+const retryPreviewPanel = async () => {
+  try {
+    if (selectedPath.value) {
+      await fileSystemMenuStore.loadPreviewContent(selectedPath.value)
+      uiStore.addNotification('Preview refreshed successfully', 'success', true, 3000)
+    }
+  } catch (error) {
+    console.error('Failed to retry preview panel:', error)
+    uiStore.addNotification('Failed to refresh preview', 'error', true, 5000)
+  }
 }
 
 // Resize functionality

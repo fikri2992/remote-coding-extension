@@ -42,7 +42,14 @@ export const useConnectionStore = defineStore('connection', () => {
     serverUrl.value = url
     connectionStatus.value = 'connecting'
     lastError.value = null
-    // Connection logic will be implemented in WebSocket composable
+    
+    // Use the connection service for actual connection
+    try {
+      const { connectionService } = await import('../services/connection')
+      await connectionService.connect(true) // Manual connection
+    } catch (error) {
+      setConnectionStatus('error', error instanceof Error ? error.message : 'Connection failed')
+    }
   }
 
   const disconnect = () => {
@@ -51,6 +58,11 @@ export const useConnectionStore = defineStore('connection', () => {
     connectionStatus.value = 'disconnected'
     lastError.value = null
     resetReconnectAttempts()
+    
+    // Use the connection service for actual disconnection
+    import('../services/connection').then(({ connectionService }) => {
+      connectionService.disconnect()
+    })
   }
 
   const setConnected = (id: string) => {
@@ -89,6 +101,35 @@ export const useConnectionStore = defineStore('connection', () => {
     maxReconnectAttempts.value = maxAttempts
     reconnectDelay.value = baseDelay
   }
+
+  // Initialize connection service integration
+  const initializeConnectionService = async () => {
+    try {
+      const { connectionService } = await import('../services/connection')
+      
+      // Set up event handlers to sync with store
+      connectionService.setEventHandlers({
+        onConnect: () => {
+          setConnected(Date.now().toString())
+        },
+        onDisconnect: () => {
+          setConnectionStatus('disconnected')
+        },
+        onError: (error) => {
+          setConnectionStatus('error', error instanceof Error ? error.message : 'Connection error')
+        },
+        onMessage: (data) => {
+          // Handle incoming messages if needed
+          console.log('Received message:', data)
+        }
+      })
+    } catch (error) {
+      console.error('Failed to initialize connection service:', error)
+    }
+  }
+
+  // Initialize on store creation
+  initializeConnectionService()
 
   return {
     // State

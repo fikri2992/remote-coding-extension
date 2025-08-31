@@ -1,6 +1,8 @@
 // Common utility components
 export { default as LoadingSpinner } from './LoadingSpinner.vue'
 export { default as ErrorBoundary } from './ErrorBoundary.vue'
+export { default as FallbackComponents } from './FallbackComponents.vue'
+export { default as SafeComponent } from './SafeComponent.vue'
 export { default as NotificationToast } from './NotificationToast.vue'
 export { default as Modal } from './Modal.vue'
 export { default as Dialog } from './Dialog.vue'
@@ -77,4 +79,23 @@ export interface ConfirmationDialogProps {
   confirmText?: string
   loading?: boolean
   persistent?: boolean
+}
+
+export interface FallbackComponentsProps {
+  type?: 'automation' | 'file-system' | 'generic'
+  error?: Error
+  errorInfo?: any
+}
+
+export interface SafeComponentProps {
+  componentName?: string
+  title?: string
+  message?: string
+  category?: 'network' | 'validation' | 'authentication' | 'permission' | 'websocket' | 'filesystem' | 'git' | 'terminal' | 'ui' | 'unknown'
+  severity?: 'low' | 'medium' | 'high' | 'critical'
+  showDetails?: boolean
+  showReload?: boolean
+  showReport?: boolean
+  onRetry?: () => void | Promise<void>
+  onError?: (error: Error, errorInfo: any) => void
 }

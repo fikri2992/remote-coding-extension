@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from '@tanstack/react-router';
 import {
   Home,
   Server,
@@ -6,28 +7,28 @@ import {
   GitBranch,
   Terminal,
   MessageCircle,
-  Settings
+  Settings,
+  Network
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 interface AppSidebarProps {
-  activeItem: string;
-  onItemClick: (item: string) => void;
+  activeItem?: string;
 }
 
 const menuItems = [
-  { id: 'home', label: 'Home', icon: Home },
-  { id: 'server', label: 'Server', icon: Server },
-  { id: 'files', label: 'Files', icon: Folder },
-  { id: 'git', label: 'Git', icon: GitBranch },
-  { id: 'terminal', label: 'Terminal', icon: Terminal },
-  { id: 'chat', label: 'Chat', icon: MessageCircle },
-  { id: 'settings', label: 'Settings', icon: Settings },
+  { id: 'home', label: 'Home', icon: Home, path: '/' },
+  { id: 'server', label: 'Server', icon: Server, path: '/server' },
+  { id: 'tunnels', label: 'Tunnels', icon: Network, path: '/tunnels' },
+  { id: 'files', label: 'Files', icon: Folder, path: '/files' },
+  { id: 'git', label: 'Git', icon: GitBranch, path: '/git' },
+  { id: 'terminal', label: 'Terminal', icon: Terminal, path: '/terminal' },
+  { id: 'chat', label: 'Chat', icon: MessageCircle, path: '/chat' },
+  { id: 'settings', label: 'Settings', icon: Settings, path: '/settings' },
 ];
 
 export const AppSidebar: React.FC<AppSidebarProps> = ({
-  activeItem,
-  onItemClick
+  activeItem
 }) => {
   return (
     <div className="flex flex-col h-full">
@@ -45,8 +46,8 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
             const Icon = item.icon;
             return (
               <li key={item.id}>
-                <button
-                  onClick={() => onItemClick(item.id)}
+                <Link
+                  to={item.path}
                   className={cn(
                     "w-full flex items-center px-3 py-3 lg:px-3 lg:py-2 text-sm font-medium rounded-lg transition-all duration-150 ease-out",
                     "min-h-[44px] lg:min-h-[40px] active:scale-[0.98]", // Faster transition and touch feedback
@@ -57,7 +58,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
                 >
                   <Icon className="w-5 h-5 mr-3 flex-shrink-0" />
                   <span className="truncate">{item.label}</span>
-                </button>
+                </Link>
               </li>
             );
           })}

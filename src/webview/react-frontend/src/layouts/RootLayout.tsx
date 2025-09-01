@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Outlet, useNavigate } from '@tanstack/react-router';
+import { Outlet, useLocation } from '@tanstack/react-router';
 import { Menu, X } from 'lucide-react';
 import { AppHeader } from '../components/AppHeader';
 import { AppSidebar } from '../components/AppSidebar';
@@ -9,44 +9,16 @@ import { cn } from '../lib/utils';
 
 const LayoutContent: React.FC = () => {
   const { isConnected, connectionCount, lastActivity } = useWebSocket();
-  const [activeItem, setActiveItem] = React.useState('home');
+  const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const navigate = useNavigate();
 
-  // Update active item based on current route
-  React.useEffect(() => {
-    const path = window.location.pathname;
-    const routeMap: { [key: string]: string } = {
-      '/': 'home',
-      '/server': 'server',
-      '/files': 'files',
-      '/git': 'git',
-      '/terminal': 'terminal',
-      '/chat': 'chat',
-      '/settings': 'settings',
-    };
-    setActiveItem(routeMap[path] || 'home');
-  }, []);
-
-  const handleItemClick = (item: string) => {
-    setActiveItem(item);
-    // Close mobile menu immediately for better UX
-    setIsMobileMenuOpen(false);
-
-    // Use TanStack Router navigation instead of window.location.href
-    const routeMap: { [key: string]: string } = {
-      'home': '/',
-      'server': '/server',
-      'files': '/files',
-      'git': '/git',
-      'terminal': '/terminal',
-      'chat': '/chat',
-      'settings': '/settings',
-    };
-
-    // Navigate instantly without page reload
-    navigate({ to: routeMap[item] || '/' });
+  // Get active item from current path
+  const getActiveItemFromPath = (pathname: string): string => {
+    if (pathname === '/') return 'home';
+    return pathname.substring(1); // Remove leading slash
   };
+
+  const activeItem = getActiveItemFromPath(location.pathname);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -116,7 +88,6 @@ const LayoutContent: React.FC = () => {
           <div className="flex flex-col h-full">
             <AppSidebar
               activeItem={activeItem}
-              onItemClick={handleItemClick}
             />
           </div>
         </div>

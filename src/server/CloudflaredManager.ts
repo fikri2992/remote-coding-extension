@@ -10,16 +10,34 @@ function ensureDirSync(dir: string) {
 }
 
 // -------------------------
-// Runtime tunnel management
-// -------------------------
-
-export interface StartedTunnelInfo {
+export interface TunnelInfo {
+  id: string;
+  name?: string;
   url: string;
+  localPort: number;
   pid: number;
+  status: 'starting' | 'running' | 'stopping' | 'stopped' | 'error';
+  type: 'quick' | 'named';
+  token?: string;
+  createdAt: Date;
+  error?: string;
 }
 
-let currentProc: cp.ChildProcess | null = null;
-let currentUrl: string | null = null;
+export interface CreateTunnelRequest {
+  localPort: number;
+  name?: string;
+  token?: string;
+  type: 'quick' | 'named';
+}
+
+export interface TunnelStatus {
+  isInstalled: boolean;
+  activeTunnels: TunnelInfo[];
+  totalCount: number;
+}
+
+// -------------------------
+let activeTunnels: Map<string, TunnelInfo> = new Map();
 
 /** Check if cloudflared is installed/available */
 export async function isInstalled(): Promise<boolean> {
@@ -38,11 +56,149 @@ export async function install(context?: vscode.ExtensionContext): Promise<string
 }
 
 /**
+ * Create a new tunnel
+ */
+export async function createTunnel(request: CreateTunnelRequest, context?: vscode.ExtensionContext): Promise<TunnelInfo> {
+  const tunnelId = `tunnel-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+  const tunnelInfo: TunnelInfo = {
+    id: tunnelId,
+    localPort: request.localPort,
+    status: 'starting',
+    type: request.type,
+    createdAt: new Date(),
+    url: '', // Will be set when tunnel starts
+    pid: 0,  // Will be set when tunnel starts
+    ...(request.name && { name: request.name }),
+    ...(request.token && { token: request.token }),
+  };
+
+  activeTunnels.set(tunnelId, tunnelInfo);
+
+  try {
+    const result = request.type === 'quick'
+      ? await startQuickTunnel(request.localPort, context)
+      : await startNamedTunnel(request.localPort, request.name, request.token, context);
+
+    // Update tunnel with actual info
+    const updatedTunnel: TunnelInfo = {
+      ...tunnelInfo,
+      url: result.url,
+      pid: result.pid,
+      status: 'running',
+    };
+
+    activeTunnels.set(tunnelId, updatedTunnel);
+    return updatedTunnel;
+  } catch (error) {
+    // Update tunnel with error
+    const errorTunnel: TunnelInfo = {
+      ...tunnelInfo,
+      status: 'error',
+      error: error instanceof Error ? error.message : 'Failed to start tunnel',
+    };
+
+    activeTunnels.set(tunnelId, errorTunnel);
+    throw error;
+  }
+}
+
+/**
+ * Get all active tunnels
+ */
+export function getActiveTunnels(): TunnelInfo[] {
+  return Array.from(activeTunnels.values());
+}
+
+/**
+ * Get tunnel by ID
+ */
+export function getTunnelById(tunnelId: string): TunnelInfo | undefined {
+  return activeTunnels.get(tunnelId);
+}
+
+/**
+ * Stop a specific tunnel
+ */
+export async function stopTunnel(tunnelId: string): Promise<boolean> {
+  const tunnel = activeTunnels.get(tunnelId);
+  if (!tunnel) return false;
+
+  // Update status to stopping
+  const stoppingTunnel: TunnelInfo = { ...tunnel, status: 'stopping' };
+  activeTunnels.set(tunnelId, stoppingTunnel);
+
+  try {
+    const success = await stopTunnelByPid(tunnel.pid);
+    if (success) {
+      activeTunnels.delete(tunnelId);
+    } else {
+      // Update status back if stop failed
+      const errorTunnel: TunnelInfo = { ...tunnel, status: 'error', error: 'Failed to stop tunnel' };
+      activeTunnels.set(tunnelId, errorTunnel);
+    }
+    return success;
+  } catch (error) {
+    // Update status with error
+    const errorTunnel: TunnelInfo = { ...tunnel, status: 'error', error: 'Failed to stop tunnel' };
+    activeTunnels.set(tunnelId, errorTunnel);
+    return false;
+  }
+}
+
+/**
+ * Stop all tunnels
+ */
+export async function stopAllTunnels(): Promise<void> {
+  const tunnelIds = Array.from(activeTunnels.keys());
+  await Promise.all(tunnelIds.map(id => stopTunnel(id)));
+}
+
+/**
+ * Get tunnel status summary
+ */
+export async function getTunnelStatus(): Promise<TunnelStatus> {
+  const isInstalledFlag = await isInstalled();
+  const activeTunnelsList = getActiveTunnels();
+
+  return {
+    isInstalled: isInstalledFlag,
+    activeTunnels: activeTunnelsList,
+    totalCount: activeTunnelsList.length,
+  };
+}
+
+/**
+ * Helper function to stop tunnel by PID
+ */
+async function stopTunnelByPid(pid: number): Promise<boolean> {
+  return new Promise<boolean>((resolve) => {
+    try {
+      if (process.platform === 'win32') {
+        // Use taskkill to ensure child tree termination on Windows
+        cp.exec(`taskkill /PID ${pid} /T /F`, { windowsHide: true }, () => {
+          resolve(true);
+        });
+      } else {
+        process.kill(pid, 'SIGTERM');
+        setTimeout(() => {
+          try {
+            process.kill(pid, 'SIGKILL');
+          } catch {}
+          resolve(true);
+        }, 3000);
+      }
+    } catch {
+      resolve(false);
+    }
+  });
+}
+
+/**
  * Start a Quick Tunnel that exposes http://localhost:localPort
  * Resolves with the public URL and PID once available.
  */
-export async function startQuickTunnel(localPort: number, context?: vscode.ExtensionContext, extraArgs: string[] = []): Promise<StartedTunnelInfo> {
-  if (currentProc) throw new Error('A tunnel is already running');
+export async function startQuickTunnel(localPort: number, context?: vscode.ExtensionContext, extraArgs: string[] = []): Promise<{ url: string; pid: number }> {
   const bin = await ensureCloudflared(context);
 
   const args = [
@@ -62,8 +218,7 @@ export async function startQuickTunnel(localPort: number, context?: vscode.Exten
  * In both cases we append --no-autoupdate and attempt to route to localPort via --url to simplify usage.
  * Note: For production named tunnels, routing is often configured via YAML; this provides a simplified path.
  */
-export async function startNamedTunnel(localPort: number, tunnelName?: string, token?: string, context?: vscode.ExtensionContext, extraArgs: string[] = []): Promise<StartedTunnelInfo> {
-  if (currentProc) throw new Error('A tunnel is already running');
+export async function startNamedTunnel(localPort: number, tunnelName?: string, token?: string, context?: vscode.ExtensionContext, extraArgs: string[] = []): Promise<{ url: string; pid: number }> {
   const bin = await ensureCloudflared(context);
 
   const base = ['tunnel', '--no-autoupdate'];
@@ -82,33 +237,6 @@ export async function startNamedTunnel(localPort: number, tunnelName?: string, t
   return spawnAndResolveUrl(bin, args);
 }
 
-/** Stop the running tunnel process, if any */
-export async function stopTunnel(): Promise<boolean> {
-  if (!currentProc) return false;
-  const pid = currentProc.pid ?? 0;
-
-  return new Promise<boolean>((resolve) => {
-    const proc = currentProc!;
-    currentProc = null;
-    currentUrl = null;
-
-    const onExit = () => resolve(true);
-    proc.once('exit', onExit);
-
-    try {
-      if (process.platform === 'win32' && pid) {
-        // Use taskkill to ensure child tree termination on Windows
-        cp.exec(`taskkill /PID ${pid} /T /F`, { windowsHide: true }, () => {});
-      } else {
-        proc.kill('SIGTERM');
-        setTimeout(() => proc.kill('SIGKILL'), 3000).unref?.();
-      }
-    } catch {
-      resolve(false);
-    }
-  });
-}
-
 // -------------------------
 // Helpers
 // -------------------------
@@ -123,17 +251,15 @@ function parsePublicUrl(data: string): string | null {
   return preferred || matches[0];
 }
 
-function spawnAndResolveUrl(bin: string, args: string[]): Promise<StartedTunnelInfo> {
-  return new Promise<StartedTunnelInfo>((resolve, reject) => {
+function spawnAndResolveUrl(bin: string, args: string[]): Promise<{ url: string; pid: number }> {
+  return new Promise<{ url: string; pid: number }>((resolve, reject) => {
     try {
       const proc = cp.spawn(bin, args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
-      currentProc = proc;
 
       let resolved = false;
       const timeout = setTimeout(() => {
         if (!resolved) {
           try { proc.kill(); } catch {}
-          currentProc = null;
           reject(new Error('Timed out waiting for tunnel URL'));
         }
       }, 20000); // 20s
@@ -144,7 +270,6 @@ function spawnAndResolveUrl(bin: string, args: string[]): Promise<StartedTunnelI
         if (url && !resolved) {
           resolved = true;
           clearTimeout(timeout);
-          currentUrl = url;
           resolve({ url, pid: proc.pid ?? 0 });
         }
       };
@@ -155,19 +280,16 @@ function spawnAndResolveUrl(bin: string, args: string[]): Promise<StartedTunnelI
       proc.on('error', (err) => {
         if (!resolved) {
           clearTimeout(timeout);
-          currentProc = null;
           reject(err);
         }
       });
       proc.on('exit', (code) => {
         if (!resolved) {
           clearTimeout(timeout);
-          currentProc = null;
           reject(new Error(`cloudflared exited with code ${code}`));
         }
       });
     } catch (e) {
-      currentProc = null;
       reject(e);
     }
   });

@@ -93,6 +93,22 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
                     case 'openWebInterface':
                         this._handleOpenWebInterface();
                         break;
+                    // New tunnel management message handlers
+                    case 'createTunnel':
+                        this._handleCreateTunnel(message.data);
+                        break;
+                    case 'stopAllTunnels':
+                        this._handleStopAllTunnels();
+                        break;
+                    case 'refreshTunnels':
+                        this._handleRefreshTunnels();
+                        break;
+                    case 'getTunnels':
+                        this._handleGetTunnels();
+                        break;
+                    case 'getTunnelStatus':
+                        this._handleGetTunnelStatus();
+                        break;
                     default:
                         console.log('Unknown message received from webview:', message);
                         break;
@@ -217,6 +233,146 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
                     data: { isRunning: false, error: errorMessage }
                 });
             }
+        }
+    }
+
+    /**
+     * Handle creating a new tunnel from webview
+     */
+    private async _handleCreateTunnel(data: any): Promise<void> {
+        try {
+            const { localPort, name, token, type } = data;
+
+            // Create tunnel using ServerManager's startTunnel method
+            const tunnelConfig: any = {
+                tunnelName: name,
+                cloudflareToken: token,
+                localPort: localPort
+            };
+
+            await this._serverManager.startTunnel(tunnelConfig);
+
+            // Send success response to webview
+            if (this._view) {
+                this._view.webview.postMessage({
+                    command: 'tunnelCreated',
+                    tunnel: {
+                        id: name || 'quick-tunnel',
+                        name: name,
+                        status: 'running',
+                        localPort: localPort,
+                        publicUrl: this._serverManager.getTunnelStatus()?.publicUrl || undefined
+                    }
+                });
+            }
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+            vscode.window.showErrorMessage(`Failed to create tunnel: ${errorMessage}`);
+
+            // Send error response to webview
+            if (this._view) {
+                this._view.webview.postMessage({
+                    command: 'tunnelError',
+                    error: errorMessage
+                });
+            }
+        }
+    }
+
+    /**
+     * Handle stopping all tunnels from webview
+     */
+    private async _handleStopAllTunnels(): Promise<void> {
+        try {
+            await this._serverManager.stopTunnel();
+            vscode.window.showInformationMessage('All tunnels stopped successfully');
+
+            // Send update to webview
+            if (this._view) {
+                this._view.webview.postMessage({
+                    command: 'tunnelsUpdated',
+                    tunnels: []
+                });
+            }
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+            vscode.window.showErrorMessage(`Failed to stop tunnels: ${errorMessage}`);
+        }
+    }
+
+    /**
+     * Handle refreshing tunnel status from webview
+     */
+    private async _handleRefreshTunnels(): Promise<void> {
+        try {
+            const tunnelStatus = this._serverManager.getTunnelStatus();
+
+            // Send tunnel status to webview
+            if (this._view) {
+                this._view.webview.postMessage({
+                    command: 'tunnelStatusUpdate',
+                    data: tunnelStatus
+                });
+            }
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+            vscode.window.showErrorMessage(`Failed to refresh tunnels: ${errorMessage}`);
+        }
+    }
+
+    /**
+     * Handle getting all tunnels from webview
+     */
+    private _handleGetTunnels(): void {
+        try {
+            const tunnelStatus = this._serverManager.getTunnelStatus();
+            const tunnels = [];
+
+            if (tunnelStatus && tunnelStatus.isRunning) {
+                // Extract local port from localUrl (format: http://localhost:port)
+                const localPort = tunnelStatus.localUrl
+                    ? parseInt(tunnelStatus.localUrl.split(':').pop() || '8080', 10)
+                    : 8080;
+
+                tunnels.push({
+                    id: 'active-tunnel',
+                    name: 'active-tunnel',
+                    status: 'running',
+                    localPort: localPort,
+                    publicUrl: tunnelStatus.publicUrl
+                });
+            }
+
+            // Send tunnels to webview
+            if (this._view) {
+                this._view.webview.postMessage({
+                    command: 'tunnelsUpdated',
+                    tunnels: tunnels
+                });
+            }
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+            vscode.window.showErrorMessage(`Failed to get tunnels: ${errorMessage}`);
+        }
+    }
+
+    /**
+     * Handle getting tunnel status from webview
+     */
+    private async _handleGetTunnelStatus(): Promise<void> {
+        try {
+            const tunnelStatus = this._serverManager.getTunnelStatus();
+
+            // Send tunnel status to webview
+            if (this._view) {
+                this._view.webview.postMessage({
+                    command: 'tunnelStatusUpdate',
+                    data: tunnelStatus
+                });
+            }
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+            vscode.window.showErrorMessage(`Failed to get tunnel status: ${errorMessage}`);
         }
     }
 

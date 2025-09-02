@@ -79,8 +79,8 @@ The extension provides several configuration options accessible through VS Code 
 
 ### Settings
 
-- **HTTP Port** (`webAutomationTunnel.httpPort`): Port for HTTP server (default: 8080)
-- **WebSocket Port** (`webAutomationTunnel.websocketPort`): Port for WebSocket server (defaults to HTTP port + 1)
+- **HTTP Port** (`webAutomationTunnel.httpPort`): Port for the HTTP server (default: 3900)
+- **WebSocket Port** (`webAutomationTunnel.websocketPort`): Port for the WebSocket server (default: 3901; deprecated — WebSocket now upgrades on `/ws` via the HTTP port)
 - **Allowed Origins** (`webAutomationTunnel.allowedOrigins`): CORS allowed origins (default: ["*"])
 - **Max Connections** (`webAutomationTunnel.maxConnections`): Maximum WebSocket connections (default: 10)
 - **Enable CORS** (`webAutomationTunnel.enableCors`): Enable CORS support (default: true)
@@ -218,8 +218,8 @@ npx ts-node src/server/integration-test.ts
 
 2. **Server Testing**:
    - Start the server via command palette
-   - Test HTTP endpoints: `http://localhost:8080`
-   - Test WebSocket connections: `ws://localhost:8081`
+   - Test HTTP endpoints: `http://localhost:3900`
+   - Test WebSocket connections: `ws://localhost:3900/ws` (legacy standalone: `ws://localhost:3901`)
 
 3. **Configuration Testing**:
    - Modify settings and verify server behavior

@@ -346,18 +346,18 @@ export class HttpServer {
         // For local development, allow common development origins
         const allowedOrigins = [
             'http://localhost:3000',
-            'http://localhost:8080',
+            'http://localhost:3900',
             'http://127.0.0.1:3000',
-            'http://127.0.0.1:8080',
-            'http://localhost:8081',
-            'http://127.0.0.1:8081'
+            'http://127.0.0.1:3900',
+            'http://localhost:3901',
+            'http://127.0.0.1:3901'
         ];
 
         if (origin && allowedOrigins.includes(origin)) {
             res.setHeader('Access-Control-Allow-Origin', origin);
         } else {
             // Default to allowing localhost for development
-            res.setHeader('Access-Control-Allow-Origin', 'http://localhost:8080');
+            res.setHeader('Access-Control-Allow-Origin', 'http://localhost:3900');
         }
 
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
@@ -386,11 +386,11 @@ export class HttpServer {
         // For local development, allow common development origins
         const allowedOrigins = [
             'http://localhost:3000',
-            'http://localhost:8080',
+            'http://localhost:3900',
             'http://127.0.0.1:3000',
-            'http://127.0.0.1:8080',
-            'http://localhost:8081',
-            'http://127.0.0.1:8081'
+            'http://127.0.0.1:3900',
+            'http://localhost:3901',
+            'http://127.0.0.1:3901'
         ];
 
         return allowedOrigins.includes(origin);

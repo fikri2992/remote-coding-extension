@@ -331,8 +331,8 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
             if (tunnelStatus && tunnelStatus.isRunning) {
                 // Extract local port from localUrl (format: http://localhost:port)
                 const localPort = tunnelStatus.localUrl
-                    ? parseInt(tunnelStatus.localUrl.split(':').pop() || '8080', 10)
-                    : 8080;
+                    ? parseInt(tunnelStatus.localUrl.split(':').pop() || '3900', 10)
+                    : 3900;
 
                 tunnels.push({
                     id: 'active-tunnel',

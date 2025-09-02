@@ -46,11 +46,11 @@ export class WebSocketServer {
               const origin = request.headers['origin'] as string | undefined;
               const allowedOrigins = new Set([
                 'http://localhost:3000',
-                'http://localhost:8080',
+                'http://localhost:3900',
                 'http://127.0.0.1:3000',
-                'http://127.0.0.1:8080',
-                'http://localhost:8081',
-                'http://127.0.0.1:8081'
+                'http://127.0.0.1:3900',
+                'http://localhost:3901',
+                'http://127.0.0.1:3901'
               ]);
               if (origin && !allowedOrigins.has(origin)) {
                 socket.destroy();

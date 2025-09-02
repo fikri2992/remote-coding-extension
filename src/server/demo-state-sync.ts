@@ -17,8 +17,8 @@ export class StateSynchronizationDemo {
 
     constructor() {
         this.config = {
-            httpPort: 8080,
-            websocketPort: 8081,
+            httpPort: 3900,
+            websocketPort: 3901,
             autoStartTunnel: true
         };
 

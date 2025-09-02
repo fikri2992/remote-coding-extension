@@ -15,8 +15,8 @@
 - Cause: `run` was invoked without a name.
 - Fix: `LocalTunnel` now only uses `run` when `tunnelName` is non-empty; otherwise it uses Quick Tunnel: `tunnel --url ...`.
 
-## Port in use (HTTP 8080 / WebSocket 8081)
-- Symptoms: UI warnings like “HTTP port 8080 is not available” or “WebSocket 8081 is not available”.
+## Port in use (HTTP 3900 / WebSocket 3901)
+- Symptoms: UI warnings like “HTTP port 3900 is not available” or “WebSocket 3901 is not available”.
 - Fix: Choose different ports in settings or stop the conflicting process. `ServerManager` logs the fallback port.
 
 ## No public URL appears

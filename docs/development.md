@@ -25,7 +25,7 @@
 ## Testing tips
 - Verify Quick Tunnel by starting the server and then the tunnel; ensure a public URL appears.
 - Simulate arch mismatch by forcing the wrong asset URL and confirm fallback logic.
-- Verify port conflicts by running another process on 8080/8081 and starting the server.
+- Verify port conflicts by running another process on 3900/3901 and starting the server.
 
 ## Publishing
 - Package with: `npm run package` (requires `vsce`).

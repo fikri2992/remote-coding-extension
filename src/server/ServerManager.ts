@@ -286,9 +286,8 @@ export class ServerManager {
             
             // Return a basic default configuration as fallback (minimal schema)
             const fallbackConfig: ServerConfig = {
-                httpPort: 8080,
-                websocketPort: 8081,
-                autoStartTunnel: true
+                httpPort: 3900,
+                autoStartTunnel: false
             };
             return fallbackConfig;
         }
@@ -578,7 +577,7 @@ export class ServerManager {
                     return await this.tryAlternativeHttpPort(config);
                 },
                 useHigherPort: async () => {
-                    config.httpPort = Math.max(config.httpPort, 8080) + Math.floor(Math.random() * 1000);
+                    config.httpPort = Math.max(config.httpPort, 3900) + Math.floor(Math.random() * 1000);
                     return await this.tryAlternativeHttpPort(config);
                 }
             });
@@ -886,7 +885,7 @@ export class ServerManager {
             }
 
             // Get HTTP port from current config
-            const httpPort = this._config?.httpPort || 8080;
+            const httpPort = this._config?.httpPort || 3900;
 
             // Create tunnel config with defaults from server config
             const config: TunnelConfig = {

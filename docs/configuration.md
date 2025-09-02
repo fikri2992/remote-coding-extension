@@ -2,11 +2,11 @@
 
 VS Code settings namespace: `webAutomationTunnel` (see `package.json` > `contributes.configuration`).
 
-- `webAutomationTunnel.httpPort` (number, default 8080)
+- `webAutomationTunnel.httpPort` (number, default 3900)
   Port for the HTTP server.
 
-- `webAutomationTunnel.websocketPort` (number, default 8081)
-  WebSocket port. If omitted at runtime, `ServerManager` uses `httpPort + 1`.
+- `webAutomationTunnel.websocketPort` (number, default 3901)
+  Deprecated: WebSocket now upgrades on path `/ws` via the HTTP server. This setting is ignored at runtime.
 
 - `webAutomationTunnel.allowedOrigins` (array<string>, default ["*"])
   CORS and WebSocket allowed origins.

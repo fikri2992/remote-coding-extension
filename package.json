@@ -26,7 +26,8 @@
             "basicExtension": [{
                 "id": "basicExtensionView",
                 "name": "Web Automation Tunnel",
-                "type": "webview"
+                "type": "webview",
+                "icon": "./src/assets/icon.svg"
             }]
         },
         "commands": [{
@@ -95,30 +96,39 @@
             "properties": {
                 "webAutomationTunnel.httpPort": {
                     "type": "number",
-                    "default": 8080,
+                    "default": 3900,
                     "minimum": 1024,
                     "maximum": 65535,
                     "description": "Port number for the HTTP server"
                 },
                 "webAutomationTunnel.websocketPort": {
                     "type": "number",
-                    "default": 8081,
+                    "default": 3901,
                     "minimum": 1024,
                     "maximum": 65535,
-                    "description": "Port number for the WebSocket server (defaults to HTTP port + 1)"
+                    "description": "Port number for the WebSocket server (defaults to HTTP port + 1)",
+                    "deprecationMessage": "Deprecated: WebSocket server now attaches to the HTTP server automatically. This setting is ignored."
                 },
                 "webAutomationTunnel.tunnelName": {
                     "type": "string",
-                    "description": "Optional Cloudflare named tunnel to use (leave empty to use a quick tunnel)"
+                    "description": "Optional Cloudflare named tunnel to use (leave empty to use a quick tunnel)",
+                    "deprecationMessage": "Deprecated: Configure tunnels via commands or the extension UI. This setting is ignored."
                 },
                 "webAutomationTunnel.cloudflareToken": {
                     "type": "string",
-                    "description": "Optional Cloudflare API token for authenticated tunnels (recommended for named tunnels)"
+                    "description": "Optional Cloudflare API token for authenticated tunnels (recommended for named tunnels)",
+                    "deprecationMessage": "Deprecated: Provide tokens during tunnel start via UI/commands. This setting is ignored."
                 },
                 "webAutomationTunnel.autoStartTunnel": {
                     "type": "boolean",
                     "default": true,
-                    "description": "Automatically start Cloudflare tunnel when server starts"
+                    "description": "Automatically start Cloudflare tunnel when server starts",
+                    "deprecationMessage": "Deprecated: Tunnel start is controlled via the extension UI. This setting is ignored."
+                },
+                "webAutomationTunnel.useEnhancedUI": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Use the enhanced UI for the Webview panel (toggle via the 'Toggle Enhanced/Basic UI' command)"
                 }
             }
         }
@@ -127,8 +137,8 @@
         "vscode:prepublish": "npm run build",
         "compile": "tsc -p ./",
         "compile:watch": "tsc -watch -p ./",
-"copy-assets": "xcopy /Y \"src\\webview\\panel.html\" \"out\\webview\\\" && xcopy /Y \"src\\webview\\styles.css\" \"out\\webview\\\" && xcopy /Y \"src\\webview\\script.js\" \"out\\webview\\\"",
-"copy-react-dist": "xcopy /E /I /Y \"src\\webview\\react-frontend\\dist\" \"out\\webview\\react-frontend\\dist\\\"",
+        "copy-assets": "xcopy /Y \"src\\webview\\panel.html\" \"out\\webview\\\" && xcopy /Y \"src\\webview\\styles.css\" \"out\\webview\\\" && xcopy /Y \"src\\webview\\script.js\" \"out\\webview\\\"",
+        "copy-react-dist": "xcopy /E /I /Y \"src\\webview\\react-frontend\\dist\" \"out\\webview\\react-frontend\\dist\\\"",
         "build:vue": "cd src/webview/react-frontend && npm run build",
         "build:vue:dev": "cd src/webview/react-frontend && npm run build",
         "build:vue:prod": "cd src/webview/react-frontend && npm run build",

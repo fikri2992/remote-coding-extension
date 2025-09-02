@@ -4,11 +4,15 @@
 
 import * as vscode from 'vscode';
 import * as net from 'net';
+import * as fs from 'fs';
+import * as path from 'path';
 import { ServerConfig } from './interfaces';
 
 export class ConfigurationManager {
     private _configChangeListener: vscode.Disposable | null = null;
     private _onConfigurationChanged: vscode.EventEmitter<ServerConfig> = new vscode.EventEmitter<ServerConfig>();
+    private _configFileWatcher: vscode.FileSystemWatcher | null = null;
+    private _usingFileConfig: boolean = false;
     
     /**
      * Event fired when configuration changes
@@ -17,6 +21,7 @@ export class ConfigurationManager {
 
     constructor() {
         this.setupConfigurationWatcher();
+        this.setupConfigFileWatcher();
     }
 
     /**
@@ -41,21 +46,65 @@ export class ConfigurationManager {
     }
 
     /**
+     * Watch .remote-coding/config.json changes and emit validated ServerConfig
+     */
+    private setupConfigFileWatcher(): void {
+        if (!vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length === 0) {
+            return;
+        }
+
+        // Dispose any existing watcher
+        if (this._configFileWatcher) {
+            this._configFileWatcher.dispose();
+            this._configFileWatcher = null;
+        }
+
+        const folders = vscode.workspace.workspaceFolders!;
+        const folder = folders[0]!;
+        const pattern = new vscode.RelativePattern(folder, '.remote-coding/config.json');
+        this._configFileWatcher = vscode.workspace.createFileSystemWatcher(pattern);
+
+        const reloadAndEmit = async () => {
+            try {
+                const cfg = await this.loadConfiguration();
+                this._onConfigurationChanged.fire(cfg);
+            } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                vscode.window.showErrorMessage(`Configuration file error: ${msg}`);
+            }
+        };
+
+        this._configFileWatcher.onDidCreate(reloadAndEmit);
+        this._configFileWatcher.onDidChange(reloadAndEmit);
+        this._configFileWatcher.onDidDelete(async () => {
+            this._usingFileConfig = false;
+            await reloadAndEmit();
+        });
+    }
+
+    /**
      * Load and validate server configuration from VS Code settings (simplified schema)
      */
     public async loadConfiguration(): Promise<ServerConfig> {
-        const config = vscode.workspace.getConfiguration('webAutomationTunnel');
+        // Try to load from .remote-coding/config.json first
+        const fileCfg = await this.readConfigFile();
+        if (fileCfg) {
+            this._usingFileConfig = true;
+            const serverConfig = await this.applyDefaultsAndValidate(fileCfg);
+            const cfg: ServerConfig = {
+                httpPort: serverConfig.httpPort,
+                autoStartTunnel: false
+            } as ServerConfig;
+            return cfg;
+        }
 
-        // Load configuration with defaults (simplified: only httpPort is honored)
+        // Fallback to VS Code settings
+        const config = vscode.workspace.getConfiguration('webAutomationTunnel');
         const rawConfig = {
             httpPort: config.get<number>('httpPort')
         } as const;
 
-        // Apply defaults and validate
         const serverConfig = await this.applyDefaultsAndValidate(rawConfig);
-
-        // Return minimal shape of ServerConfig for backward compatibility
-        // Note: we intentionally omit deprecated optional fields to satisfy exactOptionalPropertyTypes
         const cfg: ServerConfig = {
             httpPort: serverConfig.httpPort,
             autoStartTunnel: false
@@ -76,6 +125,89 @@ export class ConfigurationManager {
         await this.validateConfiguration({ httpPort: config.httpPort } as ServerConfig);
 
         return config;
+    }
+
+    /**
+     * Ensure onboarding by creating .remote-coding/config.json if missing (interactive by default).
+     */
+    public async ensureOnboarding(interactive: boolean = true): Promise<void> {
+        const workspace = vscode.workspace.workspaceFolders?.[0];
+        if (!workspace) return; // no workspace open
+
+        const folderPath = path.join(workspace.uri.fsPath, '.remote-coding');
+        const configPath = path.join(folderPath, 'config.json');
+
+        // If already exists, nothing to do
+        if (await this.pathExists(configPath)) {
+            return;
+        }
+
+        if (!interactive) {
+            await fs.promises.mkdir(folderPath, { recursive: true });
+            await this.writeConfigFile({ httpPort: 3900 });
+            vscode.window.showInformationMessage('Initialized .remote-coding/config.json with defaults');
+            return;
+        }
+
+        const choice = await vscode.window.showInformationMessage(
+            'Remote Coding: Set up project configuration?',
+            'Set Up',
+            'Skip'
+        );
+        if (choice === 'Set Up') {
+            try {
+                await fs.promises.mkdir(folderPath, { recursive: true });
+                await this.writeConfigFile({ httpPort: 3900 });
+                this._usingFileConfig = true;
+                const cfg = await this.loadConfiguration();
+                this._onConfigurationChanged.fire(cfg);
+                vscode.window.showInformationMessage('Project configured in .remote-coding/config.json');
+            } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                vscode.window.showErrorMessage(`Failed to initialize .remote-coding: ${msg}`);
+            }
+        }
+    }
+
+    /** Read JSON from .remote-coding/config.json if it exists */
+    private async readConfigFile(): Promise<Partial<ServerConfig> | null> {
+        const workspace = vscode.workspace.workspaceFolders?.[0];
+        if (!workspace) return null;
+        const configPath = path.join(workspace.uri.fsPath, '.remote-coding', 'config.json');
+        if (!(await this.pathExists(configPath))) return null;
+        try {
+            const content = await fs.promises.readFile(configPath, 'utf8');
+            const data = JSON.parse(content);
+            // Only honor supported keys
+            const result: Partial<ServerConfig> = {};
+            if (typeof data.httpPort === 'number') result.httpPort = data.httpPort;
+            return result;
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            vscode.window.showErrorMessage(`Invalid .remote-coding/config.json: ${msg}`);
+            return null;
+        }
+    }
+
+    /** Write JSON to .remote-coding/config.json */
+    private async writeConfigFile(data: Partial<ServerConfig>): Promise<void> {
+        const workspace = vscode.workspace.workspaceFolders?.[0];
+        if (!workspace) return;
+        const folderPath = path.join(workspace.uri.fsPath, '.remote-coding');
+        const configPath = path.join(folderPath, 'config.json');
+        await fs.promises.mkdir(folderPath, { recursive: true });
+        const payload: any = {};
+        if (typeof data.httpPort === 'number') payload.httpPort = data.httpPort;
+        await fs.promises.writeFile(configPath, JSON.stringify(payload, null, 2), 'utf8');
+    }
+
+    private async pathExists(p: string): Promise<boolean> {
+        try {
+            await fs.promises.stat(p);
+            return true;
+        } catch {
+            return false;
+        }
     }
 
     /**
@@ -135,6 +267,16 @@ export class ConfigurationManager {
      * Reset configuration to defaults
      */
     public async resetToDefaults(): Promise<void> {
+        // Prefer file-based config if present
+        const fileCfg = await this.readConfigFile();
+        if (fileCfg !== null) {
+            await this.writeConfigFile({ httpPort: 3900 });
+            const cfg = await this.loadConfiguration();
+            this._onConfigurationChanged.fire(cfg);
+            vscode.window.showInformationMessage('Reset .remote-coding/config.json to defaults');
+            return;
+        }
+
         const config = vscode.workspace.getConfiguration('webAutomationTunnel');
         const schema = this.getConfigurationSchema();
 
@@ -161,7 +303,18 @@ export class ConfigurationManager {
             this._onConfigurationChanged.fire(cfg);
             return;
         }
+
         await this.validateConfigurationValue(key, value);
+
+        // Prefer file-based config if present (or if previously used)
+        const hasFile = (await this.readConfigFile()) !== null;
+        if (hasFile || this._usingFileConfig) {
+            await this.writeConfigFile({ httpPort: value });
+            const cfg = await this.loadConfiguration();
+            this._onConfigurationChanged.fire(cfg);
+            return;
+        }
+
         const config = vscode.workspace.getConfiguration('webAutomationTunnel');
         await config.update(key, value, vscode.ConfigurationTarget.Workspace);
         // Reload and emit
@@ -239,6 +392,10 @@ export class ConfigurationManager {
         if (this._configChangeListener) {
             this._configChangeListener.dispose();
             this._configChangeListener = null;
+        }
+        if (this._configFileWatcher) {
+            this._configFileWatcher.dispose();
+            this._configFileWatcher = null;
         }
         this._onConfigurationChanged.dispose();
     }

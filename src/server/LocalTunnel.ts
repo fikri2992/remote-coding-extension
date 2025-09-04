@@ -2,6 +2,7 @@ import * as cp from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as vscode from 'vscode';
+import { parsePublicUrl, killProcessTree } from './CloudflaredManager';
 
 export interface TunnelConfig {
   localPort: number;
@@ -36,12 +37,6 @@ export class LocalTunnel {
     try {
       // Resolve cloudflared CLI path
       const cli = this.binaryPath || 'cloudflared';
-      // Check if cloudflared is available
-      const isInstalled = await this.checkCloudflaredInstalled(cli);
-
-      if (!isInstalled) {
-        throw new Error('cloudflared is not installed. Please install it from: https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/install-and-setup/tunnel-guide');
-      }
 
       // Validate Cloudflare token if provided
       if (this.config.cloudflareToken) {
@@ -70,6 +65,8 @@ export class LocalTunnel {
       this.status.startTime = new Date();
       this.status.localUrl = `http://localhost:${this.config.localPort}`;
 
+      const timeoutMs = vscode.workspace.getConfiguration('webAutomationTunnel').get<number>('tunnelStartTimeoutMs', 60000);
+
       return new Promise((resolve, reject) => {
         let tunnelUrl = '';
         let errorMessage = '';
@@ -79,31 +76,10 @@ export class LocalTunnel {
           const output = data.toString();
           console.log('Cloudflared stdout:', output);
 
-          // Look for the tunnel URL in the output (try multiple patterns)
-          if (!tunnelUrl) { // Only process if we haven't found URL yet
-            // Try different Cloudflare URL patterns
-            const patterns = [
-              /https:\/\/[^\s]+\.trycloudflare\.com[^\s]*/g,
-              /https:\/\/[^\s]+\.cloudflaretunnel\.com[^\s]*/g,
-              /https:\/\/[^\s]+\.cfargotunnel\.com[^\s]*/g,
-              /tunnel.*started.*https:\/\/[^\s]+/gi,
-              /https:\/\/[^\s]+\.tunnel\.cloudflare\.com[^\s]*/g
-            ];
-
-            for (const pattern of patterns) {
-              const match = output.match(pattern);
-              if (match) {
-                // Extract URL from the match
-                const urlMatch = match[0].match(/https:\/\/[^\s]+/);
-                if (urlMatch) {
-                  tunnelUrl = urlMatch[0];
-                  console.log(`Found tunnel URL: ${tunnelUrl}`);
-                  break;
-                }
-              }
-            }
-
-            if (tunnelUrl) {
+          if (!tunnelUrl) {
+            const maybe = parsePublicUrl(output);
+            if (maybe) {
+              tunnelUrl = maybe;
               this.status.publicUrl = tunnelUrl;
               this.status.isRunning = true;
               console.log(`Cloudflare tunnel started: ${tunnelUrl}`);
@@ -119,26 +95,9 @@ export class LocalTunnel {
 
           // Sometimes tunnel URL appears in stderr
           if (!tunnelUrl) {
-            const patterns = [
-              /https:\/\/[^\s]+\.trycloudflare\.com[^\s]*/g,
-              /https:\/\/[^\s]+\.cloudflaretunnel\.com[^\s]*/g,
-              /https:\/\/[^\s]+\.cfargotunnel\.com[^\s]*/g,
-              /https:\/\/[^\s]+\.tunnel\.cloudflare\.com[^\s]*/g
-            ];
-
-            for (const pattern of patterns) {
-              const match = output.match(pattern);
-              if (match) {
-                const urlMatch = match[0].match(/https:\/\/[^\s]+/);
-                if (urlMatch) {
-                  tunnelUrl = urlMatch[0];
-                  console.log(`Found tunnel URL in stderr: ${tunnelUrl}`);
-                  break;
-                }
-              }
-            }
-
-            if (tunnelUrl) {
+            const maybe = parsePublicUrl(output);
+            if (maybe) {
+              tunnelUrl = maybe;
               this.status.publicUrl = tunnelUrl;
               this.status.isRunning = true;
               console.log(`Cloudflare tunnel started: ${tunnelUrl}`);
@@ -168,14 +127,14 @@ export class LocalTunnel {
           reject(error);
         });
 
-        // Timeout after 60 seconds if no URL is found
+        // Timeout if no URL is found
         setTimeout(() => {
           if (!tunnelUrl) {
             tunnelProcess.kill();
             this.status.lastError = 'Timeout: Could not establish tunnel connection';
             reject(new Error(this.status.lastError));
           }
-        }, 60000); // Cloudflare tunnels take longer to establish
+        }, typeof timeoutMs === 'number' && timeoutMs > 0 ? timeoutMs : 60000);
       });
 
     } catch (error) {
@@ -186,50 +145,27 @@ export class LocalTunnel {
   }
 
   public async stop(): Promise<void> {
-    return new Promise((resolve) => {
-      if (this.status.process) {
-        this.status.process.kill('SIGTERM');
-
-        // Wait for process to exit
-        const timeout = setTimeout(() => {
-          if (this.status.process) {
-            this.status.process.kill('SIGKILL');
-          }
-          resolve();
-        }, 5000);
-
-        this.status.process.on('exit', () => {
-          clearTimeout(timeout);
-          this.status.isRunning = false;
-          this.status.process = undefined as any;
-          console.log('LocalTunnel stopped');
-          resolve();
-        });
+    return new Promise(async (resolve) => {
+      const proc = this.status.process;
+      if (proc) {
+        const pid = proc.pid ?? 0;
+        if (pid > 0) {
+          await killProcessTree(pid);
+        } else {
+          try { proc.kill('SIGTERM'); } catch {}
+          setTimeout(() => { try { proc.kill('SIGKILL'); } catch {} }, 3000);
+        }
+        this.status.isRunning = false;
+        this.status.process = undefined as any;
+        console.log('LocalTunnel stopped');
+        resolve();
       } else {
         resolve();
       }
     });
   }
 
-  private async checkCloudflaredInstalled(cli: string): Promise<boolean> {
-    return new Promise((resolve) => {
-      cp.exec(`"${cli}" version`, (error, stdout, stderr) => {
-        if (error) {
-          console.log('Cloudflared not found. Please install from: https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/install-and-setup/tunnel-guide');
-          console.log('Installation command:', process.platform === 'win32'
-            ? 'winget install --id Cloudflare.cloudflared'
-            : process.platform === 'darwin'
-            ? 'brew install cloudflared'
-            : 'curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o cloudflared && sudo mv cloudflared /usr/local/bin/ && chmod +x /usr/local/bin/cloudflared'
-          );
-          resolve(false);
-        } else {
-          console.log('Cloudflared version:', stdout.trim());
-          resolve(true);
-        }
-      });
-    });
-  }
+  // Binary management is handled by ensureCloudflared() upstream; no local install/check here.
 
   private async authenticateCloudflare(cli: string): Promise<void> {
     if (!this.config.cloudflareToken) {
@@ -269,47 +205,5 @@ export class LocalTunnel {
     return { ...this.status };
   }
 
-  public async installCloudflared(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      console.log('Installing cloudflared...');
-
-      // Determine the platform and architecture for the correct download
-      const platform = process.platform;
-      const arch = process.arch;
-
-      let downloadUrl = '';
-      let installCommand = '';
-
-      if (platform === 'win32') {
-        downloadUrl = 'https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe';
-        installCommand = `powershell -Command "Invoke-WebRequest -Uri '${downloadUrl}' -OutFile 'cloudflared.exe'; Move-Item -Path 'cloudflared.exe' -Destination 'C:\\Windows\\System32\\cloudflared.exe'"`;
-      } else if (platform === 'darwin') {
-        downloadUrl = arch === 'arm64'
-          ? 'https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-darwin-arm64.tgz'
-          : 'https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-darwin-amd64.tgz';
-        installCommand = `curl -L ${downloadUrl} | tar -xz && sudo mv cloudflared /usr/local/bin/cloudflared`;
-      } else if (platform === 'linux') {
-        downloadUrl = arch === 'arm64'
-          ? 'https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-arm64'
-          : 'https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64';
-        installCommand = `curl -L ${downloadUrl} -o cloudflared && chmod +x cloudflared && sudo mv cloudflared /usr/local/bin/cloudflared`;
-      } else {
-        reject(new Error(`Unsupported platform: ${platform}-${arch}`));
-        return;
-      }
-
-      console.log(`Downloading cloudflared for ${platform}-${arch}...`);
-
-      const installProcess = cp.exec(installCommand, (error, stdout, stderr) => {
-        if (error) {
-          console.error('Installation error:', error);
-          reject(new Error(`Failed to install cloudflared: ${error.message}`));
-          return;
-        }
-
-        console.log('cloudflared installed successfully');
-        resolve();
-      });
-    });
-  }
+  // Installation of cloudflared is delegated to CloudflaredManager.ensureCloudflared().
 }

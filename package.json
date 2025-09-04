@@ -89,6 +89,16 @@
                 "command": "webAutomationTunnel.tunnelStatus",
                 "title": "Check Tunnel Status",
                 "category": "Web Automation Tunnel"
+            },
+            {
+                "command": "webAutomationTunnel.quickStart",
+                "title": "Quick Start: Start Server + Quick Tunnel",
+                "category": "Web Automation Tunnel"
+            },
+            {
+                "command": "webAutomationTunnel.statusBarAction",
+                "title": "Web Automation Status Actions",
+                "category": "Web Automation Tunnel"
             }
         ],
         "configuration": {
@@ -124,6 +134,13 @@
                     "default": true,
                     "description": "Automatically start Cloudflare tunnel when server starts",
                     "deprecationMessage": "Deprecated: Tunnel start is controlled via the extension UI. This setting is ignored."
+                },
+                "webAutomationTunnel.tunnelStartTimeoutMs": {
+                    "type": "number",
+                    "default": 60000,
+                    "minimum": 5000,
+                    "maximum": 300000,
+                    "description": "Timeout in milliseconds to wait for Cloudflare tunnel to report its public URL before failing"
                 },
                 "webAutomationTunnel.useEnhancedUI": {
                     "type": "boolean",

@@ -19,7 +19,8 @@
     "tailwind-merge": "^2.0.0",
     "tailwindcss-animate": "^1.0.7",
     "@tanstack/react-router": "^1.20.0",
-    "reconnecting-websocket": "^4.4.0"
+    "reconnecting-websocket": "^4.4.0",
+    "qrcode": "^1.5.3"
   },
   "devDependencies": {
     "@types/node": "^20.10.5",

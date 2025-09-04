@@ -29,8 +29,19 @@ interface WebSocketProviderProps {
 
 export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
   children,
-  url = 'ws://localhost:3900/ws'
+  url
 }) => {
+  const defaultUrl = (() => {
+    if (typeof window !== 'undefined' && window.location && window.location.origin) {
+      try {
+        const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        return `${proto}//${window.location.host}/ws`;
+      } catch {
+        /* ignore */
+      }
+    }
+    return 'ws://localhost:3900/ws';
+  })();
   const [isConnected, setIsConnected] = useState(false);
   const [connectionCount, setConnectionCount] = useState(0);
   const [lastActivity, setLastActivity] = useState<string | null>(null);
@@ -38,7 +49,8 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
   const listenersRef = useRef<Array<(data: any) => void>>([]);
 
   useEffect(() => {
-    const websocket = new ReconnectingWebSocket(url, [], {
+    const connectUrl = url || defaultUrl;
+    const websocket = new ReconnectingWebSocket(connectUrl, [], {
       maxReconnectionDelay: 10000,
       minReconnectionDelay: 1000,
       reconnectionDelayGrowFactor: 1.3,

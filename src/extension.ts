@@ -178,6 +178,110 @@ export function activate(context: vscode.ExtensionContext) {
         }
     });
 
+    // Quick Start: Start server then quick tunnel
+    const quickStartCommand = vscode.commands.registerCommand('webAutomationTunnel.quickStart', async () => {
+        try {
+            await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: 'Starting server and tunnel...' }, async (progress) => {
+                const status = webviewProvider.serverManager.getServerStatus();
+                if (!status.isRunning) {
+                    progress.report({ message: 'Starting server...' });
+                    await webviewProvider.startServer();
+                }
+                progress.report({ message: 'Starting quick tunnel...' });
+                await webviewProvider.serverManager.startTunnel({} as any);
+            });
+
+            const t = webviewProvider.serverManager.getTunnelStatus();
+            if (t?.publicUrl) {
+                vscode.window.showInformationMessage(
+                    `Tunnel ready: ${t.publicUrl}`,
+                    'Open',
+                    'Copy URL'
+                ).then(action => {
+                    if (action === 'Open') {
+                        vscode.env.openExternal(vscode.Uri.parse(t.publicUrl!));
+                    } else if (action === 'Copy URL') {
+                        vscode.env.clipboard.writeText(t.publicUrl!);
+                    }
+                });
+            } else {
+                vscode.window.showInformationMessage('Server started. Tunnel starting...');
+            }
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+            vscode.window.showErrorMessage(`Quick Start failed: ${errorMessage}`);
+        }
+    });
+
+    // Status bar item for quick actions
+    const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+    statusBarItem.name = 'Web Automation Tunnel';
+    statusBarItem.command = 'webAutomationTunnel.statusBarAction';
+
+    const updateStatusBar = () => {
+        const s = webviewProvider.serverManager.getServerStatus();
+        const hasTunnel = !!s.publicUrl && !!s.tunnelStatus?.isRunning;
+        if (hasTunnel) {
+            statusBarItem.text = '$(globe) Tunnel';
+            statusBarItem.tooltip = s.publicUrl;
+        } else if (s.isRunning) {
+            statusBarItem.text = '$(plug) Server';
+            statusBarItem.tooltip = 'Server running. Click for actions.';
+        } else {
+            statusBarItem.text = '$(circle-slash) Server Off';
+            statusBarItem.tooltip = 'Click to start server / tunnel';
+        }
+        statusBarItem.show();
+    };
+
+    updateStatusBar();
+    const serverDisp = webviewProvider.serverManager.onServerStatusChanged(() => updateStatusBar());
+    const tunnelDisp = webviewProvider.serverManager.onTunnelStatusChanged(() => updateStatusBar());
+
+    const statusBarActionCommand = vscode.commands.registerCommand('webAutomationTunnel.statusBarAction', async () => {
+        const s = webviewProvider.serverManager.getServerStatus();
+        const actions: string[] = [];
+        if (s.publicUrl && s.tunnelStatus?.isRunning) {
+            actions.push('Open Public URL', 'Copy Public URL', 'Stop Tunnel');
+        } else if (s.isRunning) {
+            actions.push('Start Quick Tunnel', 'Start Named Tunnel');
+        } else {
+            actions.push('Quick Start (Server + Quick Tunnel)', 'Start Server');
+        }
+        const choice = await vscode.window.showQuickPick(actions, { placeHolder: 'Web Automation Tunnel' });
+        if (!choice) return;
+        try {
+            switch (choice) {
+                case 'Open Public URL':
+                    if (s.publicUrl) vscode.env.openExternal(vscode.Uri.parse(s.publicUrl));
+                    break;
+                case 'Copy Public URL':
+                    if (s.publicUrl) await vscode.env.clipboard.writeText(s.publicUrl);
+                    break;
+                case 'Stop Tunnel':
+                    await webviewProvider.serverManager.stopTunnel();
+                    break;
+                case 'Start Quick Tunnel':
+                    await webviewProvider.serverManager.startTunnel({} as any);
+                    break;
+                case 'Start Named Tunnel':
+                    vscode.commands.executeCommand('webAutomationTunnel.startTunnel');
+                    break;
+                case 'Quick Start (Server + Quick Tunnel)':
+                    vscode.commands.executeCommand('webAutomationTunnel.quickStart');
+                    break;
+                case 'Start Server':
+                    await webviewProvider.startServer();
+                    break;
+            }
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            vscode.window.showErrorMessage(`Action failed: ${msg}`);
+        }
+    });
+
+    context.subscriptions.push(statusBarItem, serverDisp, tunnelDisp);
+
     context.subscriptions.push(
         startServerCommand, 
         stopServerCommand, 
@@ -187,7 +291,9 @@ export function activate(context: vscode.ExtensionContext) {
         startTunnelCommand,
         stopTunnelCommand,
         installCloudflaredCommand,
-        tunnelStatusCommand
+        tunnelStatusCommand,
+        quickStartCommand,
+        statusBarActionCommand
     );
 
     // Register integration test command

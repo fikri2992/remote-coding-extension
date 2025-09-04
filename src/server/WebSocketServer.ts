@@ -42,7 +42,7 @@ export class WebSocketServer {
                 return;
               }
 
-              // Basic origin allowlist similar to HttpServer
+              // Origin allowlist: allow common localhost origins and same-origin over tunnels
               const origin = request.headers['origin'] as string | undefined;
               const allowedOrigins = new Set([
                 'http://localhost:3000',
@@ -52,7 +52,15 @@ export class WebSocketServer {
                 'http://localhost:3901',
                 'http://127.0.0.1:3901'
               ]);
-              if (origin && !allowedOrigins.has(origin)) {
+              let sameOriginOk = false;
+              try {
+                if (origin && request.headers['host']) {
+                  const o = new URL(origin);
+                  // Accept when the Origin host matches request Host (e.g., Cloudflare tunnel same-origin)
+                  sameOriginOk = o.host === String(request.headers['host']);
+                }
+              } catch {}
+              if (origin && !allowedOrigins.has(origin) && !sameOriginOk) {
                 socket.destroy();
                 return;
               }

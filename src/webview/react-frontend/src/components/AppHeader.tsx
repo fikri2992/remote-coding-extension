@@ -1,6 +1,8 @@
 import React from 'react';
-import { Wifi, WifiOff } from 'lucide-react';
+import { Wifi, WifiOff, Moon, Sun } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { useTheme } from './theme/ThemeProvider';
+import { Button } from './ui/button';
 
 interface AppHeaderProps {
   isConnected: boolean;
@@ -11,12 +13,13 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   isConnected,
   connectionCount
 }) => {
+  const { theme, toggle } = useTheme();
   return (
-    <header className="bg-white border-b border-gray-200 px-4 lg:px-6 py-3 lg:py-4">
+    <header className="bg-card border-b border-border px-4 lg:px-6 py-3 lg:py-4">
       <div className="flex items-center justify-between max-w-7xl mx-auto">
         {/* App Title */}
         <div className="flex items-center space-x-3 lg:space-x-4">
-          <h1 className="text-lg lg:text-xl font-semibold text-gray-900">
+          <h1 className="text-lg lg:text-xl font-semibold text-foreground">
             Kiro Remote
           </h1>
 
@@ -41,10 +44,10 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
         </div>
 
         {/* Desktop Actions */}
-        <div className="hidden lg:flex items-center space-x-4">
-          <div className="text-sm text-gray-500">
-            {new Date().toLocaleTimeString()}
-          </div>
+        <div className="hidden lg:flex items-center space-x-3">
+          <Button variant="secondary" size="icon" onClick={toggle} aria-label="Toggle theme">
+            {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          </Button>
         </div>
 
         {/* Mobile Connection Status - Simplified */}

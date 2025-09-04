@@ -89,7 +89,7 @@ Notes:
   - `tunnel ... started ... https://<url>`
   - `https://<hash>.tunnel.cloudflare.com`
 - If the process exits non-zero before a URL is found, `start()` rejects with the captured error output.
-- A 60s timeout aborts startup if no URL is discovered; the process is killed and `lastError` is set.
+- Startup timeout is configurable via setting `webAutomationTunnel.tunnelStartTimeoutMs` (default 60000 ms). If no URL is discovered within this window, the process is killed and `lastError` is set.
 - `stop()` sends SIGTERM, then SIGKILL after 5s if needed, and awaits process exit.
 
 ## Binary preparation details
@@ -114,9 +114,24 @@ Notes:
   2) Call `startTunnel({ tunnelName: '<NAME>' })` so `LocalTunnel` runs `cloudflared --no-autoupdate tunnel run <NAME>`.
   3) URL is parsed from output and emitted through server/tunnel status.
 
+## Manage tunnels from the web UI
+When you open the server in a browser (locally or via its Cloudflare public URL), you can manage additional tunnels directly from the web UI. The HTTP server exposes JSON endpoints:
+
+- GET /api/tunnels — list active tunnels started via the web server
+- GET /api/tunnels/status — installation + summary
+- POST /api/tunnels/create — body: { localPort, name?, token? } (quick if no name/token)
+- POST /api/tunnels/stop — body: { id } or { pid }
+- POST /api/tunnels/stopAll — stop all web‑managed tunnels
+- POST /api/cloudflared/install — prepare/install cloudflared
+
+Notes:
+- These endpoints are separate from the single tunnel managed inside VS Code by ServerManager (LocalTunnel).
+- WebSocket upgrades now allow same‑origin connections over tunnel domains, so the browser UI can connect to /ws when accessed via a Cloudflare URL.
+
 ## See also
 - `docs/configuration.md` — all available settings, including `webAutomationTunnel.autoStartTunnel`.
 - `docs/troubleshooting.md` — common issues (arch mismatch, timeouts, ports in use) and fixes.
 - `docs/setup.md` — quick start, building, and getting a Quick Tunnel running.
 - `docs/architecture.md` — where tunnel responsibilities live (`ServerManager`, `LocalTunnel`, `CloudflaredManager`).
 - `docs/commands.md` — palette commands and what they trigger.
+

@@ -4,14 +4,25 @@ import { TunnelList } from '../components/TunnelList';
 import { TunnelActions } from '../components/TunnelActions';
 import { TunnelInfo, CreateTunnelRequest } from '../types/tunnel';
 import { AlertCircle, CheckCircle, Info } from 'lucide-react';
+import { useToast } from '../components/ui/toast';
 
 // VS Code API with fallback for development
 declare const acquireVsCodeApi: () => any;
-const vscode = typeof acquireVsCodeApi !== 'undefined' ? acquireVsCodeApi() : {
-  postMessage: (message: any) => {
-    console.log('VS Code message (development mode):', message);
-  }
-};
+const isVSCode = typeof acquireVsCodeApi !== 'undefined';
+const vscode = isVSCode ? acquireVsCodeApi() : null;
+
+async function apiRequest(path: string, options?: RequestInit): Promise<any> {
+  const url = path.startsWith('http') ? path : `${window.location.origin}${path}`;
+  const res = await fetch(url, {
+    method: 'GET',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'same-origin',
+    ...options
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
+  return data;
+}
 
 export const TunnelManagerPage: React.FC = () => {
   const [tunnels, setTunnels] = useState<TunnelInfo[]>([]);
@@ -22,40 +33,45 @@ export const TunnelManagerPage: React.FC = () => {
     type: 'success' | 'error' | 'info';
     message: string;
   } | null>(null);
+  const { show } = useToast();
 
   // Handle messages from extension
   useEffect(() => {
+    if (!isVSCode) return;
     const handleMessage = (event: MessageEvent) => {
       const message = event.data;
-      switch (message.type) {
+      const type = message.type || message.command;
+      switch (type) {
         case 'tunnelCreated':
-          setTunnels(prev => [...prev, message.tunnel]);
-          setNotification({
-            type: 'success',
-            message: `Tunnel created successfully! Access at ${message.tunnel.url}`
-          });
+          if (message.tunnel) {
+            setTunnels(prev => [...prev, message.tunnel]);
+            setNotification({ type: 'success', message: `Tunnel created successfully! Access at ${message.tunnel.url}` });
+            show({ variant: 'success', title: 'Tunnel created', description: message.tunnel.url });
+          }
           break;
         case 'tunnelStopped':
-          setTunnels(prev => prev.filter(t => t.id !== message.tunnelId));
-          setNotification({
-            type: 'success',
-            message: 'Tunnel stopped successfully.'
-          });
+          if (message.tunnelId) {
+            setTunnels(prev => prev.filter(t => t.id !== message.tunnelId));
+            setNotification({ type: 'success', message: 'Tunnel stopped successfully.' });
+            show({ variant: 'default', title: 'Tunnel stopped' });
+          }
           break;
         case 'tunnelError':
-          setNotification({
-            type: 'error',
-            message: message.error || 'An error occurred with the tunnel.'
-          });
+          setNotification({ type: 'error', message: message.error || 'An error occurred with the tunnel.' });
+          show({ variant: 'destructive', title: 'Tunnel error', description: message.error });
           break;
         case 'tunnelsUpdated':
-          setTunnels(message.tunnels);
+          if (Array.isArray(message.tunnels)) setTunnels(message.tunnels);
           break;
         case 'tunnelStatus':
-          // Update specific tunnel status
-          setTunnels(prev => prev.map(t =>
-            t.id === message.tunnel.id ? message.tunnel : t
-          ));
+        case 'tunnelStatusUpdate':
+          if (message.tunnel) {
+            setTunnels(prev => {
+              const exists = prev.find(t => t.id === message.tunnel.id);
+              if (exists) return prev.map(t => (t.id === message.tunnel.id ? message.tunnel : t));
+              return [...prev, message.tunnel];
+            });
+          }
           break;
       }
     };
@@ -66,41 +82,86 @@ export const TunnelManagerPage: React.FC = () => {
 
   // Load initial tunnel data
   useEffect(() => {
-    vscode.postMessage({ type: 'getTunnels' });
-    vscode.postMessage({ type: 'getTunnelStatus' });
+    (async () => {
+      if (isVSCode) {
+        vscode!.postMessage({ type: 'getTunnels' });
+        vscode!.postMessage({ type: 'getTunnelStatus' });
+      } else {
+        try {
+          const list = await apiRequest('/api/tunnels');
+          if (Array.isArray(list.tunnels)) setTunnels(list.tunnels);
+        } catch (e) { /* ignore */ }
+      }
+    })();
   }, []);
 
   const handleCreateTunnel = async (request: CreateTunnelRequest) => {
     setCreatingTunnel(true);
-    vscode.postMessage({
-      type: 'createTunnel',
-      request: request
-    });
-    // The response will be handled by the message listener
-    setCreatingTunnel(false);
+    try {
+      if (isVSCode) {
+        vscode!.postMessage({ type: 'createTunnel', request });
+      } else {
+        const res = await apiRequest('/api/tunnels/create', { method: 'POST', body: JSON.stringify(request) });
+        if (res?.tunnel) {
+          setTunnels(prev => [...prev, res.tunnel as TunnelInfo]);
+          setNotification({ type: 'success', message: `Tunnel created successfully! Access at ${res.tunnel.url}` });
+          show({ variant: 'success', title: 'Tunnel created', description: res.tunnel.url });
+        }
+      }
+    } catch (e: any) {
+      setNotification({ type: 'error', message: e?.message || 'Failed to create tunnel' });
+      show({ variant: 'destructive', title: 'Create failed', description: e?.message });
+    } finally {
+      setCreatingTunnel(false);
+    }
   };
 
   const handleStopTunnel = async (tunnelId: string) => {
-    vscode.postMessage({
-      type: 'stopTunnel',
-      tunnelId: tunnelId
-    });
+    try {
+      if (isVSCode) {
+        vscode!.postMessage({ type: 'stopTunnel', tunnelId });
+      } else {
+        await apiRequest('/api/tunnels/stop', { method: 'POST', body: JSON.stringify({ id: tunnelId }) });
+        setTunnels(prev => prev.filter(t => t.id !== tunnelId));
+      }
+    } catch (e: any) {
+      setNotification({ type: 'error', message: e?.message || 'Failed to stop tunnel' });
+      show({ variant: 'destructive', title: 'Stop failed', description: e?.message });
+    }
   };
 
   const handleStopAll = async () => {
     setLoading(true);
-    vscode.postMessage({
-      type: 'stopAllTunnels'
-    });
-    setLoading(false);
+    try {
+      if (isVSCode) {
+        vscode!.postMessage({ type: 'stopAllTunnels' });
+      } else {
+        await apiRequest('/api/tunnels/stopAll', { method: 'POST' });
+        setTunnels([]);
+      }
+    } catch (e: any) {
+      setNotification({ type: 'error', message: e?.message || 'Failed to stop tunnels' });
+      show({ variant: 'destructive', title: 'Stop all failed', description: e?.message });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    vscode.postMessage({
-      type: 'refreshTunnels'
-    });
-    setRefreshing(false);
+    try {
+      if (isVSCode) {
+        vscode!.postMessage({ type: 'refreshTunnels' });
+      } else {
+        const list = await apiRequest('/api/tunnels');
+        if (Array.isArray(list.tunnels)) setTunnels(list.tunnels);
+      }
+    } catch (e: any) {
+      setNotification({ type: 'error', message: e?.message || 'Failed to refresh tunnels' });
+      show({ variant: 'destructive', title: 'Refresh failed', description: e?.message });
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   // Auto-hide notifications
@@ -145,7 +206,7 @@ export const TunnelManagerPage: React.FC = () => {
 
       {/* Active Tunnels List */}
       <div className="space-y-4">
-        <h3 className="text-lg font-semibold text-gray-900">Active Tunnels</h3>
+        <h3 className="text-lg font-semibold text-foreground">Active Tunnels</h3>
         <TunnelList
           tunnels={tunnels}
           onStopTunnel={handleStopTunnel}

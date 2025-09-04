@@ -7,6 +7,14 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as url from 'url';
 import { ServerConfig } from './interfaces';
+import {
+    createTunnel as cfCreateTunnel,
+    getActiveTunnels as cfGetActiveTunnels,
+    getTunnelsSummary as cfGetTunnelsSummary,
+    stopTunnelById as cfStopTunnelById,
+    stopAllTunnels as cfStopAllTunnels,
+    ensureCloudflared as cfEnsure
+} from './CloudflaredManager';
 import { ErrorHandler, ErrorCategory, ErrorSeverity } from './ErrorHandler';
 
 export class HttpServer {
@@ -102,12 +110,6 @@ export class HttpServer {
                 return;
             }
 
-            // Validate request method
-            if (!['GET', 'HEAD'].includes(req.method || '')) {
-                this.sendErrorResponse(res, 405, 'Method Not Allowed');
-                return;
-            }
-
             // Parse the URL with error handling
             let parsedUrl;
             try {
@@ -118,6 +120,18 @@ export class HttpServer {
             }
 
             let pathname = parsedUrl.pathname || '/';
+
+            // API routes (allow POST and GET)
+            if (pathname.startsWith('/api/')) {
+                this.handleApiRequest(req, res, pathname, parsedUrl.query || {});
+                return;
+            }
+
+            // Validate request method (static assets only support GET/HEAD)
+            if (!['GET', 'HEAD'].includes(req.method || '')) {
+                this.sendErrorResponse(res, 405, 'Method Not Allowed');
+                return;
+            }
 
             // Health endpoint (no SPA rewrite)
             if (pathname === '/health') {
@@ -171,6 +185,114 @@ export class HttpServer {
             if (duration > 1000) { // Log slow requests
                 console.warn(`Slow HTTP request: ${req.method} ${req.url} took ${duration}ms`);
             }
+        }
+    }
+
+    /**
+     * Handle /api/* JSON endpoints for tunnel management
+     */
+    private async handleApiRequest(req: http.IncomingMessage, res: http.ServerResponse, pathname: string, query: any): Promise<void> {
+        try {
+            // Normalize method
+            const method = (req.method || 'GET').toUpperCase();
+
+            // Helper to send JSON
+            const sendJson = (code: number, obj: any) => {
+                if (!res.headersSent) {
+                    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+                    res.setHeader('Cache-Control', 'no-store');
+                    res.writeHead(code);
+                }
+                res.end(JSON.stringify(obj));
+            };
+
+            // Helper to read JSON body (max 1MB)
+            const readBody = async (): Promise<any> => {
+                return new Promise((resolve, reject) => {
+                    let data = '';
+                    let size = 0;
+                    req.on('data', (chunk) => {
+                        size += chunk.length;
+                        if (size > 1024 * 1024) {
+                            reject(new Error('Payload too large'));
+                            try { req.destroy(); } catch {}
+                            return;
+                        }
+                        data += chunk.toString();
+                    });
+                    req.on('end', () => {
+                        if (!data) return resolve({});
+                        try { resolve(JSON.parse(data)); }
+                        catch (e) { reject(new Error('Invalid JSON')); }
+                    });
+                    req.on('error', (e) => reject(e));
+                });
+            };
+
+            // Routing
+            if (method === 'GET' && pathname === '/api/tunnels') {
+                const tunnels = cfGetActiveTunnels();
+                return sendJson(200, { success: true, tunnels });
+            }
+
+            if (method === 'GET' && pathname === '/api/tunnels/status') {
+                const status = await cfGetTunnelsSummary();
+                return sendJson(200, { success: true, status });
+            }
+
+            if (method === 'POST' && pathname === '/api/tunnels/create') {
+                const body = await readBody();
+                const localPort = Number(body.localPort || 0);
+                const name = typeof body.name === 'string' ? body.name : undefined;
+                const token = typeof body.token === 'string' ? body.token : undefined;
+                const type: 'quick' | 'named' = name || token ? 'named' : 'quick';
+
+                if (!localPort || isNaN(localPort)) {
+                    return sendJson(400, { success: false, error: 'localPort is required' });
+                }
+
+                const tunnel = await cfCreateTunnel({ localPort, name, token, type });
+                return sendJson(200, { success: true, tunnel });
+            }
+
+            if (method === 'POST' && pathname === '/api/tunnels/stop') {
+                const body = await readBody();
+                const id = typeof body.id === 'string' ? body.id : undefined;
+                const pid = typeof body.pid === 'number' ? body.pid : undefined;
+
+                let ok = false;
+                if (id) {
+                    ok = await cfStopTunnelById(id);
+                } else if (typeof pid === 'number' && pid > 0) {
+                    // Use exported killProcessTree to terminate
+                    const { killProcessTree } = await import('./CloudflaredManager');
+                    ok = await killProcessTree(pid);
+                } else {
+                    return sendJson(400, { success: false, error: 'id or pid is required' });
+                }
+                return sendJson(200, { success: ok });
+            }
+
+            if (method === 'POST' && pathname === '/api/tunnels/stopAll') {
+                const count = await cfStopAllTunnels();
+                return sendJson(200, { success: true, stopped: count });
+            }
+
+            if (method === 'POST' && pathname === '/api/cloudflared/install') {
+                const bin = await cfEnsure(undefined);
+                return sendJson(200, { success: true, binary: bin });
+            }
+
+            // Unknown API route
+            return sendJson(404, { success: false, error: 'Not Found' });
+
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : 'Unknown API error';
+            if (!res.headersSent) {
+                res.setHeader('Content-Type', 'application/json; charset=utf-8');
+            }
+            res.writeHead(500);
+            res.end(JSON.stringify({ success: false, error: msg }));
         }
     }
 

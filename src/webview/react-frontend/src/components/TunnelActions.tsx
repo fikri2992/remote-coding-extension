@@ -2,6 +2,7 @@ import React from 'react';
 import { TunnelInfo } from '../types/tunnel';
 import { RefreshCw, Square, AlertTriangle } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { Card, CardContent } from './ui/card';
 
 interface TunnelActionsProps {
   tunnels: TunnelInfo[];
@@ -22,23 +23,24 @@ export const TunnelActions: React.FC<TunnelActionsProps> = ({
   const hasErrors = tunnels.some(t => t.status === 'error');
 
   return (
-    <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-gray-700">Active Tunnels:</span>
-            <span className="px-2 py-1 bg-blue-100 text-blue-800 text-sm rounded-full">
-              {runningTunnels.length}
-            </span>
-          </div>
-
-          {hasErrors && (
-            <div className="flex items-center gap-2 text-yellow-600">
-              <AlertTriangle className="w-4 h-4" />
-              <span className="text-sm">Some tunnels have errors</span>
+    <Card className="mb-6">
+      <CardContent className="p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-foreground">Active Tunnels:</span>
+              <span className="px-2 py-1 bg-blue-100 text-blue-800 text-sm rounded-full">
+                {runningTunnels.length}
+              </span>
             </div>
-          )}
-        </div>
+
+            {hasErrors && (
+              <div className="flex items-center gap-2 text-yellow-600">
+                <AlertTriangle className="w-4 h-4" />
+                <span className="text-sm">Some tunnels have errors</span>
+              </div>
+            )}
+          </div>
 
         <div className="flex items-center gap-2">
           <button
@@ -71,15 +73,16 @@ export const TunnelActions: React.FC<TunnelActionsProps> = ({
             </button>
           )}
         </div>
-      </div>
-
-      {runningTunnels.length > 1 && (
-        <div className="mt-3 pt-3 border-t border-gray-200">
-          <div className="text-xs text-gray-500">
-            Quick actions for individual tunnels are available in the tunnel list below.
-          </div>
         </div>
-      )}
-    </div>
+
+        {runningTunnels.length > 1 && (
+          <div className="mt-3 pt-3 border-t border-gray-200">
+            <div className="text-xs text-muted-foreground">
+              Quick actions for individual tunnels are available in the tunnel list below.
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 };

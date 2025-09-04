@@ -9,6 +9,17 @@ function ensureDirSync(dir: string) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 }
 
+// Read tunnel startup timeout from settings (default 60s)
+function getTunnelStartTimeoutMs(): number {
+  try {
+    const cfg = vscode.workspace.getConfiguration('webAutomationTunnel');
+    const ms = cfg.get<number>('tunnelStartTimeoutMs', 60000);
+    return typeof ms === 'number' && ms > 0 ? ms : 60000;
+  } catch {
+    return 60000;
+  }
+}
+
 // -------------------------
 export interface TunnelInfo {
   id: string;
@@ -38,6 +49,8 @@ export interface TunnelStatus {
 
 // -------------------------
 let activeTunnels: Map<string, TunnelInfo> = new Map();
+// Keep strong references to child processes to avoid stdout/stderr pipe backpressure and GC
+const tunnelProcesses: Map<string, cp.ChildProcess> = new Map();
 
 /** Check if cloudflared is installed/available */
 export async function isInstalled(): Promise<boolean> {
@@ -89,6 +102,20 @@ export async function createTunnel(request: CreateTunnelRequest, context?: vscod
     };
 
     activeTunnels.set(tunnelId, updatedTunnel);
+    // Keep process reference and drain output to avoid blocking
+    if ((result as any).proc) {
+      const proc = (result as any).proc as cp.ChildProcess;
+      // Drain to prevent pipe backpressure
+      proc.stdout?.on('data', () => {});
+      proc.stderr?.on('data', () => {});
+      tunnelProcesses.set(tunnelId, proc);
+      // Cleanup on exit
+      proc.on('exit', () => {
+        tunnelProcesses.delete(tunnelId);
+        const t = activeTunnels.get(tunnelId);
+        if (t) activeTunnels.set(tunnelId, { ...t, status: 'stopped' });
+      });
+    }
     return updatedTunnel;
   } catch (error) {
     // Update tunnel with error
@@ -115,6 +142,56 @@ export function getActiveTunnels(): TunnelInfo[] {
  */
 export function getTunnelById(tunnelId: string): TunnelInfo | undefined {
   return activeTunnels.get(tunnelId);
+}
+
+/**
+ * Stop a tunnel by its generated ID
+ */
+export async function stopTunnelById(tunnelId: string): Promise<boolean> {
+  const info = activeTunnels.get(tunnelId);
+  if (!info) return false;
+  let ok = false;
+  try {
+    const proc = tunnelProcesses.get(tunnelId);
+    if (proc && proc.pid) {
+      ok = await stopTunnelByPid(proc.pid);
+    } else {
+      ok = await stopTunnelByPid(info.pid);
+    }
+  } finally {
+    try { tunnelProcesses.get(tunnelId)?.removeAllListeners(); } catch {}
+    tunnelProcesses.delete(tunnelId);
+  }
+  activeTunnels.delete(tunnelId);
+  return ok;
+}
+
+/**
+ * Stop all active tunnels
+ */
+export async function stopAllTunnels(): Promise<number> {
+  const ids = Array.from(activeTunnels.keys());
+  let count = 0;
+  for (const id of ids) {
+    try {
+      const ok = await stopTunnelById(id);
+      if (ok) count++;
+    } catch {
+      // ignore
+    }
+  }
+  return count;
+}
+
+/**
+ * Get summarized status for tunnels (installation + active list)
+ */
+export async function getTunnelsSummary(): Promise<TunnelStatus> {
+  return {
+    isInstalled: await isInstalled(),
+    activeTunnels: getActiveTunnels(),
+    totalCount: activeTunnels.size
+  };
 }
 
 /**
@@ -146,13 +223,6 @@ export async function stopTunnel(tunnelId: string): Promise<boolean> {
   }
 }
 
-/**
- * Stop all tunnels
- */
-export async function stopAllTunnels(): Promise<void> {
-  const tunnelIds = Array.from(activeTunnels.keys());
-  await Promise.all(tunnelIds.map(id => stopTunnel(id)));
-}
 
 /**
  * Get tunnel status summary
@@ -194,11 +264,16 @@ async function stopTunnelByPid(pid: number): Promise<boolean> {
   });
 }
 
+// Exported utility for other modules to terminate a process tree reliably
+export async function killProcessTree(pid: number): Promise<boolean> {
+  return stopTunnelByPid(pid);
+}
+
 /**
  * Start a Quick Tunnel that exposes http://localhost:localPort
  * Resolves with the public URL and PID once available.
  */
-export async function startQuickTunnel(localPort: number, context?: vscode.ExtensionContext, extraArgs: string[] = []): Promise<{ url: string; pid: number }> {
+export async function startQuickTunnel(localPort: number, context?: vscode.ExtensionContext, extraArgs: string[] = []): Promise<{ url: string; pid: number; proc: cp.ChildProcess }> {
   const bin = await ensureCloudflared(context);
 
   const args = [
@@ -208,7 +283,7 @@ export async function startQuickTunnel(localPort: number, context?: vscode.Exten
     ...extraArgs,
   ];
 
-  return spawnAndResolveUrl(bin, args);
+  return spawnAndResolveUrl(bin, args, getTunnelStartTimeoutMs());
 }
 
 /**
@@ -218,7 +293,7 @@ export async function startQuickTunnel(localPort: number, context?: vscode.Exten
  * In both cases we append --no-autoupdate and attempt to route to localPort via --url to simplify usage.
  * Note: For production named tunnels, routing is often configured via YAML; this provides a simplified path.
  */
-export async function startNamedTunnel(localPort: number, tunnelName?: string, token?: string, context?: vscode.ExtensionContext, extraArgs: string[] = []): Promise<{ url: string; pid: number }> {
+export async function startNamedTunnel(localPort: number, tunnelName?: string, token?: string, context?: vscode.ExtensionContext, extraArgs: string[] = []): Promise<{ url: string; pid: number; proc: cp.ChildProcess }> {
   const bin = await ensureCloudflared(context);
 
   const base = ['tunnel', '--no-autoupdate'];
@@ -234,25 +309,59 @@ export async function startNamedTunnel(localPort: number, tunnelName?: string, t
     args = [...base, ...route, ...extraArgs];
   }
 
-  return spawnAndResolveUrl(bin, args);
+  return spawnAndResolveUrl(bin, args, getTunnelStartTimeoutMs());
 }
 
 // -------------------------
 // Helpers
 // -------------------------
 
-function parsePublicUrl(data: string): string | null {
-  // Look for any https URL, prioritizing trycloudflare.com but allowing custom hosts
-  const urlRegex = /(https?:\/\/[^\s\"]+)/g;
-  const matches = data.match(urlRegex);
-  if (!matches) return null;
-  // Prefer trycloudflare if present
-  const preferred = matches.find(u => /trycloudflare\.com/.test(u));
-  return preferred || matches[0];
+export function parsePublicUrl(data: string): string | null {
+  // Extract all candidate URLs in the chunk
+  const urlRegex = /(https?:\/\/[^\s\)\]\}\>\"']+)/g;
+  const rawMatches = data.match(urlRegex) || [];
+  if (!rawMatches.length) return null;
+
+  // Clean trailing punctuation often printed around links
+  const clean = (u: string) => u.replace(/[)\]\}\>\.,;:'\"]+$/g, '');
+
+  const matches = rawMatches.map(clean);
+
+  // Allowed tunnel host patterns (avoid ToS links like cloudflare.com/website-terms)
+  const allow = [
+    /\.trycloudflare\.com$/i,
+    /\.cfargotunnel\.com$/i,
+    /\.cloudflaretunnel\.com$/i,
+    /\.tunnel\.cloudflare\.com$/i
+  ];
+
+  const hostname = (u: string) => {
+    try { return new URL(u).hostname; } catch { return ''; }
+  };
+
+  const allowed = matches.filter(u => {
+    const h = hostname(u);
+    return h && allow.some(rx => rx.test(h));
+  });
+
+  if (!allowed.length) return null;
+
+  // Preference order: trycloudflare > cfargotunnel > cloudflaretunnel > tunnel.cloudflare.com
+  const rank = (u: string) => {
+    const h = hostname(u);
+    if (/\.trycloudflare\.com$/i.test(h)) return 1;
+    if (/\.cfargotunnel\.com$/i.test(h)) return 2;
+    if (/\.cloudflaretunnel\.com$/i.test(h)) return 3;
+    if (/\.tunnel\.cloudflare\.com$/i.test(h)) return 4;
+    return 99;
+  };
+
+  allowed.sort((a, b) => rank(a) - rank(b));
+  return allowed.length > 0 ? allowed[0]! : null;
 }
 
-function spawnAndResolveUrl(bin: string, args: string[]): Promise<{ url: string; pid: number }> {
-  return new Promise<{ url: string; pid: number }>((resolve, reject) => {
+function spawnAndResolveUrl(bin: string, args: string[], timeoutMs?: number): Promise<{ url: string; pid: number; proc: cp.ChildProcess }> {
+  return new Promise<{ url: string; pid: number; proc: cp.ChildProcess }>((resolve, reject) => {
     try {
       const proc = cp.spawn(bin, args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
 
@@ -262,7 +371,7 @@ function spawnAndResolveUrl(bin: string, args: string[]): Promise<{ url: string;
           try { proc.kill(); } catch {}
           reject(new Error('Timed out waiting for tunnel URL'));
         }
-      }, 20000); // 20s
+      }, typeof timeoutMs === 'number' && timeoutMs > 0 ? timeoutMs : getTunnelStartTimeoutMs());
 
       const handleChunk = (buf: Buffer) => {
         const text = buf.toString();
@@ -270,7 +379,7 @@ function spawnAndResolveUrl(bin: string, args: string[]): Promise<{ url: string;
         if (url && !resolved) {
           resolved = true;
           clearTimeout(timeout);
-          resolve({ url, pid: proc.pid ?? 0 });
+          resolve({ url, pid: proc.pid ?? 0, proc });
         }
       };
 

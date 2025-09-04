@@ -5,6 +5,8 @@ import { AppHeader } from '../components/AppHeader';
 import { AppSidebar } from '../components/AppSidebar';
 import { AppFooter } from '../components/AppFooter';
 import { WebSocketProvider, useWebSocket } from '../components/WebSocketProvider';
+import { ToastProvider } from '../components/ui/toast';
+import { ThemeProvider } from '../components/theme/ThemeProvider';
 import { cn } from '../lib/utils';
 
 const LayoutContent: React.FC = () => {
@@ -21,14 +23,14 @@ const LayoutContent: React.FC = () => {
   const activeItem = getActiveItemFromPath(location.pathname);
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-background">
       {/* Mobile Header with Hamburger Menu */}
-      <div className="lg:hidden bg-white border-b border-gray-200 px-4 py-3">
+      <div className="lg:hidden bg-card border-b border-border px-4 py-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-colors"
+              className="p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
               aria-label="Toggle menu"
             >
               {isMobileMenuOpen ? (
@@ -37,7 +39,7 @@ const LayoutContent: React.FC = () => {
                 <Menu className="w-5 h-5" />
               )}
             </button>
-            <h1 className="text-lg font-semibold text-gray-900">
+            <h1 className="text-lg font-semibold text-foreground">
               Kiro Remote
             </h1>
           </div>
@@ -81,7 +83,7 @@ const LayoutContent: React.FC = () => {
         {/* Sidebar - Mobile: Overlay, Desktop: Fixed */}
         <div className={cn(
           "fixed lg:static inset-y-0 left-0 z-50 lg:z-auto",
-          "w-64 lg:w-64 bg-white border-r border-gray-200",
+          "w-64 lg:w-64 bg-card border-r border-border",
           "transform transition-transform duration-200 ease-out lg:transition-none",
           isMobileMenuOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         )}>
@@ -112,8 +114,8 @@ const LayoutContent: React.FC = () => {
       </div>
 
       {/* Mobile Footer - Simplified */}
-      <div className="lg:hidden bg-white border-t border-gray-200 px-4 py-3">
-        <div className="flex items-center justify-between text-xs text-gray-500">
+      <div className="lg:hidden bg-card border-t border-border px-4 py-3">
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
           <div className="flex items-center space-x-3">
             <span className={cn(
               "flex items-center space-x-1",
@@ -128,7 +130,7 @@ const LayoutContent: React.FC = () => {
               </span>
             </span>
           </div>
-          <span className="text-gray-400">
+          <span className="text-muted-foreground">
             v1.0
           </span>
         </div>
@@ -139,9 +141,13 @@ const LayoutContent: React.FC = () => {
 
 const RootLayout: React.FC = () => {
   return (
-    <WebSocketProvider>
-      <LayoutContent />
-    </WebSocketProvider>
+    <ThemeProvider>
+      <ToastProvider>
+        <WebSocketProvider>
+          <LayoutContent />
+        </WebSocketProvider>
+      </ToastProvider>
+    </ThemeProvider>
   );
 };
 

@@ -13,8 +13,8 @@ export const AppFooter: React.FC<AppFooterProps> = ({
   lastActivity
 }) => {
   return (
-    <footer className="bg-white border-t border-gray-200 px-6 py-3">
-      <div className="flex items-center justify-between text-sm text-gray-500">
+    <footer className="bg-card border-t border-border px-6 py-3">
+      <div className="flex items-center justify-between text-sm text-muted-foreground">
         <div className="flex items-center space-x-4">
           <div className="flex items-center space-x-1">
             <Activity className="w-4 h-4" />

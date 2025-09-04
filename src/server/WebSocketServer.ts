@@ -2,6 +2,7 @@ import WebSocket from 'ws';
 import { IncomingMessage, Server as HttpServer } from 'http';
 import { Socket } from 'net';
 import { FileSystemService } from './FileSystemService';
+import { GitService } from './GitService';
 
 export interface WebSocketConnection {
   ws: WebSocket;
@@ -17,6 +18,7 @@ export class WebSocketServer {
   private _attachedHttpServer: HttpServer | null = null;
   private _upgradePath: string = '/ws';
   private _fsService: FileSystemService;
+  private _gitService: GitService | null = null;
 
   constructor(config: any, attachedHttpServer?: HttpServer, upgradePath: string = '/ws') {
     // Handle both number and config object
@@ -324,6 +326,33 @@ export class WebSocketServer {
         const errMsg = err instanceof Error ? err.message : String(err);
         this.sendToClient(connectionId, { type: 'fileSystem', id, data: { operation: op, ok: false, error: errMsg } });
       });
+    }
+
+    // Git protocol
+    if (message.type === 'git') {
+      const id = message.id;
+      const op = message?.data?.gitData?.operation as string | undefined;
+      const options = message?.data?.gitData?.options || {};
+      if (!op) {
+        this.sendToClient(connectionId, { type: 'git', id, data: { gitData: { operation: 'unknown' }, ok: false, error: 'Missing git operation' } });
+        return;
+      }
+      try {
+        if (!this._gitService) {
+          this._gitService = new GitService();
+        }
+        Promise.resolve(this._gitService.executeGitCommand(op, options))
+          .then((result) => {
+            this.sendToClient(connectionId, { type: 'git', id, data: { gitData: { operation: op, result }, ok: true } });
+          })
+          .catch((err) => {
+            const errMsg = err instanceof Error ? err.message : String(err);
+            this.sendToClient(connectionId, { type: 'git', id, data: { gitData: { operation: op }, ok: false, error: errMsg } });
+          });
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        this.sendToClient(connectionId, { type: 'git', id, data: { gitData: { operation: op }, ok: false, error: errMsg } });
+      }
     }
   }
 

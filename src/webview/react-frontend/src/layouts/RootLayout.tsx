@@ -1,16 +1,17 @@
 import React, { useState } from 'react';
 import { Outlet, useLocation } from '@tanstack/react-router';
-import { Menu, X } from 'lucide-react';
+import { Menu, X, Moon, Sun } from 'lucide-react';
 import { AppHeader } from '../components/AppHeader';
 import { AppSidebar } from '../components/AppSidebar';
 import { AppFooter } from '../components/AppFooter';
 import { WebSocketProvider, useWebSocket } from '../components/WebSocketProvider';
 import { ToastProvider } from '../components/ui/toast';
-import { ThemeProvider } from '../components/theme/ThemeProvider';
+import { ThemeProvider, useTheme } from '../components/theme/ThemeProvider';
 import { cn } from '../lib/utils';
 
 const LayoutContent: React.FC = () => {
   const { isConnected, connectionCount, lastActivity } = useWebSocket();
+  const { theme, toggle } = useTheme();
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -44,20 +45,29 @@ const LayoutContent: React.FC = () => {
             </h1>
           </div>
 
-          {/* Mobile connection status - simplified */}
-          <div className={cn(
-            "flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium",
-            isConnected
-              ? "bg-green-100 text-green-800"
-              : "bg-red-100 text-red-800"
-          )}>
+          {/* Mobile actions: connection status + theme toggle */}
+          <div className="flex items-center gap-2">
             <div className={cn(
-              "w-2 h-2 rounded-full",
-              isConnected ? "bg-green-500" : "bg-red-500"
-            )} />
-            <span className="hidden sm:inline">
-              {isConnected ? `(${connectionCount})` : 'Offline'}
-            </span>
+              "flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium",
+              isConnected
+                ? "bg-green-100 text-green-800"
+                : "bg-red-100 text-red-800"
+            )}>
+              <div className={cn(
+                "w-2 h-2 rounded-full",
+                isConnected ? "bg-green-500" : "bg-red-500"
+              )} />
+              <span className="hidden sm:inline">
+                {isConnected ? `(${connectionCount})` : 'Offline'}
+              </span>
+            </div>
+            <button
+              onClick={toggle}
+              aria-label="Toggle theme"
+              className="p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            >
+              {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+            </button>
           </div>
         </div>
       </div>

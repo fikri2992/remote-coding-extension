@@ -1,10 +1,21 @@
 import React from 'react';
+import { ConfigForm, FieldSchema } from '../components/settings/ConfigForm';
 
 const SettingsPage: React.FC = () => {
+  const schema: Record<string, FieldSchema> = {
+    httpPort: { key: 'httpPort', type: 'number', minimum: 1024, maximum: 65535, description: 'Port for the HTTP server' },
+  };
+  const [values, setValues] = React.useState<Record<string, any>>({ httpPort: 3900 });
   return (
-    <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-      <h3 className="text-lg font-semibold mb-4">Settings</h3>
-      <p className="text-gray-600">Application settings will be implemented here.</p>
+    <div className="bg-card p-4 rounded-lg shadow-sm border border-border">
+      <h3 className="text-lg font-semibold mb-4 text-foreground">Settings</h3>
+      <ConfigForm
+        schema={schema}
+        values={values}
+        onChange={(k, v) => setValues((prev) => ({ ...prev, [k]: v }))}
+        onSubmit={() => console.log('Save settings', values)}
+        onReset={() => setValues({ httpPort: 3900 })}
+      />
     </div>
   );
 };

@@ -1,6 +1,7 @@
 import WebSocket from 'ws';
 import { IncomingMessage, Server as HttpServer } from 'http';
 import { Socket } from 'net';
+import { FileSystemService } from './FileSystemService';
 
 export interface WebSocketConnection {
   ws: WebSocket;
@@ -15,6 +16,7 @@ export class WebSocketServer {
   private _clientCount: number = 0;
   private _attachedHttpServer: HttpServer | null = null;
   private _upgradePath: string = '/ws';
+  private _fsService: FileSystemService;
 
   constructor(config: any, attachedHttpServer?: HttpServer, upgradePath: string = '/ws') {
     // Handle both number and config object
@@ -25,6 +27,8 @@ export class WebSocketServer {
     }
     this._attachedHttpServer = attachedHttpServer || null;
     this._upgradePath = upgradePath;
+    // Initialize services that need to send responses
+    this._fsService = new FileSystemService((clientId, payload) => this.sendToClient(clientId, payload));
   }
 
   public async start(): Promise<void> {
@@ -115,6 +119,8 @@ export class WebSocketServer {
           // Handle connection close
           ws.on('close', () => {
             console.log(`WebSocket connection closed: ${connectionId}`);
+            // Cleanup any per-client watchers/listeners
+            try { this._fsService.onClientDisconnect(connectionId); } catch {}
             this.connections.delete(connectionId);
             this._clientCount = this.connections.size;
           });
@@ -308,6 +314,16 @@ export class WebSocketServer {
       // Broadcast to all connected clients
       this.broadcastMessage(chatMessage);
       console.log(`Broadcasted chat message from ${connectionId}: ${message.text}`);
+    }
+
+    // File system protocol
+    if (message.type === 'fileSystem') {
+      this._fsService.handle(connectionId, message).catch(err => {
+        const id = message.id;
+        const op = message?.data?.fileSystemData?.operation || 'unknown';
+        const errMsg = err instanceof Error ? err.message : String(err);
+        this.sendToClient(connectionId, { type: 'fileSystem', id, data: { operation: op, ok: false, error: errMsg } });
+      });
     }
   }
 

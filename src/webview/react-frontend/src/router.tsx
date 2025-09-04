@@ -4,6 +4,7 @@ import { createRootRoute, createRoute, createRouter } from '@tanstack/react-rout
 import HomePage from './pages/HomePage.tsx';
 import ServerPage from './pages/ServerPage.tsx';
 import FilesPage from './pages/FilesPage.tsx';
+import FileViewerPage from './pages/FileViewerPage.tsx';
 import GitPage from './pages/GitPage.tsx';
 import TerminalPage from './pages/TerminalPage.tsx';
 import ChatPage from './pages/ChatPage.tsx';
@@ -60,6 +61,13 @@ const settingsRoute = createRoute({
   component: SettingsPage,
 });
 
+// File viewer route with search param (?path=/...)
+const fileViewRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/files/view',
+  component: FileViewerPage,
+});
+
 const tunnelsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/tunnels',
@@ -72,6 +80,7 @@ const routeTree = rootRoute.addChildren([
   serverRoute,
   tunnelsRoute,
   filesRoute,
+  fileViewRoute,
   gitRoute,
   terminalRoute,
   chatRoute,

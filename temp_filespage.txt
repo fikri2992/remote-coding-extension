@@ -4,7 +4,6 @@ import { FileTree } from '../components/files/FileTree';
 import { FileNodeLike } from '../components/files/FileNodeItem';
 import { BottomSheet, BottomSheetHeader, BottomSheetTitle, BottomSheetFooter } from '../components/ui/bottom-sheet';
 import { useWebSocket } from '../components/WebSocketProvider';
-import { useNavigate } from '@tanstack/react-router';
 
 function mapServerNodes(children: any[], depth = 0): FileNodeLike[] {
   return (children || []).map((n: any) => ({
@@ -16,7 +15,6 @@ function mapServerNodes(children: any[], depth = 0): FileNodeLike[] {
 }
 
 const FilesPage: React.FC = () => {
-  const navigate = useNavigate();
   const { sendJson, addMessageListener } = useWebSocket();
   const [crumbs, setCrumbs] = React.useState<Crumb[]>([{ name: 'root', path: '/' }]);
   const [nodes, setNodes] = React.useState<FileNodeLike[]>([]);
@@ -30,8 +28,7 @@ const FilesPage: React.FC = () => {
       setCrumbs((c) => [...c, { name: node.name, path: node.path }]);
       requestTree(node.path);
     } else {
-      // Navigate to file viewer route with search param
-      navigate({ to: '/files/view', search: { path: node.path } });
+      setActiveNode(node);
     }
   };
 
@@ -78,7 +75,7 @@ const FilesPage: React.FC = () => {
           <BottomSheetTitle>{activeNode?.name}</BottomSheetTitle>
         </BottomSheetHeader>
         <div className="flex flex-col gap-2">
-          <button className="w-full text-left px-3 py-2 rounded hover:bg-muted" onClick={() => { if (activeNode) { const p = activeNode.path; setActiveNode(null); navigate({ to: '/files/view', search: { path: p } }); } }}>Open</button>
+          <button className="w-full text-left px-3 py-2 rounded hover:bg-muted">Open</button>
           <button className="w-full text-left px-3 py-2 rounded hover:bg-muted">Rename</button>
           <button className="w-full text-left px-3 py-2 rounded hover:bg-muted">Delete</button>
           <button className="w-full text-left px-3 py-2 rounded hover:bg-muted">Share</button>
@@ -92,3 +89,4 @@ const FilesPage: React.FC = () => {
 };
 
 export default FilesPage;
+

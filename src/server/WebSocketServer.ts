@@ -3,6 +3,7 @@ import { IncomingMessage, Server as HttpServer } from 'http';
 import { Socket } from 'net';
 import { FileSystemService } from './FileSystemService';
 import { GitService } from './GitService';
+import { TerminalService } from './TerminalService';
 
 export interface WebSocketConnection {
   ws: WebSocket;
@@ -19,6 +20,7 @@ export class WebSocketServer {
   private _upgradePath: string = '/ws';
   private _fsService: FileSystemService;
   private _gitService: GitService | null = null;
+  private _terminalService: TerminalService;
 
   constructor(config: any, attachedHttpServer?: HttpServer, upgradePath: string = '/ws') {
     // Handle both number and config object
@@ -31,6 +33,7 @@ export class WebSocketServer {
     this._upgradePath = upgradePath;
     // Initialize services that need to send responses
     this._fsService = new FileSystemService((clientId, payload) => this.sendToClient(clientId, payload));
+    this._terminalService = new TerminalService((clientId, payload) => this.sendToClient(clientId, payload));
   }
 
   public async start(): Promise<void> {
@@ -123,6 +126,7 @@ export class WebSocketServer {
             console.log(`WebSocket connection closed: ${connectionId}`);
             // Cleanup any per-client watchers/listeners
             try { this._fsService.onClientDisconnect(connectionId); } catch {}
+            try { this._terminalService.onClientDisconnect(connectionId); } catch {}
             this.connections.delete(connectionId);
             this._clientCount = this.connections.size;
           });
@@ -353,6 +357,15 @@ export class WebSocketServer {
         const errMsg = err instanceof Error ? err.message : String(err);
         this.sendToClient(connectionId, { type: 'git', id, data: { gitData: { operation: op }, ok: false, error: errMsg } });
       }
+    }
+
+    // Terminal protocol (Stage 1: exec)
+    if (message.type === 'terminal') {
+      this._terminalService.handle(connectionId, message).catch(err => {
+        const id = message.id;
+        const errMsg = err instanceof Error ? err.message : String(err);
+        this.sendToClient(connectionId, { type: 'terminal', id, data: { ok: false, error: errMsg } });
+      });
     }
   }
 

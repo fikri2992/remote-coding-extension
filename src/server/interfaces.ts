@@ -79,7 +79,7 @@ export interface EnhancedWebSocketMessage extends WebSocketMessage {
         
         // Git-specific data
         gitData?: {
-            operation: 'status' | 'log' | 'diff' | 'branch' | 'commit' | 'push' | 'pull';
+            operation: 'status' | 'log' | 'diff' | 'branch' | 'commit' | 'push' | 'pull' | 'show';
             result?: any;
             path?: string;
             options?: any;

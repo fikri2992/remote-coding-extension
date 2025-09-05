@@ -4,6 +4,7 @@
 
 import * as vscode from 'vscode';
 import * as path from 'path';
+import { execFile } from 'child_process';
 import { GitRepositoryState, GitCommit, GitDiff } from './interfaces';
 
 export class GitService {
@@ -232,6 +233,175 @@ export class GitService {
     }
 
     /**
+     * Get per-file diff for a specific commit (like `git show`)
+     */
+    async getCommitDiff(workspacePath: string | undefined, commitHash: string): Promise<GitDiff[]> {
+        try {
+            const repo = await this.getRepository(workspacePath);
+            if (!repo) return [];
+
+            // Try using Git API diffBetween
+            let unified = '';
+            try {
+                const base = `${commitHash}^`;
+                unified = await repo.diffBetween(base, commitHash);
+            } catch (e) {
+                // Fallback to executing git show
+                const root = repo.rootUri.fsPath;
+                unified = await this.runGit(root, ['show', '--format=', '--unified=3', commitHash]);
+            }
+
+            return this.parseUnifiedDiff(unified);
+        } catch (error) {
+            console.error('Failed to get commit diff:', error);
+            return [];
+        }
+    }
+
+    /**
+     * List files changed in a commit (status only, no patches)
+     */
+    async getCommitFileList(workspacePath: string | undefined, commitHash: string): Promise<Array<{ file: string; type: GitDiff['type'] }>> {
+        try {
+            const repo = await this.getRepository(workspacePath);
+            if (!repo) return [];
+            const root = repo.rootUri.fsPath;
+            // Use diff-tree to get name-status pairs
+            const out = await this.runGit(root, ['diff-tree', '--no-commit-id', '--name-status', '-r', commitHash]);
+            const files: Array<{ file: string; type: GitDiff['type'] }> = [];
+            const lines = out.split('\n').map(l => l.trim()).filter(Boolean);
+            for (const l of lines) {
+                const parts = l.split('\t');
+                if (parts.length >= 2) {
+                    const status = parts[0];
+                    if (status && status.startsWith('R')) {
+                        // rename: R100	old	new
+                        const to = parts[2] || parts[1];
+                        if (to) {
+                            files.push({ file: to, type: 'renamed' });
+                        }
+                    } else {
+                        const p = parts[1];
+                        if (p) {
+                            let type: GitDiff['type'] = 'modified';
+                            if (status === 'A') type = 'added';
+                            else if (status === 'D') type = 'deleted';
+                            else if (status === 'M') type = 'modified';
+                            files.push({ file: p, type });
+                        }
+                    }
+                }
+            }
+            return files;
+        } catch (error) {
+            console.error('Failed to list commit files:', error);
+            return [];
+        }
+    }
+
+    /**
+     * Get patch for a single file in a commit
+     */
+    async getCommitFileDiff(workspacePath: string | undefined, commitHash: string, filePath: string): Promise<GitDiff | null> {
+        try {
+            const repo = await this.getRepository(workspacePath);
+            if (!repo) return null;
+            let unified = '';
+            try {
+                // Some Git API versions may not expose a single-file show; use CLI
+                const root = repo.rootUri.fsPath;
+                unified = await this.runGit(root, ['show', '--format=', '--unified=3', commitHash, '--', filePath]);
+            } catch (e) {
+                const root = repo.rootUri.fsPath;
+                unified = await this.runGit(root, ['show', '--format=', '--unified=3', commitHash, '--', filePath]);
+            }
+            const diffs = this.parseUnifiedDiff(unified);
+            const match = diffs.find(d => d.file.endsWith(filePath) || d.file === filePath) || null;
+            return match;
+        } catch (error) {
+            console.error('Failed to get commit file diff:', error);
+            return null;
+        }
+    }
+
+    private runGit(cwd: string, args: string[]): Promise<string> {
+        return new Promise((resolve, reject) => {
+            const child = execFile('git', args, { cwd, windowsHide: true, maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
+                if (err) return reject(err);
+                resolve(stdout.toString());
+            });
+        });
+    }
+
+    private parseUnifiedDiff(unified: string): GitDiff[] {
+        if (!unified) return [];
+        const diffs: GitDiff[] = [];
+        const lines = unified.split('\n');
+        let current: { file: string; content: string[]; type: GitDiff['type']; additions: number; deletions: number } | null = null;
+        const startFile = (filePath: string) => {
+            if (current) {
+                const curr = current as any;
+                diffs.push({ file: curr.file, type: curr.type, additions: curr.additions, deletions: curr.deletions, content: curr.content.join('\n') });
+            }
+            current = { file: filePath, content: [], type: 'modified', additions: 0, deletions: 0 };
+        };
+
+        for (let i = 0; i < lines.length; i++) {
+            const l = lines[i];
+            if (!l) continue; // Skip empty lines
+            
+            const m = /^diff --git a\/(.*?) b\/(.*)$/.exec(l);
+            if (m && m[1] && m[2]) {
+                startFile(m[2] || m[1]);
+                continue;
+            }
+            
+            if (!current) continue;
+            
+            // Type assertion to help TypeScript understand current is not null
+            const curr = current as { file: string; content: string[]; type: GitDiff['type']; additions: number; deletions: number };
+            
+            if (/^new file mode /.test(l)) {
+                curr.type = 'added';
+            } else if (/^deleted file mode /.test(l)) {
+                curr.type = 'deleted';
+            } else if (/^rename from /.test(l) || /^rename to /.test(l)) {
+                curr.type = 'renamed';
+            }
+
+            if (/^\+\+\+ /.test(l) || /^--- /.test(l) || /^index /.test(l)) {
+                curr.content.push(l);
+                continue;
+            }
+            
+            if (l.startsWith('+++ /dev/null')) {
+                curr.type = 'deleted';
+            } else if (l.startsWith('--- /dev/null')) {
+                curr.type = 'added';
+            }
+
+            if (l.startsWith('+') && !l.startsWith('+++')) {
+                curr.additions++;
+            } else if (l.startsWith('-') && !l.startsWith('---')) {
+                curr.deletions++;
+            }
+            
+            curr.content.push(l);
+        }
+        if (current) {
+            const curr = current as { file: string; content: string[]; type: GitDiff['type']; additions: number; deletions: number };
+            diffs.push({ 
+                file: curr.file, 
+                type: curr.type, 
+                additions: curr.additions, 
+                deletions: curr.deletions, 
+                content: curr.content.join('\n') 
+            });
+        }
+        return diffs;
+    }
+
+    /**
      * Execute git command
      */
     async executeGitCommand(operation: string, options: any = {}): Promise<any> {
@@ -250,6 +420,16 @@ export class GitService {
 
                 case 'diff':
                     return await this.getCurrentDiff(options.workspacePath);
+
+                case 'show':
+                    if (!options.commitHash) throw new Error('Missing commitHash');
+                    if (options.list) {
+                        return await this.getCommitFileList(options.workspacePath, options.commitHash);
+                    }
+                    if (options.file) {
+                        return await this.getCommitFileDiff(options.workspacePath, options.commitHash, options.file);
+                    }
+                    return await this.getCommitDiff(options.workspacePath, options.commitHash);
 
                 case 'branch':
                     return await this.getBranches(repo);

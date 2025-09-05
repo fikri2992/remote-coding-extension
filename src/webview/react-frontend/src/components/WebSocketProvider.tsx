@@ -72,7 +72,10 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
     websocket.onmessage = (event: MessageEvent) => {
       try {
         const data = JSON.parse(event.data);
-        console.log('Received message:', data);
+        try {
+          const debug = (typeof window !== 'undefined' && (window as any).localStorage?.getItem('KIRO_DEBUG_WS') === '1');
+          if (debug) console.log('Received message:', data);
+        } catch {}
 
         if (data.type === 'connection_established') {
           setConnectionCount(prev => prev + 1);

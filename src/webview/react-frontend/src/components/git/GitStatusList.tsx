@@ -10,13 +10,12 @@ export const GitStatusList: React.FC<{ items: GitStatusItem[]; className?: strin
     itemKey={(it) => `${it.state}:${it.path}`}
     className={className}
     renderItem={(it) => (
-      <div className="flex items-center justify-between px-3 py-2 text-sm border-b border-border/60">
+      <div className="flex items-center justify-between px-3 py-3 min-h-[44px] text-sm border-b border-border/60">
         <span className="truncate mr-3">{it.path}</span>
-        <span className="rounded px-2 py-0.5 text-xs bg-muted">
+        <span className="rounded-full px-2.5 py-1 text-[11px] bg-muted capitalize">
           {it.state}
         </span>
       </div>
     )}
   />
 )
-

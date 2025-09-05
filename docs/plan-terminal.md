@@ -1,6 +1,6 @@
 # Terminal — Command Runner to Full Interactive PTY
 
-Outcome: Start with a safe Command Runner (execute a command, capture output), then add true interactive terminals using `node-pty`, all optimized for mobile.
+Outcome: Start with a safe Command Runner (execute a command, capture output), then add true interactive terminals using `node-pty`, all optimized for mobile. When `node-pty` is unavailable (e.g., native build not present), transparently fall back to a persistent pipe-based shell so the UI remains interactive for basic commands.
 
 Related server code to review/extend
 
@@ -13,6 +13,7 @@ New server module
 - `src/server/TerminalService.ts` (proposed):
   - Stage 1 — Command Runner: `exec(command, cwd, env)` with timeout, output chunks streamed over WS.
   - Stage 2 — Interactive: use `node-pty` to spawn a pseudo terminal that supports `data`, `resize`, `input`, `exit` events.
+  - Fallback: If `node-pty` cannot be loaded, spawn a persistent shell via `child_process.spawn` and bridge `stdin/stdout/stderr` to mimic the same protocol (no real TTY; vim/nano may not work).
   - Multiplex sessions: map `sessionId` → PTY instance; cleanup on idle.
   - Security: workspace cwd only; configurable command allow‑list; redact secrets from output.
 
@@ -43,8 +44,9 @@ Step‑by‑step plan
   - [ ] Implement WS `op: 'exec'` path with cwd pinned to workspace.
   - [ ] Build minimal UI to run command and show output (non‑interactive).
 - Stage 2: Interactive PTY
-  - [ ] Add `node-pty` dependency in extension backend (packaged binary notes per OS).
-  - [ ] Implement `create/input/resize/dispose` ops; idle timeout cleanup.
+  - [x] Add `node-pty` dependency in extension backend (packaged binary notes per OS).
+  - [x] Implement `create/input/resize/dispose` ops; idle timeout cleanup.
+  - [x] Pipe-based fallback when `node-pty` is unavailable (Windows build env or missing prebuilds).
   - [ ] Streaming back‑pressure: pause/resume or buffer cap with drop notice.
   - [ ] Replace UI with xterm.js and session tabs.
 - Hardening
@@ -55,6 +57,5 @@ Step‑by‑step plan
 Acceptance criteria
 
 - Command Runner: `git status` and `ls -la` execute within 5s, output streamed without UI freezes.
-- Interactive: Supports nano/vim, arrow keys, resizing; reconnect restores session within 10s.
+- Interactive: With `node-pty` available — supports nano/vim, arrow keys, resizing; reconnect restores session within 10s. With fallback — basic commands and REPLs work; no full-screen TUI apps.
 - Mobile controls: common hotkeys accessible with ≤ 2 taps.
-

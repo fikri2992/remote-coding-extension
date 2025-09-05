@@ -18,7 +18,7 @@ type SendFn = (clientId: string, message: any) => boolean;
 export class TerminalService {
   private sendToClient: SendFn;
   private processesByClient: Map<string, Set<number>> = new Map();
-  private sessions: Map<string, any> = new Map(); // sessionId -> pty
+  private sessions: Map<string, any> = new Map(); // sessionId -> pty or child process wrapper
   private sessionLastSeen: Map<string, number> = new Map();
   private idleMs: number = 15 * 60 * 1000; // 15 minutes
 
@@ -30,7 +30,7 @@ export class TerminalService {
       for (const [sid, pty] of this.sessions.entries()) {
         const last = this.sessionLastSeen.get(sid) || now;
         if (now - last > this.idleMs) {
-          try { pty.kill(); } catch {}
+          try { pty.kill ? pty.kill() : pty?.child?.kill?.(); } catch {}
           this.sessions.delete(sid);
           this.sessionLastSeen.delete(sid);
         }
@@ -78,9 +78,9 @@ export class TerminalService {
         this.processesByClient.delete(clientId);
       }
     }
-    // Dispose all PTY sessions
+    // Dispose all sessions
     for (const [sid, pty] of this.sessions.entries()) {
-      try { pty.kill(); } catch {}
+      try { pty.kill ? pty.kill() : pty?.child?.kill?.(); } catch {}
       this.sessions.delete(sid);
     }
   }
@@ -90,11 +90,15 @@ export class TerminalService {
   }
 
   private getWorkspaceRoot(): string {
-    const wf = vscode.workspace.workspaceFolders;
-    if (!wf || wf.length === 0) {
+    const folders = vscode.workspace.workspaceFolders;
+    if (!folders) {
       return process.cwd();
     }
-    return wf[0].uri.fsPath;
+    if (folders.length === 0) {
+      return process.cwd();
+    }
+    const firstFolder = folders[0]!;
+    return firstFolder.uri.fsPath;
   }
 
   private async exec(clientId: string, id: string | undefined, data: any) {
@@ -125,7 +129,9 @@ export class TerminalService {
     // Track by client to cleanup on disconnect
     let pset = this.processesByClient.get(clientId);
     if (!pset) { pset = new Set(); this.processesByClient.set(clientId, pset); }
-    pset.add(child.pid);
+    if (child.pid) {
+      pset.add(child.pid);
+    }
 
     child.stdout.on('data', (chunk: Buffer) => {
       const text = this.redact(chunk.toString('utf8'));
@@ -139,57 +145,103 @@ export class TerminalService {
     child.on('close', (code, signal) => {
       this.sendToClient(clientId, { type: 'terminal', data: { op: 'exec', sessionId, event: 'exit', code, signal, done: true } });
       // remove from tracking
-      try { this.processesByClient.get(clientId)?.delete(child.pid); } catch {}
+      if (child.pid) {
+        try { this.processesByClient.get(clientId)?.delete(child.pid); } catch {}
+      }
     });
 
     child.on('error', (err) => {
       this.sendToClient(clientId, { type: 'terminal', data: { op: 'exec', sessionId, event: 'error', error: err.message } });
-      try { this.processesByClient.get(clientId)?.delete(child.pid); } catch {}
+      if (child.pid) {
+        try { this.processesByClient.get(clientId)?.delete(child.pid); } catch {}
+      }
     });
   }
 
   // --- Stage 2: Interactive PTY ---
   private async create(clientId: string, id: string | undefined, data: any) {
-    if (!nodePty) {
-      this.reply(clientId, id, { op: 'create', ok: false, error: 'node-pty not available on backend' });
-      return;
-    }
+    // Choose shell and cwd
     const sessionId: string = data.sessionId || `term_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const cols: number = Number(data.cols || 80);
     const rows: number = Number(data.rows || 24);
     const cwdRaw: string | undefined = data.cwd;
     const cwd = cwdRaw ? (path.isAbsolute(cwdRaw) ? cwdRaw : path.join(this.getWorkspaceRoot(), cwdRaw)) : this.getWorkspaceRoot();
-
+    const preferPwsh = process.platform === 'win32' && !!process.env.ComSpec;
     const shell = process.platform === 'win32'
-      ? (process.env.COMSPEC || 'C\\\Windows\\System32\\cmd.exe')
+      ? ((process.env.PWsh || process.env.PWSH || '') || 'powershell.exe')
       : (process.env.SHELL || '/bin/bash');
 
+    // If node-pty is available, use it. Otherwise, fall back to a pipe-based persistent shell.
+    if (nodePty) {
+      try {
+        const pty = nodePty.spawn(shell, process.platform === 'win32' ? ['-NoLogo', '-NoProfile'] : [], {
+          name: 'xterm-color',
+          cols,
+          rows,
+          cwd,
+          env: { ...process.env },
+        });
+
+        this.sessions.set(sessionId, pty);
+
+        pty.onData((chunk: string) => {
+          this.sessionLastSeen.set(sessionId, Date.now());
+          this.sendToClient(clientId, { type: 'terminal', data: { op: 'data', sessionId, chunk: this.redact(chunk) } });
+        });
+
+        pty.onExit((e: any) => {
+          this.sendToClient(clientId, { type: 'terminal', data: { op: 'exit', sessionId, code: e?.exitCode } });
+          try { this.sessions.delete(sessionId); } catch {}
+          this.sessionLastSeen.delete(sessionId);
+        });
+
+        this.reply(clientId, id, { op: 'create', ok: true, sessionId, cwd, cols, rows, event: 'ready' });
+        return;
+      } catch (err) {
+        // Fall through to pipe-based shell if PTY spawn fails
+      }
+    }
+
+    // Pipe-based fallback (no true PTY). Provides a persistent shell for basic commands.
     try {
-      const pty = nodePty.spawn(shell, [], {
-        name: 'xterm-color',
-        cols,
-        rows,
-        cwd,
-        env: { ...process.env },
-      });
+      const { spawn } = await import('child_process');
+      const args = process.platform === 'win32' ? ['-NoLogo', '-NoProfile'] : ['-i'];
+      const child = spawn(shell, args, { cwd, env: { ...process.env } });
 
-      this.sessions.set(sessionId, pty);
+      // Minimal wrapper to look like a PTY for downstream handlers
+      const wrapper = {
+        write: (d: string) => { try { child.stdin?.write(d); } catch {} },
+        kill: () => { try { child.kill(); } catch {} },
+        resize: (_c: number, _r: number) => { /* not supported */ },
+        child,
+      } as any;
 
-      pty.onData((chunk: string) => {
+      // Wire stdout/stderr
+      child.stdout?.setEncoding('utf8');
+      child.stderr?.setEncoding('utf8');
+      child.stdout?.on('data', (chunk: string) => {
         this.sessionLastSeen.set(sessionId, Date.now());
         this.sendToClient(clientId, { type: 'terminal', data: { op: 'data', sessionId, chunk: this.redact(chunk) } });
       });
-
-      pty.onExit((e: any) => {
-        this.sendToClient(clientId, { type: 'terminal', data: { op: 'exit', sessionId, code: e?.exitCode } });
+      child.stderr?.on('data', (chunk: string) => {
+        this.sessionLastSeen.set(sessionId, Date.now());
+        this.sendToClient(clientId, { type: 'terminal', data: { op: 'data', sessionId, chunk: this.redact(chunk) } });
+      });
+      child.on('close', (code: number) => {
+        this.sendToClient(clientId, { type: 'terminal', data: { op: 'exit', sessionId, code } });
         try { this.sessions.delete(sessionId); } catch {}
         this.sessionLastSeen.delete(sessionId);
       });
 
-      this.reply(clientId, id, { op: 'create', ok: true, sessionId, cwd, cols, rows, event: 'ready' });
+      this.sessions.set(sessionId, wrapper);
+      this.reply(clientId, id, { op: 'create', ok: true, sessionId, cwd, cols, rows, event: 'ready', note: 'pty-fallback' });
+      // Send a short banner so users know capabilities
+      const banner = `[PTY fallback] Interactive shell without full TTY. Some apps may not work.\r\n`;
+      this.sendToClient(clientId, { type: 'terminal', data: { op: 'data', sessionId, chunk: banner } });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      this.reply(clientId, id, { op: 'create', ok: false, error: msg });
+      // Preserve previous error surface for UI if everything failed
+      this.reply(clientId, id, { op: 'create', ok: false, error: `node-pty not available; fallback failed: ${msg}` });
     }
   }
 
@@ -201,7 +253,13 @@ export class TerminalService {
       return;
     }
     const text: string = data.data || data.chunk || '';
-    pty.write(text);
+    try {
+      if (typeof pty.write === 'function') {
+        pty.write(text);
+      } else if (pty.child?.stdin && typeof pty.child.stdin.write === 'function') {
+        pty.child.stdin.write(text);
+      }
+    } catch {}
     this.sessionLastSeen.set(sid, Date.now());
     this.reply(clientId, id, { op: 'input', ok: true });
   }
@@ -216,9 +274,11 @@ export class TerminalService {
       return;
     }
     try {
-      pty.resize(cols, rows);
+      if (typeof pty.resize === 'function') {
+        pty.resize(cols, rows);
+      }
       this.sessionLastSeen.set(sid, Date.now());
-      this.reply(clientId, id, { op: 'resize', ok: true, cols, rows });
+      this.reply(clientId, id, { op: 'resize', ok: true, cols, rows, note: typeof pty.resize === 'function' ? 'pty' : 'fallback' });
     } catch (err) {
       this.reply(clientId, id, { op: 'resize', ok: false, error: (err as Error).message });
     }
@@ -232,7 +292,11 @@ export class TerminalService {
       return;
     }
     try {
-      pty.kill();
+      if (typeof pty.kill === 'function') {
+        pty.kill();
+      } else if (pty.child?.kill) {
+        pty.child.kill();
+      }
       this.sessions.delete(sid);
       this.sessionLastSeen.delete(sid);
       this.reply(clientId, id, { op: 'dispose', ok: true });

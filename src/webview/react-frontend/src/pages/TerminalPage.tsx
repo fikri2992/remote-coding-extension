@@ -60,6 +60,7 @@ const TerminalPage: React.FC = () => {
     return () => { if (keepaliveRef.current) clearInterval(keepaliveRef.current) };
   }, []);
 
+  // For non-PTY fallback view: submit full commands
   const onSend = (text: string) => {
     if (fallbackExec) {
       const sessionId = `exec_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -67,11 +68,19 @@ const TerminalPage: React.FC = () => {
       sendJson({ type: 'terminal', id: sessionId, data: { op: 'exec', sessionId, command: text } });
       return;
     }
+    // In interactive xterm mode we do not use this path; onInput handles keystrokes
     ensureSession();
     const sid = activeSessionRef.current!;
-    // Echo locally for responsiveness
-    setOutput((prev) => prev + text + '\n');
-    sendJson({ type: 'terminal', id: `in_${Date.now()}`, data: { op: 'input', sessionId: sid, data: text + '\r' } });
+    sendJson({ type: 'terminal', id: `in_${Date.now()}`, data: { op: 'input', sessionId: sid, data: text } });
+  };
+
+  // Interactive keystrokes from xterm.js
+  const onInput = (data: string) => {
+    if (fallbackExec) return; // Not used in exec mode
+    ensureSession();
+    const sid = activeSessionRef.current!;
+    // data already includes Enter as \r when user hits Enter
+    sendJson({ type: 'terminal', id: `in_${Date.now()}`, data: { op: 'input', sessionId: sid, data } });
   };
 
   const onActionKey = (seq: string) => {
@@ -97,7 +106,7 @@ const TerminalPage: React.FC = () => {
         <div className="space-y-2">
           <TerminalXterm
             ref={termRef as any}
-            onInput={(d) => onSend(d)}
+            onInput={onInput}
             onResize={(c, r) => {
               if (!activeSessionRef.current) return;
               sendJson({ type: 'terminal', id: `rs_${Date.now()}`, data: { op: 'resize', sessionId: activeSessionRef.current, cols: c, rows: r } });

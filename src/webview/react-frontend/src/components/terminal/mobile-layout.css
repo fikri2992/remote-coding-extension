@@ -1,0 +1,327 @@
+/* Mobile Layout Manager Styles */
+
+/* CSS Custom Properties for safe areas and layout */
+:root {
+  --safe-area-inset-top: env(safe-area-inset-top, 0px);
+  --safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-inset-left: env(safe-area-inset-left, 0px);
+  --safe-area-inset-right: env(safe-area-inset-right, 0px);
+  --keyboard-height: 0px;
+}
+
+/* Base mobile layout container */
+.mobile-layout-container {
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Orientation-specific styles */
+.orientation-portrait {
+  --terminal-padding: 16px;
+  --ui-scale: 1;
+}
+
+.orientation-landscape {
+  --terminal-padding: 12px;
+  --ui-scale: 0.9;
+}
+
+/* Small screen optimizations */
+.small-screen {
+  --terminal-padding: 8px;
+  --ui-scale: 0.85;
+}
+
+.small-screen .orientation-landscape {
+  --terminal-padding: 6px;
+  --ui-scale: 0.8;
+}
+
+/* Mobile device specific styles */
+.mobile-device {
+  /* Prevent zoom on input focus */
+  -webkit-text-size-adjust: 100%;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.mobile-device * {
+  /* Ensure minimum touch target size */
+  min-height: 44px;
+  min-width: 44px;
+}
+
+.mobile-device button,
+.mobile-device input,
+.mobile-device select,
+.mobile-device textarea {
+  /* Prevent zoom on focus for form elements */
+  font-size: 16px;
+}
+
+/* Compact mode styles */
+.compact-mode {
+  --ui-padding: 8px;
+  --header-height: 40px;
+  --footer-height: 0px;
+}
+
+.compact-mode .app-header {
+  height: var(--header-height);
+  padding: 4px 8px;
+}
+
+.compact-mode .app-footer {
+  display: none;
+}
+
+.compact-mode .sidebar {
+  width: 200px;
+}
+
+.compact-mode .terminal-container {
+  padding: var(--terminal-padding);
+}
+
+/* Keyboard visible adjustments */
+.keyboard-visible {
+  height: calc(100vh - var(--keyboard-height));
+  padding-bottom: 0;
+}
+
+.keyboard-visible .terminal-container {
+  height: calc(100% - var(--keyboard-height) - 60px);
+  overflow-y: auto;
+}
+
+.keyboard-visible .virtual-keyboard {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+}
+
+/* Fullscreen mode */
+.fullscreen-mode {
+  padding: 0 !important;
+}
+
+.fullscreen-mode .app-header,
+.fullscreen-mode .app-footer,
+.fullscreen-mode .sidebar {
+  display: none;
+}
+
+.fullscreen-mode .terminal-container {
+  height: 100vh;
+  width: 100vw;
+}
+
+/* Safe area handling */
+.safe-area-padding {
+  padding-top: var(--safe-area-inset-top);
+  padding-bottom: var(--safe-area-inset-bottom);
+  padding-left: var(--safe-area-inset-left);
+  padding-right: var(--safe-area-inset-right);
+}
+
+/* Terminal-specific layout adjustments */
+.terminal-layout-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+}
+
+.terminal-content-area {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+.terminal-content-area.keyboard-avoiding {
+  height: calc(100% - var(--keyboard-height));
+  transition: height 0.3s ease-out;
+}
+
+/* Responsive terminal sizing */
+.terminal-responsive {
+  width: 100%;
+  height: 100%;
+  font-size: calc(14px * var(--ui-scale, 1));
+  line-height: 1.2;
+}
+
+.orientation-landscape .terminal-responsive {
+  font-size: calc(13px * var(--ui-scale, 1));
+}
+
+.small-screen .terminal-responsive {
+  font-size: calc(12px * var(--ui-scale, 1));
+}
+
+/* Touch-optimized scrolling */
+.terminal-scroll-container {
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+}
+
+/* Gesture-friendly spacing */
+.touch-friendly-spacing {
+  padding: var(--terminal-padding);
+  margin: 4px 0;
+}
+
+.touch-friendly-spacing > * {
+  margin-bottom: 8px;
+}
+
+.touch-friendly-spacing > *:last-child {
+  margin-bottom: 0;
+}
+
+/* Animation for layout changes */
+.layout-transition {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.layout-transition-fast {
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Orientation change animations */
+@media screen and (orientation: landscape) {
+  .mobile-layout-container {
+    animation: orientationChange 0.3s ease-out;
+  }
+}
+
+@media screen and (orientation: portrait) {
+  .mobile-layout-container {
+    animation: orientationChange 0.3s ease-out;
+  }
+}
+
+@keyframes orientationChange {
+  0% {
+    opacity: 0.8;
+    transform: scale(0.98);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Keyboard animation */
+.keyboard-slide-up {
+  animation: keyboardSlideUp 0.3s ease-out;
+}
+
+.keyboard-slide-down {
+  animation: keyboardSlideDown 0.3s ease-out;
+}
+
+@keyframes keyboardSlideUp {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes keyboardSlideDown {
+  from {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+}
+
+/* High DPI display optimizations */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  .terminal-responsive {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/* Reduced motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  .mobile-layout-container,
+  .layout-transition,
+  .layout-transition-fast {
+    transition: none;
+    animation: none;
+  }
+}
+
+/* Dark mode adjustments */
+@media (prefers-color-scheme: dark) {
+  .mobile-layout-container {
+    background-color: #1a1a1a;
+  }
+}
+
+/* Utility classes for layout management */
+.layout-fill {
+  width: 100%;
+  height: 100%;
+}
+
+.layout-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.layout-column {
+  display: flex;
+  flex-direction: column;
+}
+
+.layout-row {
+  display: flex;
+  flex-direction: row;
+}
+
+.layout-flex-1 {
+  flex: 1;
+}
+
+.layout-no-shrink {
+  flex-shrink: 0;
+}
+
+/* Accessibility improvements */
+.layout-focus-visible:focus-visible {
+  outline: 2px solid #007acc;
+  outline-offset: 2px;
+}
+
+.layout-high-contrast {
+  border: 1px solid currentColor;
+}
+
+/* Performance optimizations */
+.layout-gpu-accelerated {
+  transform: translateZ(0);
+  will-change: transform;
+}
+
+.layout-contain {
+  contain: layout style paint;
+}

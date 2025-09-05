@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { TouchOptimizedTerminalUI, TouchOptimizedTerminalUIHandle } from '../components/terminal/TouchOptimizedTerminalUI';
 import { TerminalView } from '../components/terminal/TerminalView';
 import { TerminalActionBar } from '../components/terminal/TerminalActionBar';
+import { CompactModeToggle } from '../components/terminal/CompactModeManager';
 import { useWebSocket } from '../components/WebSocketProvider';
 import { Button } from '../components/ui/button';
 import { useHapticFeedback } from '../components/terminal/HapticFeedback';
@@ -200,6 +201,7 @@ const EnhancedTerminalPage: React.FC = () => {
               >
                 A-
               </Button>
+              <CompactModeToggle className="min-h-[44px] min-w-[44px]" />
             </>
           )}
         </div>
@@ -224,6 +226,10 @@ const EnhancedTerminalPage: React.FC = () => {
             terminalState={terminalState}
             currentDirectory={currentDirectory}
             commandHistory={commandHistory}
+            enableMobileLayout={true}
+            enableKeyboardAvoidance={true}
+            enableSafeArea={true}
+            enableCompactMode={true}
           />
           {!isTouchMode && (
             <TerminalActionBar onKey={onActionKey} />

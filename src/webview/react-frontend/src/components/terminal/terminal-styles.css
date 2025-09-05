@@ -472,3 +472,130 @@ nced Smart Virtual Keyboard Styles */
     border-width: 3px;
   }
 }
+
+/* Session Navigation Integration */
+.terminal-with-session-navigation {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.terminal-session-content {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Swipe-based session navigation styles */
+.session-swipe-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  touch-action: pan-y;
+}
+
+.session-swipe-content {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  will-change: transform;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.session-swipe-content.transitioning {
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.session-swipe-content.swipe-active {
+  transition: none;
+}
+
+/* Session status indicators */
+.session-status-active {
+  background-color: #10b981;
+  animation: pulse 2s infinite;
+}
+
+.session-status-background {
+  background-color: #f59e0b;
+}
+
+.session-status-disconnected {
+  background-color: #ef4444;
+}
+
+/* Session transition animations */
+@keyframes sessionSlideInLeft {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes sessionSlideInRight {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes sessionSlideOutLeft {
+  from { transform: translateX(0); }
+  to { transform: translateX(-100%); }
+}
+
+@keyframes sessionSlideOutRight {
+  from { transform: translateX(0); }
+  to { transform: translateX(100%); }
+}
+
+.session-slide-in-left {
+  animation: sessionSlideInLeft 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.session-slide-in-right {
+  animation: sessionSlideInRight 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.session-slide-out-left {
+  animation: sessionSlideOutLeft 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.session-slide-out-right {
+  animation: sessionSlideOutRight 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Mobile-optimized session tabs */
+@media (max-width: 768px) {
+  .session-tabs-mobile {
+    padding: 4px;
+    gap: 2px;
+  }
+  
+  .session-tab-mobile {
+    min-width: 80px;
+    max-width: 120px;
+    padding: 6px 8px;
+    font-size: 12px;
+  }
+  
+  .session-tab-mobile .session-tab-subtitle {
+    display: none;
+  }
+}
+
+/* Reduced motion support for session navigation */
+@media (prefers-reduced-motion: reduce) {
+  .session-swipe-content,
+  .session-slide-in-left,
+  .session-slide-in-right,
+  .session-slide-out-left,
+  .session-slide-out-right {
+    transition: none;
+    animation: none;
+  }
+  
+  .session-status-active {
+    animation: none;
+  }
+}

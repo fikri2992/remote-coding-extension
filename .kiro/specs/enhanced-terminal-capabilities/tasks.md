@@ -27,7 +27,16 @@
   - Implement auto-hide/show logic based on terminal state and user interaction
   - _Requirements: 6.2, 6.3, 6.4, 6.5_
 
-- [ ] 3. Implement core gesture handling system
+- [x] 3. Implement core gesture handling system
+
+
+
+
+
+
+
+
+
   - Create GestureHandler component for touch event processing
   - Add support for basic gestures: tap, double-tap, long-press, swipe
   - Implement gesture recognition with configurable sensitivity settings
@@ -35,7 +44,12 @@
   - Create gesture feedback system with visual and haptic responses
   - _Requirements: 4.7, 4.8, 6.1_
 
-- [ ] 4. Create adaptive layout management
+- [x] 4. Create adaptive layout management
+
+
+
+
+
   - Implement MobileLayoutManager for dynamic screen adaptation
   - Add orientation change handling with layout optimization
   - Create keyboard avoidance system that reflows terminal content
@@ -45,7 +59,12 @@
 
 ## Phase 2: Core Mobile Interactions
 
-- [ ] 5. Implement swipe-based session navigation
+- [x] 5. Implement swipe-based session navigation
+
+
+
+
+
   - Add horizontal swipe gesture detection for session switching
   - Create smooth session transition animations optimized for mobile
   - Implement session preview on swipe with visual indicators
@@ -53,7 +72,10 @@
   - Create visual session status indicators (active, background, disconnected)
   - _Requirements: 7.2, 7.7_
 
-- [ ] 6. Add pinch-to-zoom text scaling
+- [-] 6. Add pinch-to-zoom text scaling
+
+
+
   - Implement pinch gesture recognition for font size adjustment
   - Create smooth zoom animations with momentum and bounce effects
   - Add zoom level persistence per user preference

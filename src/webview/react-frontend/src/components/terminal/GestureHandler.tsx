@@ -5,22 +5,25 @@ import {
   TouchGesture, 
   GestureCallback, 
   GestureSettings, 
+  GestureConfig, 
   TouchPoint, 
   GestureState,
   GestureHandler as IGestureHandler
 } from '../../types/gesture';
-import { getGestureSetting } from './gestureUtils';
+import { getGestureSetting, updateGestureSetting } from './gestureUtils';
 
-export interface TouchGestureHandlerProps {
+export interface GestureHandlerProps {
   onGesture: (gesture: TouchGesture) => void;
   className?: string;
   style?: React.CSSProperties;
   children?: React.ReactNode;
   gestureSettings?: Partial<GestureSettings>;
   onTextSelection?: (startX: number, startY: number, endX: number, endY: number) => void;
+  enableMouseGestures?: boolean;
+  enableTouchGestures?: boolean;
 }
 
-// Default gesture settings
+// Default gesture settings with configurable sensitivity
 const DEFAULT_GESTURE_SETTINGS: GestureSettings = {
   tap: { enabled: true, sensitivity: 1, threshold: 10, timeout: 300 },
   doubleTap: { enabled: true, sensitivity: 1, threshold: 10, timeout: 300 },
@@ -34,16 +37,30 @@ const DEFAULT_GESTURE_SETTINGS: GestureSettings = {
   visualFeedback: true
 };
 
-export const TouchGestureHandler: React.FC<TouchGestureHandlerProps> = ({
+export const GestureHandler: React.FC<GestureHandlerProps> = ({
   onGesture,
   className,
   style,
   children,
   gestureSettings = {},
-  onTextSelection
+  onTextSelection,
+  enableMouseGestures = true,
+  enableTouchGestures = true
 }) => {
   const touchesRef = useRef<Map<number, TouchPoint>>(new Map());
   const gestureHandlersRef = useRef<Map<GestureType, GestureCallback[]>>(new Map());
+  const mouseStateRef = useRef<{
+    isDown: boolean;
+    startPos: { x: number; y: number };
+    lastClickTime: number;
+    clickCount: number;
+  }>({
+    isDown: false,
+    startPos: { x: 0, y: 0 },
+    lastClickTime: 0,
+    clickCount: 0
+  });
+
   const [settings, setSettings] = useState<GestureSettings>({
     ...DEFAULT_GESTURE_SETTINGS,
     ...gestureSettings
@@ -64,11 +81,11 @@ export const TouchGestureHandler: React.FC<TouchGestureHandlerProps> = ({
     }
   });
 
-  // Gesture Handler Implementation (unused in this component, kept for interface compatibility)
-  // This component is being replaced by the main GestureHandler component
+  // Gesture Handler Implementation would go here if needed for external use
+  // Currently this component handles gestures internally
 
   // Utility functions
-  const getDistance = (p1: TouchPoint, p2: TouchPoint): number => {
+  const getDistance = (p1: TouchPoint | { x: number; y: number }, p2: TouchPoint | { x: number; y: number }): number => {
     const dx = p1.x - p2.x;
     const dy = p1.y - p2.y;
     return Math.sqrt(dx * dx + dy * dy);
@@ -111,26 +128,30 @@ export const TouchGestureHandler: React.FC<TouchGestureHandlerProps> = ({
     
     // Create a temporary visual indicator
     const indicator = document.createElement('div');
-    indicator.style.position = 'fixed';
-    indicator.style.left = `${x - 15}px`;
-    indicator.style.top = `${y - 15}px`;
-    indicator.style.width = '30px';
-    indicator.style.height = '30px';
-    indicator.style.borderRadius = '50%';
-    indicator.style.backgroundColor = 'rgba(0, 123, 255, 0.3)';
-    indicator.style.border = '2px solid rgba(0, 123, 255, 0.6)';
-    indicator.style.pointerEvents = 'none';
-    indicator.style.zIndex = '9999';
-    indicator.style.animation = 'gestureRipple 0.3s ease-out';
+    indicator.style.cssText = `
+      position: fixed;
+      left: ${x - 15}px;
+      top: ${y - 15}px;
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      background-color: rgba(0, 123, 255, 0.3);
+      border: 2px solid rgba(0, 123, 255, 0.6);
+      pointer-events: none;
+      z-index: 9999;
+      animation: gestureRipple 0.3s ease-out;
+    `;
     
     document.body.appendChild(indicator);
     
     setTimeout(() => {
-      document.body.removeChild(indicator);
+      if (document.body.contains(indicator)) {
+        document.body.removeChild(indicator);
+      }
     }, 300);
   };
 
-  // Gesture conflict resolution
+  // Gesture conflict resolution with priority system
   const resolveGestureConflict = (newGesture: GestureType): boolean => {
     const state = gestureStateRef.current;
     
@@ -140,7 +161,7 @@ export const TouchGestureHandler: React.FC<TouchGestureHandlerProps> = ({
       return true;
     }
     
-    // Priority order: pinch > long-press > double-tap > triple-tap > swipe > pan > tap
+    // Priority order: pinch > long-press > triple-tap > double-tap > swipe > pan > tap
     const priority: Record<GestureType, number> = {
       'pinch': 7,
       'long-press': 6,
@@ -156,8 +177,14 @@ export const TouchGestureHandler: React.FC<TouchGestureHandlerProps> = ({
     
     // Allow higher priority gestures to override lower priority ones
     if (newPriority > currentPriority) {
+      state.conflictResolution.conflictingGestures.push(state.conflictResolution.activeGesture);
       state.conflictResolution.activeGesture = newGesture;
       return true;
+    }
+    
+    // Add to conflicting gestures list for debugging
+    if (!state.conflictResolution.conflictingGestures.includes(newGesture)) {
+      state.conflictResolution.conflictingGestures.push(newGesture);
     }
     
     return false;
@@ -213,8 +240,140 @@ export const TouchGestureHandler: React.FC<TouchGestureHandlerProps> = ({
     onGesture(gesture);
   };
 
-  // Handle touch start
+  // Mouse event handlers
+  const handleMouseDown = useCallback((event: React.MouseEvent) => {
+    if (!enableMouseGestures) return;
+    
+    const now = Date.now();
+    mouseStateRef.current.isDown = true;
+    mouseStateRef.current.startPos = { x: event.clientX, y: event.clientY };
+    
+    // Initialize gesture state
+    gestureStateRef.current.startTime = now;
+    gestureStateRef.current.isGesturing = true;
+    gestureStateRef.current.conflictResolution.activeGesture = null;
+    
+    // Handle click sequence detection
+    const timeSinceLastClick = now - mouseStateRef.current.lastClickTime;
+    
+    if (timeSinceLastClick < settings.doubleTap.timeout!) {
+      mouseStateRef.current.clickCount++;
+    } else {
+      mouseStateRef.current.clickCount = 1;
+    }
+    
+    mouseStateRef.current.lastClickTime = now;
+    
+    // Start long press timer
+    if (settings.longPress.enabled) {
+      gestureStateRef.current.longPressTimer = setTimeout(() => {
+        if (resolveGestureConflict('long-press')) {
+          const gesture = createGesture('long-press', mouseStateRef.current.startPos, mouseStateRef.current.startPos, {
+            center: mouseStateRef.current.startPos
+          });
+          dispatchGesture(gesture);
+        }
+      }, settings.longPress.timeout!);
+    }
+  }, [enableMouseGestures, settings, onGesture]);
+
+  const handleMouseUp = useCallback((event: React.MouseEvent) => {
+    if (!enableMouseGestures || !mouseStateRef.current.isDown) return;
+    
+    mouseStateRef.current.isDown = false;
+    
+    // Clear long press timer
+    if (gestureStateRef.current.longPressTimer) {
+      clearTimeout(gestureStateRef.current.longPressTimer);
+      gestureStateRef.current.longPressTimer = null;
+    }
+    
+    const endPos = { x: event.clientX, y: event.clientY };
+    const distance = getDistance(mouseStateRef.current.startPos, endPos);
+    
+    // Handle click gestures
+    if (distance < (settings.tap.threshold! * settings.globalSensitivity)) {
+      // Handle multi-click detection
+      if (mouseStateRef.current.clickCount === 3 && settings.tripleTap.enabled) {
+        if (resolveGestureConflict('triple-tap')) {
+          const gesture = createGesture('triple-tap', mouseStateRef.current.startPos, endPos, {
+            center: endPos
+          });
+          dispatchGesture(gesture);
+          
+          // Handle text selection for triple-click (select line)
+          if (onTextSelection) {
+            onTextSelection(endPos.x, endPos.y, endPos.x, endPos.y);
+          }
+        }
+      } else if (mouseStateRef.current.clickCount === 2 && settings.doubleTap.enabled) {
+        if (resolveGestureConflict('double-tap')) {
+          const gesture = createGesture('double-tap', mouseStateRef.current.startPos, endPos, {
+            center: endPos
+          });
+          dispatchGesture(gesture);
+          
+          // Handle text selection for double-click (select word)
+          if (onTextSelection) {
+            onTextSelection(endPos.x, endPos.y, endPos.x, endPos.y);
+          }
+        }
+      } else {
+        // Single click - wait to see if it becomes multi-click
+        setTimeout(() => {
+          if (mouseStateRef.current.clickCount === 1 && settings.tap.enabled) {
+            if (resolveGestureConflict('tap')) {
+              const gesture = createGesture('tap', mouseStateRef.current.startPos, endPos, {
+                center: endPos
+              });
+              dispatchGesture(gesture);
+            }
+          }
+        }, settings.tap.timeout!);
+      }
+    }
+    
+    // Reset gesture state
+    setTimeout(() => {
+      gestureStateRef.current.isGesturing = false;
+      gestureStateRef.current.gestureType = null;
+      gestureStateRef.current.conflictResolution.activeGesture = null;
+      gestureStateRef.current.conflictResolution.conflictingGestures = [];
+    }, 50);
+  }, [enableMouseGestures, settings, onGesture, onTextSelection]);
+
+  const handleMouseMove = useCallback((event: React.MouseEvent) => {
+    if (!enableMouseGestures || !mouseStateRef.current.isDown) return;
+    
+    const currentPos = { x: event.clientX, y: event.clientY };
+    const deltaX = currentPos.x - mouseStateRef.current.startPos.x;
+    const deltaY = currentPos.y - mouseStateRef.current.startPos.y;
+    const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+    
+    // Clear long press timer on significant movement
+    if (gestureStateRef.current.longPressTimer && distance > (settings.longPress.threshold || 10)) {
+      clearTimeout(gestureStateRef.current.longPressTimer);
+      gestureStateRef.current.longPressTimer = null;
+    }
+    
+    // Detect drag/pan gesture
+    if (distance > (settings.pan.threshold! * settings.globalSensitivity)) {
+      if (settings.pan.enabled && resolveGestureConflict('pan')) {
+        const gesture = createGesture('pan', mouseStateRef.current.startPos, currentPos, {
+          deltaX,
+          deltaY,
+          distance,
+          center: currentPos
+        });
+        dispatchGesture(gesture);
+      }
+    }
+  }, [enableMouseGestures, settings, onGesture]);
+
+  // Touch event handlers (delegated to TouchGestureHandler logic)
   const handleTouchStart = useCallback((event: React.TouchEvent) => {
+    if (!enableTouchGestures) return;
+    
     event.preventDefault();
     
     const now = Date.now();
@@ -280,7 +439,6 @@ export const TouchGestureHandler: React.FC<TouchGestureHandlerProps> = ({
               onTextSelection(touchPos.x, touchPos.y, touchPos.x, touchPos.y);
             }
             
-            // Don't reset tap count yet, might be triple tap
             return;
           }
         }
@@ -317,10 +475,11 @@ export const TouchGestureHandler: React.FC<TouchGestureHandlerProps> = ({
         }
       }
     }
-  }, [onGesture, onTextSelection, settings]);
+  }, [enableTouchGestures, settings, onGesture, onTextSelection]);
 
-  // Handle touch move
   const handleTouchMove = useCallback((event: React.TouchEvent) => {
+    if (!enableTouchGestures) return;
+    
     event.preventDefault();
     
     const touches = Array.from(event.touches);
@@ -347,7 +506,7 @@ export const TouchGestureHandler: React.FC<TouchGestureHandlerProps> = ({
       
       if (originalTouch) {
         const moveDistance = getDistance(
-          { id: 0, x: firstTouch.clientX, y: firstTouch.clientY, timestamp: now },
+          { x: firstTouch.clientX, y: firstTouch.clientY },
           originalTouch
         );
         
@@ -435,10 +594,11 @@ export const TouchGestureHandler: React.FC<TouchGestureHandlerProps> = ({
         }
       }
     }
-  }, [onGesture, settings]);
+  }, [enableTouchGestures, settings, onGesture]);
 
-  // Handle touch end
   const handleTouchEnd = useCallback((event: React.TouchEvent) => {
+    if (!enableTouchGestures) return;
+    
     event.preventDefault();
     
     const remainingTouches = Array.from(event.touches);
@@ -491,11 +651,10 @@ export const TouchGestureHandler: React.FC<TouchGestureHandlerProps> = ({
       gestureStateRef.current.initialDistance = 0;
       gestureStateRef.current.initialScale = 1;
     }
-  }, [onGesture, settings]);
+  }, [enableTouchGestures, settings, onGesture]);
 
-  // Expose gesture handler methods
+  // Add CSS for visual feedback animation
   useEffect(() => {
-    // Add CSS for visual feedback animation
     const style = document.createElement('style');
     style.textContent = `
       @keyframes gestureRipple {
@@ -512,7 +671,9 @@ export const TouchGestureHandler: React.FC<TouchGestureHandlerProps> = ({
     document.head.appendChild(style);
     
     return () => {
-      document.head.removeChild(style);
+      if (document.head.contains(style)) {
+        document.head.removeChild(style);
+      }
     };
   }, []);
 
@@ -533,10 +694,16 @@ export const TouchGestureHandler: React.FC<TouchGestureHandlerProps> = ({
     }));
   }, [gestureSettings]);
 
+  // Expose gesture handler methods via context or ref if needed
+  // const contextValue = React.useMemo(() => gestureHandler, [gestureHandler]);
+
   return (
     <div
       className={className}
       style={style}
+      onMouseDown={handleMouseDown}
+      onMouseUp={handleMouseUp}
+      onMouseMove={handleMouseMove}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
@@ -566,16 +733,25 @@ export const useGestureHandler = (initialSettings?: Partial<GestureSettings>) =>
       gestureHandlersRef.current.delete(type);
     },
 
-    enableGesture: () => {
-      // Deprecated - use GestureHandler instead
+    enableGesture: (type: GestureType, enabled: boolean) => {
+      setSettings(prev => ({
+        ...prev,
+        ...updateGestureSetting(prev, type, { enabled })
+      }));
     },
 
-    setGestureSensitivity: () => {
-      // Deprecated - use GestureHandler instead
+    setGestureSensitivity: (sensitivity: number) => {
+      setSettings(prev => ({
+        ...prev,
+        globalSensitivity: Math.max(0.1, Math.min(5, sensitivity))
+      }));
     },
 
-    setGestureConfig: () => {
-      // Deprecated - use GestureHandler instead
+    setGestureConfig: (type: GestureType, config: Partial<GestureConfig>) => {
+      setSettings(prev => ({
+        ...prev,
+        ...updateGestureSetting(prev, type, config)
+      }));
     },
 
     getGestureSettings: () => settings,
@@ -587,3 +763,5 @@ export const useGestureHandler = (initialSettings?: Partial<GestureSettings>) =>
 
   return { gestureHandler, settings };
 };
+
+export default GestureHandler;

@@ -1,0 +1,396 @@
+/* Compact Mode Styles */
+
+/* Base compact mode styles */
+.compact-mode {
+  --compact-padding: 8px;
+  --compact-margin: 4px;
+  --compact-font-scale: 0.9;
+  --compact-header-height: 40px;
+  --compact-footer-height: 0px;
+  --compact-sidebar-width: 200px;
+}
+
+/* Very small screen adjustments */
+.compact-very-small {
+  --compact-padding: 4px;
+  --compact-margin: 2px;
+  --compact-font-scale: 0.85;
+  --compact-header-height: 36px;
+  --compact-sidebar-width: 180px;
+}
+
+/* Small screen adjustments */
+.compact-small {
+  --compact-padding: 6px;
+  --compact-margin: 3px;
+  --compact-font-scale: 0.87;
+  --compact-header-height: 38px;
+  --compact-sidebar-width: 190px;
+}
+
+/* Orientation-specific adjustments */
+.compact-landscape {
+  --compact-padding: 6px;
+  --compact-header-height: 36px;
+  --compact-sidebar-width: 160px;
+}
+
+.compact-portrait {
+  --compact-padding: 8px;
+  --compact-header-height: 40px;
+}
+
+/* Hide header in compact mode */
+.compact-hide-header .app-header,
+.compact-hide-header .mobile-header {
+  display: none !important;
+}
+
+.compact-hide-header .main-content {
+  padding-top: 0 !important;
+}
+
+/* Hide footer in compact mode */
+.compact-hide-footer .app-footer,
+.compact-hide-footer .mobile-footer {
+  display: none !important;
+}
+
+.compact-hide-footer .main-content {
+  padding-bottom: 0 !important;
+}
+
+/* Hide sidebar in compact mode */
+.compact-hide-sidebar .app-sidebar,
+.compact-hide-sidebar .sidebar {
+  display: none !important;
+}
+
+.compact-hide-sidebar .main-content {
+  margin-left: 0 !important;
+  width: 100% !important;
+}
+
+/* Minimize UI elements */
+.compact-minimize-ui {
+  /* Reduce button sizes */
+}
+
+.compact-minimize-ui button {
+  padding: var(--compact-padding);
+  font-size: calc(14px * var(--compact-font-scale));
+  min-height: 36px;
+  min-width: 36px;
+}
+
+.compact-minimize-ui .button-group {
+  gap: var(--compact-margin);
+}
+
+.compact-minimize-ui .toolbar {
+  padding: var(--compact-padding);
+  height: var(--compact-header-height);
+}
+
+.compact-minimize-ui .status-bar {
+  height: calc(var(--compact-header-height) * 0.8);
+  font-size: calc(12px * var(--compact-font-scale));
+}
+
+/* Maximize terminal space */
+.compact-max-terminal .terminal-container {
+  height: calc(100vh - var(--compact-header-height) - var(--compact-footer-height));
+  padding: var(--compact-padding);
+}
+
+.compact-max-terminal .terminal-content {
+  height: 100%;
+  width: 100%;
+}
+
+.compact-max-terminal .terminal-wrapper {
+  padding: 0;
+  margin: 0;
+}
+
+/* Compact keyboard styles */
+.compact-keyboard .virtual-keyboard {
+  padding: var(--compact-padding);
+}
+
+.compact-keyboard .keyboard-key {
+  padding: calc(var(--compact-padding) * 0.75);
+  font-size: calc(14px * var(--compact-font-scale));
+  min-height: 36px;
+  min-width: 36px;
+}
+
+.compact-keyboard .keyboard-row {
+  gap: var(--compact-margin);
+  margin-bottom: var(--compact-margin);
+}
+
+.compact-keyboard .quick-keys {
+  padding: var(--compact-padding);
+  gap: var(--compact-margin);
+}
+
+/* Reduced padding throughout */
+.compact-reduced-padding {
+  padding: var(--compact-padding) !important;
+}
+
+.compact-reduced-padding .container,
+.compact-reduced-padding .content-area,
+.compact-reduced-padding .panel {
+  padding: var(--compact-padding);
+}
+
+.compact-reduced-padding .card {
+  padding: calc(var(--compact-padding) * 1.5);
+}
+
+.compact-reduced-padding .form-group {
+  margin-bottom: calc(var(--compact-margin) * 2);
+}
+
+.compact-reduced-padding .input-group {
+  gap: var(--compact-margin);
+}
+
+/* Smaller fonts */
+.compact-smaller-fonts {
+  font-size: calc(14px * var(--compact-font-scale));
+}
+
+.compact-smaller-fonts h1 {
+  font-size: calc(24px * var(--compact-font-scale));
+}
+
+.compact-smaller-fonts h2 {
+  font-size: calc(20px * var(--compact-font-scale));
+}
+
+.compact-smaller-fonts h3 {
+  font-size: calc(18px * var(--compact-font-scale));
+}
+
+.compact-smaller-fonts h4 {
+  font-size: calc(16px * var(--compact-font-scale));
+}
+
+.compact-smaller-fonts .text-sm {
+  font-size: calc(12px * var(--compact-font-scale));
+}
+
+.compact-smaller-fonts .text-xs {
+  font-size: calc(10px * var(--compact-font-scale));
+}
+
+/* Terminal-specific compact styles */
+.compact-mode .terminal-view {
+  padding: var(--compact-padding);
+}
+
+.compact-mode .terminal-header {
+  height: var(--compact-header-height);
+  padding: 0 var(--compact-padding);
+}
+
+.compact-mode .terminal-tabs {
+  height: calc(var(--compact-header-height) * 0.9);
+}
+
+.compact-mode .terminal-tab {
+  padding: calc(var(--compact-padding) * 0.75) var(--compact-padding);
+  font-size: calc(13px * var(--compact-font-scale));
+}
+
+.compact-mode .terminal-actions {
+  gap: var(--compact-margin);
+}
+
+.compact-mode .terminal-action-button {
+  padding: calc(var(--compact-padding) * 0.75);
+  min-height: 32px;
+  min-width: 32px;
+}
+
+/* Gesture area adjustments for compact mode */
+.compact-mode .gesture-area {
+  padding: var(--compact-padding);
+}
+
+.compact-mode .touch-target {
+  min-height: 36px;
+  min-width: 36px;
+}
+
+/* Layout adjustments for compact mode */
+.compact-mode .layout-container {
+  gap: var(--compact-margin);
+}
+
+.compact-mode .layout-grid {
+  grid-gap: var(--compact-margin);
+}
+
+.compact-mode .layout-flex {
+  gap: var(--compact-margin);
+}
+
+/* Sidebar adjustments in compact mode */
+.compact-mode .sidebar {
+  width: var(--compact-sidebar-width);
+}
+
+.compact-mode .sidebar-item {
+  padding: calc(var(--compact-padding) * 0.75) var(--compact-padding);
+  font-size: calc(14px * var(--compact-font-scale));
+}
+
+.compact-mode .sidebar-icon {
+  width: 16px;
+  height: 16px;
+}
+
+/* Menu adjustments */
+.compact-mode .menu-item {
+  padding: calc(var(--compact-padding) * 0.75) var(--compact-padding);
+  font-size: calc(14px * var(--compact-font-scale));
+}
+
+.compact-mode .dropdown-menu {
+  padding: var(--compact-padding);
+}
+
+/* Modal adjustments */
+.compact-mode .modal-content {
+  padding: calc(var(--compact-padding) * 2);
+  margin: var(--compact-padding);
+}
+
+.compact-mode .modal-header {
+  padding: var(--compact-padding) calc(var(--compact-padding) * 2);
+}
+
+.compact-mode .modal-footer {
+  padding: var(--compact-padding) calc(var(--compact-padding) * 2);
+  gap: var(--compact-margin);
+}
+
+/* Form adjustments */
+.compact-mode .form-control {
+  padding: calc(var(--compact-padding) * 0.75);
+  font-size: calc(14px * var(--compact-font-scale));
+}
+
+.compact-mode .form-label {
+  font-size: calc(13px * var(--compact-font-scale));
+  margin-bottom: calc(var(--compact-margin) * 0.5);
+}
+
+.compact-mode .form-group {
+  margin-bottom: var(--compact-padding);
+}
+
+/* Animation adjustments for compact mode */
+.compact-mode .transition-all {
+  transition-duration: 200ms;
+}
+
+.compact-mode .animation-duration {
+  animation-duration: 200ms;
+}
+
+/* Responsive breakpoints for compact mode */
+@media (max-width: 480px) {
+  .compact-mode {
+    --compact-padding: 4px;
+    --compact-margin: 2px;
+    --compact-font-scale: 0.8;
+    --compact-header-height: 32px;
+  }
+}
+
+@media (max-width: 320px) {
+  .compact-mode {
+    --compact-padding: 2px;
+    --compact-margin: 1px;
+    --compact-font-scale: 0.75;
+    --compact-header-height: 28px;
+  }
+}
+
+/* Landscape orientation optimizations */
+@media (orientation: landscape) and (max-height: 500px) {
+  .compact-mode {
+    --compact-header-height: 32px;
+    --compact-footer-height: 0px;
+  }
+  
+  .compact-mode .app-header,
+  .compact-mode .mobile-header {
+    height: var(--compact-header-height);
+  }
+  
+  .compact-mode .app-footer,
+  .compact-mode .mobile-footer {
+    display: none;
+  }
+}
+
+/* High DPI adjustments */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  .compact-mode {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/* Accessibility adjustments */
+@media (prefers-reduced-motion: reduce) {
+  .compact-mode * {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+/* Focus styles for compact mode */
+.compact-mode *:focus-visible {
+  outline: 2px solid #007acc;
+  outline-offset: 1px;
+}
+
+/* Utility classes for compact mode */
+.compact-hidden {
+  display: none !important;
+}
+
+.compact-visible {
+  display: block !important;
+}
+
+.compact-flex {
+  display: flex !important;
+}
+
+.compact-grid {
+  display: grid !important;
+}
+
+.compact-full-width {
+  width: 100% !important;
+}
+
+.compact-full-height {
+  height: 100% !important;
+}
+
+.compact-no-padding {
+  padding: 0 !important;
+}
+
+.compact-no-margin {
+  margin: 0 !important;
+}

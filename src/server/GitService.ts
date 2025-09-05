@@ -324,6 +324,25 @@ export class GitService {
         }
     }
 
+    /**
+     * Get commit metadata (hash, author, date, message)
+     */
+    async getCommitMeta(workspacePath: string | undefined, commitHash: string): Promise<{ hash: string; author: string; date: string; message: string } | null> {
+        try {
+            const repo = await this.getRepository(workspacePath);
+            if (!repo) return null;
+            const root = repo.rootUri.fsPath;
+            // %H hash, %an author name, %ad author date (human), %B body
+            const out = await this.runGit(root, ['show', '-s', '--format=%H%n%an%n%ad%n%B', commitHash]);
+            const [hash, author, date, ...rest] = out.split('\n');
+            const message = (rest || []).join('\n').trim();
+            return { hash: (hash || '').trim(), author: (author || '').trim(), date: (date || '').trim(), message };
+        } catch (error) {
+            console.error('Failed to get commit meta:', error);
+            return null;
+        }
+    }
+
     private runGit(cwd: string, args: string[]): Promise<string> {
         return new Promise((resolve, reject) => {
             const child = execFile('git', args, { cwd, windowsHide: true, maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
@@ -428,6 +447,9 @@ export class GitService {
                     }
                     if (options.file) {
                         return await this.getCommitFileDiff(options.workspacePath, options.commitHash, options.file);
+                    }
+                    if (options.meta) {
+                        return await this.getCommitMeta(options.workspacePath, options.commitHash);
                     }
                     return await this.getCommitDiff(options.workspacePath, options.commitHash);
 

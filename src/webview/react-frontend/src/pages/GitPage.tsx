@@ -5,7 +5,6 @@ import { useWebSocket } from '../components/WebSocketProvider';
 import { GitHistoryViewer } from '../components/git/GitHistoryViewer';
 import { DiffFile } from '../components/git/DiffFile';
 import { usePullToRefresh } from '../lib/hooks/usePullToRefresh';
-import { BottomSheet, BottomSheetHeader, BottomSheetTitle } from '../components/ui/bottom-sheet';
 
 interface GitRepositoryState {
   currentBranch: string;
@@ -18,27 +17,19 @@ interface GitRepositoryState {
 const GitPage: React.FC = () => {
   const { sendJson, addMessageListener } = useWebSocket();
   const [repo, setRepo] = useState<GitRepositoryState | null>(null);
-  const [_diffText, setDiffText] = useState<string>('');
   const [diffFiles, setDiffFiles] = useState<Array<{ file: string; type: 'added' | 'modified' | 'deleted' | 'renamed'; additions: number; deletions: number; content: string }>>([]);
   const [commits, setCommits] = useState<Array<{ hash: string; message: string; author: string; date: string | Date }>>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
-  const pendingMap = useRef<Record<string, string>>({}); // id -> op
+  const pendingMap = useRef<Record<string, string>>({}); 
   const [activeTab, setActiveTab] = useState<'status' | 'history'>('status');
   const [logCount, setLogCount] = useState<number>(20);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const composerAnchorRef = useRef<HTMLDivElement | null>(null);
-  const [selectedCommit, setSelectedCommit] = useState<{ hash: string; message: string; author: string; date: string | Date; files?: string[] } | null>(null);
-  const [selectedFileList, setSelectedFileList] = useState<Array<{ file: string; type: 'added' | 'modified' | 'deleted' | 'renamed' }>>([]);
-  const [selectedDiffs, setSelectedDiffs] = useState<Array<{ file: string; type: 'added' | 'modified' | 'deleted' | 'renamed'; additions: number; deletions: number; content: string }>>([]);
-  const [selectedLoading, setSelectedLoading] = useState(false);
-  const [loadingFiles, setLoadingFiles] = useState<Record<string, boolean>>({});
 
-  const pendingMeta = useRef<Record<string, any>>({});
-  const request = (operation: string, options: any = {}, meta?: any) => {
+  const request = (operation: string, options: any = {}) => {
     const id = `git_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
     pendingMap.current[id] = operation;
-    if (meta) pendingMeta.current[id] = meta;
     setLoading(true);
     sendJson({ type: 'git', id, data: { gitData: { operation, options } } });
   };
@@ -49,8 +40,6 @@ const GitPage: React.FC = () => {
       const op = pendingMap.current[msg.id];
       if (!op) return; // not ours
       delete pendingMap.current[msg.id];
-      const meta = pendingMeta.current[msg.id];
-      delete pendingMeta.current[msg.id];
       setLoading(Object.keys(pendingMap.current).length > 0);
       if (msg.data?.ok === false) {
         setError(msg.data?.error || `Git ${op} failed`);
@@ -69,37 +58,12 @@ const GitPage: React.FC = () => {
           if (Array.isArray(result)) {
             const list = (result as any[]) as typeof diffFiles;
             setDiffFiles(list);
-            const content = list.map((d) => `# ${d.file}\n${d.content || ''}`).join('\n\n');
-            setDiffText(content);
           } else {
             setDiffFiles([]);
-            setDiffText('');
           }
           break;
         case 'log':
           if (Array.isArray(result)) setCommits(result as any);
-          break;
-        case 'show':
-          // lazy modes:
-          if (meta && meta.mode === 'list') {
-            if (Array.isArray(result)) setSelectedFileList(result as any);
-            setSelectedLoading(false);
-            break;
-          }
-          if (meta && meta.file) {
-            const file = meta.file as string;
-            setLoadingFiles((m) => ({ ...m, [file]: false }));
-            if (result && typeof result === 'object' && result.file) {
-              setSelectedDiffs((prev) => {
-                const others = prev.filter(d => d.file !== file);
-                return [...others, result as any];
-              });
-            }
-            break;
-          }
-          // fallback: full commit patch
-          if (Array.isArray(result)) setSelectedDiffs(result as any);
-          setSelectedLoading(false);
           break;
         case 'commit':
         case 'push':
@@ -220,11 +184,8 @@ const GitPage: React.FC = () => {
                 request('log', { count: next })
               }}
               onSelect={(c) => {
-                setSelectedCommit(c)
-                setSelectedLoading(true)
-                setSelectedFileList([])
-                setSelectedDiffs([])
-                request('show', { commitHash: c.hash, list: true }, { mode: 'list' })
+                // TODO: Implement commit details view
+                console.log('Selected commit:', c);
               }}
             />
           </div>
@@ -249,65 +210,14 @@ const GitPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Commit details sheet */}
-      <BottomSheet open={!!selectedCommit} onClose={() => { setSelectedCommit(null); setSelectedFileList([]); setSelectedDiffs([]); setSelectedLoading(false); setLoadingFiles({}); }} ariaLabel="Commit details">
-        {selectedCommit && (
-          <>
-            <BottomSheetHeader>
-              <BottomSheetTitle>Commit Details</BottomSheetTitle>
-              <button className="rounded-md border border-border px-2 py-1 text-xs" onClick={() => setSelectedCommit(null)}>Close</button>
-            </BottomSheetHeader>
-            <div className="space-y-2">
-              <div className="text-sm font-medium leading-snug">{selectedCommit.message || '(no message)'}</div>
-              <div className="text-xs text-muted-foreground flex items-center gap-2">
-                <span>{(selectedCommit.author || '').trim() || 'Unknown'}</span>
-                <span>•</span>
-                <span>{new Date(selectedCommit.date).toLocaleString()}</span>
-              </div>
-              <div className="flex items-center gap-2 text-xs mt-1">
-                <span className="font-mono bg-muted rounded px-1.5 py-0.5">{selectedCommit.hash.slice(0, 12)}</span>
-                <button className="rounded border border-border px-2 py-1" onClick={() => navigator.clipboard?.writeText(selectedCommit.hash)}>Copy</button>
-              </div>
-              {/* Commit files & lazy diffs */}
-              <div className="mt-3 space-y-2">
-                {selectedLoading && (
-                  <div className="text-xs text-muted-foreground">Loading files…</div>
-                )}
-                {!selectedLoading && selectedFileList.length === 0 && (
-                  <div className="text-xs text-muted-foreground">No changes in this commit.</div>
-                )}
-                {selectedFileList.length > 0 && (
-                  <div className="space-y-2">
-                    {selectedFileList.map((f, i) => {
-                      const loaded = selectedDiffs.find(d => d.file === f.file)
-                      const additions = loaded?.additions || 0;
-                      const deletions = loaded?.deletions || 0;
-                      const content = loaded?.content || '';
-                      const chunk = loaded || { file: f.file, type: f.type, additions, deletions, content }
-                      const isLoading = !!loadingFiles[f.file]
-                      return (
-                        <DiffFile
-                          key={`${f.file}:${i}`}
-                          chunk={chunk as any}
-                          loading={isLoading}
-                          onExpand={() => {
-                            const alreadyLoaded = !!selectedDiffs.find(d => d.file === f.file)
-                            if (alreadyLoaded || isLoading) return
-                            setLoadingFiles((m) => ({ ...m, [f.file]: true }))
-                            request('show', { commitHash: selectedCommit.hash, file: f.file }, { file: f.file })
-                          }}
-                        />
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
-            </div>
-          </>
-        )}
-      </BottomSheet>
+      {/* Commit details are rendered in /git/commit/$hash route */}
     </div>
   );
 };
 
 export default GitPage;
+
+
+
+
+

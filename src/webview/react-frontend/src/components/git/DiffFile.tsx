@@ -51,7 +51,25 @@ export const DiffFile: React.FC<{ chunk: DiffChunk; loading?: boolean; onExpand?
           {loading ? (
             <div className="text-muted-foreground">Loading…</div>
           ) : (
-            <pre className="overflow-auto whitespace-pre-wrap leading-relaxed">{chunk.content || 'No diff content'}</pre>
+            <div className="overflow-auto whitespace-pre leading-relaxed font-mono">
+              {(chunk.content || '').split('\n').map((line, i) => {
+                let cls = ''
+                if (line.startsWith('+++') || line.startsWith('---') || line.startsWith('index ')) {
+                  cls = 'text-muted-foreground'
+                } else if (line.startsWith('@@')) {
+                  cls = 'bg-blue-500/10 text-blue-700 dark:text-blue-300'
+                } else if (line.startsWith('+')) {
+                  cls = 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+                } else if (line.startsWith('-')) {
+                  cls = 'bg-rose-500/10 text-rose-700 dark:text-rose-300'
+                } else {
+                  cls = ''
+                }
+                return (
+                  <div key={i} className={`px-2 rounded ${cls}`}>{line || '\u00A0'}</div>
+                )
+              })}
+            </div>
           )}
         </div>
       )}

@@ -4,9 +4,8 @@ import { Menu, X, Moon, Sun } from 'lucide-react';
 import { AppHeader } from '../components/AppHeader';
 import { AppSidebar } from '../components/AppSidebar';
 import { AppFooter } from '../components/AppFooter';
-import { WebSocketProvider, useWebSocket } from '../components/WebSocketProvider';
-import { ToastProvider } from '../components/ui/toast';
-import { ThemeProvider, useTheme } from '../components/theme/ThemeProvider';
+import { useWebSocket } from '../components/WebSocketProvider';
+import { useTheme } from '../components/theme/ThemeProvider';
 import { cn } from '../lib/utils';
 
 const LayoutContent: React.FC = () => {
@@ -151,15 +150,7 @@ const LayoutContent: React.FC = () => {
 };
 
 const RootLayout: React.FC = () => {
-  return (
-    <ThemeProvider>
-      <ToastProvider>
-        <WebSocketProvider>
-          <LayoutContent />
-        </WebSocketProvider>
-      </ToastProvider>
-    </ThemeProvider>
-  );
+  return <LayoutContent />
 };
 
 export default RootLayout;

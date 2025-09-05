@@ -1,0 +1,474 @@
+/* Touch-Optimized Terminal Styles */
+
+.touch-optimized-terminal {
+  /* Ensure smooth touch interactions */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -khtml-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  
+  /* Optimize for touch scrolling */
+  -webkit-overflow-scrolling: touch;
+  
+  /* Prevent zoom on double tap */
+  touch-action: manipulation;
+}
+
+.touch-device .terminal-container {
+  /* Larger touch targets on mobile */
+  min-height: 44px;
+  
+  /* Better spacing for finger interaction */
+  padding: 8px;
+  
+  /* Smooth transitions for interactions */
+  transition: all 0.2s ease;
+}
+
+.touch-device .terminal-container:active {
+  /* Visual feedback on touch */
+  transform: scale(0.98);
+  opacity: 0.9;
+}
+
+/* Responsive Font System Styles */
+
+.responsive-font-system {
+  font-size: var(--terminal-font-size, 14px);
+  line-height: var(--terminal-line-height, 19.6px);
+  font-family: var(--terminal-font-family, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-weight: var(--terminal-font-weight, 400);
+}
+
+.responsive-font-system * {
+  font-size: inherit;
+  line-height: inherit;
+  font-family: inherit;
+}
+
+/* High contrast adjustments */
+.high-contrast {
+  font-weight: 600;
+}
+
+.high-contrast .xterm-screen {
+  filter: contrast(1.2);
+}
+
+/* Reduced motion adjustments */
+.reduced-motion * {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}
+
+/* Responsive breakpoints */
+@media (max-width: 480px) {
+  .responsive-font-system {
+    --terminal-font-size: 15.4px; /* 14 * 1.1 */
+  }
+}
+
+@media (max-width: 320px) {
+  .responsive-font-system {
+    --terminal-font-size: 16.8px; /* 14 * 1.2 */
+  }
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+  .responsive-font-system {
+    --terminal-font-size: 12.6px; /* 14 * 0.9 */
+  }
+}
+
+/* Visual Feedback System Styles */
+
+.visual-feedback-system {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.ripple-effect {
+  will-change: transform, opacity;
+}
+
+.touch-indicator {
+  will-change: transform, opacity;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(0.8);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+}
+
+/* High contrast mode adjustments */
+@media (prefers-contrast: high) {
+  .ripple-effect {
+    border: 2px solid currentColor;
+    background-color: transparent;
+  }
+  
+  .touch-indicator {
+    border-color: currentColor;
+    background-color: transparent;
+  }
+}
+
+/* Reduced motion adjustments */
+@media (prefers-reduced-motion: reduce) {
+  .ripple-effect {
+    animation: none;
+    transition: none;
+  }
+  
+  .touch-indicator {
+    animation: none;
+  }
+}
+
+/* Enhanced Terminal Page Styles */
+
+.touch-optimized-terminal-container {
+  /* Ensure proper touch interaction area */
+  min-height: 300px;
+}
+
+/* Mobile-specific adjustments */
+@media (max-width: 768px) {
+  .touch-optimized-terminal-container {
+    min-height: 250px;
+  }
+}
+
+@media (max-width: 480px) {
+  .touch-optimized-terminal-container {
+    min-height: 200px;
+  }
+}
+
+/* Touch target size enforcement */
+.min-touch-target {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Haptic feedback visual indicators */
+.haptic-active {
+  animation: haptic-pulse 0.1s ease-out;
+}
+
+@keyframes haptic-pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+/* Smart Virtual Keyboard Styles */
+.virtual-keyboard {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+}
+
+.virtual-keyboard-key {
+  min-height: 44px;
+  min-width: 44px;
+  touch-action: manipulation;
+  user-select: none;
+}
+
+.virtual-keyboard-key:active {
+  transform: scale(0.95);
+}
+
+/* Gesture handler overlay */
+.gesture-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10;
+}
+
+/* Accessibility improvements */
+@media (prefers-reduced-motion: reduce) {
+  .touch-device .terminal-container,
+  .virtual-keyboard-key,
+  .haptic-active {
+    transition: none;
+    animation: none;
+  }
+}
+
+/* Focus indicators for keyboard navigation */
+.virtual-keyboard-key:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .virtual-keyboard {
+    border-width: 2px;
+  }
+  
+  .virtual-keyboard-key {
+    border-width: 2px;
+  }
+}
+/* Enha
+nced Smart Virtual Keyboard Styles */
+
+.virtual-keyboard-minimized {
+  background: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+  transition: all 0.3s ease;
+}
+
+.virtual-keyboard-minimized:hover {
+  background: var(--muted-foreground);
+}
+
+/* Predictive text suggestions */
+.virtual-keyboard .suggestions-container {
+  max-height: 120px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  background: var(--muted);
+  border-radius: 6px;
+  margin-bottom: 12px;
+}
+
+.virtual-keyboard .suggestion-item {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.virtual-keyboard .suggestion-item:hover {
+  background: var(--accent);
+}
+
+.virtual-keyboard .suggestion-item:last-child {
+  border-bottom: none;
+}
+
+.virtual-keyboard .suggestion-icon {
+  margin-right: 8px;
+  font-size: 14px;
+}
+
+.virtual-keyboard .suggestion-text {
+  flex: 1;
+  font-family: monospace;
+  font-size: 14px;
+}
+
+.virtual-keyboard .suggestion-description {
+  font-size: 12px;
+  color: var(--muted-foreground);
+  margin-left: 8px;
+}
+
+/* Context-aware keyboard styling */
+.virtual-keyboard.terminal-running {
+  border-color: var(--destructive);
+  box-shadow: 0 0 0 1px var(--destructive);
+}
+
+.virtual-keyboard.terminal-input {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 1px var(--primary);
+}
+
+.virtual-keyboard.terminal-idle {
+  opacity: 0.9;
+}
+
+/* Modifier key states */
+.virtual-keyboard-key.modifier-active {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+.virtual-keyboard-key.modifier-sticky {
+  background: var(--accent);
+  border: 2px solid var(--primary);
+  animation: sticky-pulse 2s infinite;
+}
+
+@keyframes sticky-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.8; }
+}
+
+/* Quick commands section */
+.virtual-keyboard .quick-commands {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+  margin-top: 12px;
+}
+
+.virtual-keyboard .quick-commands-title {
+  font-size: 12px;
+  color: var(--muted-foreground);
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.virtual-keyboard .quick-command-button {
+  font-family: monospace;
+  font-size: 13px;
+  margin: 2px;
+}
+
+/* Recent commands section */
+.virtual-keyboard .recent-commands {
+  margin-top: 12px;
+}
+
+.virtual-keyboard .recent-command-button {
+  font-family: monospace;
+  font-size: 12px;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Layout toggles */
+.virtual-keyboard .layout-toggle {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.virtual-keyboard .layout-toggle-button {
+  flex: 1;
+  min-height: 44px;
+}
+
+/* Responsive adjustments for enhanced features */
+@media (max-width: 640px) {
+  .virtual-keyboard {
+    padding: 12px;
+    margin: 0 -4px;
+  }
+  
+  .virtual-keyboard .suggestion-item {
+    padding: 6px 10px;
+  }
+  
+  .virtual-keyboard .suggestion-text {
+    font-size: 13px;
+  }
+  
+  .virtual-keyboard .suggestion-description {
+    font-size: 11px;
+  }
+}
+
+@media (max-width: 480px) {
+  .virtual-keyboard {
+    padding: 8px;
+  }
+  
+  .virtual-keyboard-key {
+    font-size: 12px;
+    min-height: 40px;
+    min-width: 40px;
+  }
+  
+  .virtual-keyboard .quick-command-button {
+    font-size: 11px;
+    min-height: 36px;
+  }
+  
+  .virtual-keyboard .recent-command-button {
+    font-size: 10px;
+    min-height: 32px;
+    max-width: 80px;
+  }
+}
+
+/* Auto-hide animation */
+.virtual-keyboard.auto-hiding {
+  animation: keyboard-slide-down 0.3s ease-out forwards;
+}
+
+.virtual-keyboard.auto-showing {
+  animation: keyboard-slide-up 0.3s ease-out forwards;
+}
+
+@keyframes keyboard-slide-down {
+  from {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+}
+
+@keyframes keyboard-slide-up {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* Accessibility enhancements */
+.virtual-keyboard-key[aria-pressed="true"] {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+.virtual-keyboard .suggestion-item:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
+
+/* High contrast mode enhancements */
+@media (prefers-contrast: high) {
+  .virtual-keyboard .suggestion-item {
+    border-color: currentColor;
+  }
+  
+  .virtual-keyboard.terminal-running {
+    border-width: 3px;
+  }
+  
+  .virtual-keyboard.terminal-input {
+    border-width: 3px;
+  }
+}

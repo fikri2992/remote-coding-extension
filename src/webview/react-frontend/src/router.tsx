@@ -6,7 +6,7 @@ import ServerPage from './pages/ServerPage.tsx';
 import FilesPage from './pages/FilesPage.tsx';
 import FileViewerPage from './pages/FileViewerPage.tsx';
 import GitPage from './pages/GitPage.tsx';
-import TerminalPage from './pages/TerminalPage.tsx';
+import EnhancedTerminalPage from './pages/EnhancedTerminalPage.tsx';
 import ChatPage from './pages/ChatPage.tsx';
 import SettingsPage from './pages/SettingsPage.tsx';
 import { TunnelManagerPage } from './pages/TunnelManagerPage.tsx';
@@ -46,7 +46,7 @@ const gitRoute = createRoute({
 const terminalRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/terminal',
-  component: TerminalPage,
+  component: EnhancedTerminalPage,
 });
 
 const chatRoute = createRoute({

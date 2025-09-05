@@ -31,9 +31,15 @@ export const TerminalXterm = React.forwardRef<TerminalXtermHandle, {
       if (disposed) return
 
       const isDark = document.documentElement.classList.contains('dark')
+      
+      // Get responsive font size from CSS custom properties
+      const rootStyles = getComputedStyle(document.documentElement);
+      const responsiveFontSize = rootStyles.getPropertyValue('--terminal-font-size');
+      const fontSize = responsiveFontSize ? parseFloat(responsiveFontSize) : 13;
+      
       const term = new Terminal({
-        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-        fontSize: 13,
+        fontFamily: 'var(--terminal-font-family, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace)',
+        fontSize,
         convertEol: true,
         cursorBlink: true,
         scrollback: 2000,

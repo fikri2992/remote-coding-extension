@@ -23,7 +23,7 @@ export const CommitDiff: React.FC<Props> = ({ commit, files, loading, onBack, on
     <div className="space-y-3">
       <div className="flex items-center gap-2">
         <button
-          className="h-10 w-10 inline-flex items-center justify-center rounded-lg border border-border hover:bg-muted active:bg-muted"
+          className="h-12 w-12 sm:h-10 sm:w-10 inline-flex items-center justify-center rounded-lg border border-border hover:bg-muted active:bg-muted neo:rounded-none neo:border-[3px] neo:shadow-[4px_4px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[4px_4px_0_0_rgba(255,255,255,0.9)]"
           onClick={onBack}
           aria-label="Back to history"
         >

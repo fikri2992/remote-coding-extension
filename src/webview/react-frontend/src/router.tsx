@@ -10,6 +10,7 @@ import TerminalPage from './pages/TerminalPage.tsx';
 import ChatPage from './pages/ChatPage.tsx';
 import SettingsPage from './pages/SettingsPage.tsx';
 import { TunnelManagerPage } from './pages/TunnelManagerPage.tsx';
+
 import RootLayout from './layouts/RootLayout.tsx';
 
 // Create a root route
@@ -73,6 +74,8 @@ const tunnelsRoute = createRoute({
   path: '/tunnels',
   component: TunnelManagerPage,
 });
+
+
 
 // Create the route tree
 const routeTree = rootRoute.addChildren([

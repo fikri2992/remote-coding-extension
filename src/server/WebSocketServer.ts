@@ -343,18 +343,33 @@ export class WebSocketServer {
       }
       try {
         if (!this._gitService) {
+          console.log('WebSocketServer: Initializing GitService...');
           this._gitService = new GitService();
         }
-        Promise.resolve(this._gitService.executeGitCommand(op, options))
+        
+        console.log(`WebSocketServer: Executing git operation: ${op}`);
+        
+        // Add timeout to prevent hanging
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error(`Git operation '${op}' timed out after 45 seconds`)), 45000);
+        });
+        
+        Promise.race([
+          this._gitService.executeGitCommand(op, options),
+          timeoutPromise
+        ])
           .then((result) => {
+            console.log(`WebSocketServer: Git operation '${op}' completed successfully`);
             this.sendToClient(connectionId, { type: 'git', id, data: { gitData: { operation: op, result }, ok: true } });
           })
           .catch((err) => {
             const errMsg = err instanceof Error ? err.message : String(err);
+            console.error(`WebSocketServer: Git operation '${op}' failed:`, errMsg);
             this.sendToClient(connectionId, { type: 'git', id, data: { gitData: { operation: op }, ok: false, error: errMsg } });
           });
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : String(err);
+        console.error(`WebSocketServer: Git operation '${op}' error:`, errMsg);
         this.sendToClient(connectionId, { type: 'git', id, data: { gitData: { operation: op }, ok: false, error: errMsg } });
       }
     }

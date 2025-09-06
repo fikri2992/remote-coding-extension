@@ -59,6 +59,7 @@ function parseUnified(content: string): DiffRow[] {
 export const DiffFile: React.FC<{ chunk: DiffChunk; loading?: boolean; onExpand?: () => void }>
   = ({ chunk, loading, onExpand }) => {
   const [open, setOpen] = React.useState(false)
+  const [wrapMode, setWrapMode] = React.useState(false)
   const badge = (n: number, color: string, label: string) => (
     <span className={`inline-flex items-center justify-center min-w-[36px] h-7 px-2 rounded-full text-xs ${color} neo:rounded-none neo:border-2 neo:border-border neo:shadow-[3px_3px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[3px_3px_0_0_rgba(255,255,255,0.9)]`}>
       {label} {n}
@@ -91,7 +92,7 @@ export const DiffFile: React.FC<{ chunk: DiffChunk; loading?: boolean; onExpand?
   return (
     <div className="rounded-xl border border-border bg-background overflow-hidden neo:rounded-none neo:border-[3px] neo:shadow-[6px_6px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[6px_6px_0_0_rgba(255,255,255,0.9)]">
       <button
-        className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left active:bg-muted/60 neo:duration-100"
+        className="w-full flex items-center justify-between gap-3 px-4 py-4 sm:py-3 text-left active:bg-muted/60 neo:duration-100 min-h-[60px] sm:min-h-[auto]"
         onClick={() => {
           const next = !open
           setOpen(next)
@@ -112,22 +113,55 @@ export const DiffFile: React.FC<{ chunk: DiffChunk; loading?: boolean; onExpand?
         </div>
       </button>
       {open && (
-        <div className="px-3 py-3 border-t border-border text-[12px] leading-5 neo:border-t-[2px]">
-          {loading ? (
-            <div className="text-muted-foreground">Loading...</div>
-          ) : (
-            <div className="overflow-auto">
-              <div className="min-w-full font-mono">
-                {rows.map((r, i) => (
-                  <div key={i} className={`grid grid-cols-[3rem_3rem_1fr] items-start gap-x-2 px-1 py-0.5 rounded ${rowClass(r.type)} neo:rounded-none neo:border-b-2 neo:border-border`}>
-                    <div className="text-right pr-1 text-muted-foreground select-none font-mono">{r.oldNo ?? ''}</div>
-                    <div className="text-right pr-1 text-muted-foreground select-none font-mono">{r.newNo ?? ''}</div>
-                    <div className="whitespace-pre px-2">{r.text || '\u00A0'}</div>
+        <div className="border-t border-border neo:border-t-[2px]">
+          {/* Mobile controls */}
+          <div className="flex items-center justify-between px-3 py-2 bg-muted/30 border-b border-border lg:hidden">
+            <span className="text-xs text-muted-foreground">View mode:</span>
+            <button
+              onClick={() => setWrapMode(!wrapMode)}
+              className="px-2 py-1 text-xs rounded border border-border bg-background hover:bg-muted neo:rounded-none neo:border-[2px]"
+            >
+              {wrapMode ? 'Scroll' : 'Wrap'}
+            </button>
+          </div>
+          
+          <div className="px-3 py-3 text-xs sm:text-[12px] leading-5">
+            {loading ? (
+              <div className="text-muted-foreground">Loading...</div>
+            ) : (
+              <div className={wrapMode ? "overflow-hidden" : "overflow-auto"}>
+                {/* Scroll indicator for mobile */}
+                {!wrapMode && (
+                  <div className="lg:hidden mb-2 text-xs text-muted-foreground flex items-center gap-1">
+                    <svg className="w-3 h-3" viewBox="0 0 20 20" fill="currentColor">
+                      <path d="M3 10a1.5 1.5 0 113 0 1.5 1.5 0 01-3 0zM8.5 10a1.5 1.5 0 113 0 1.5 1.5 0 01-3 0zM15.5 8.5a1.5 1.5 0 100 3 1.5 1.5 0 000-3z"/>
+                    </svg>
+                    Scroll horizontally to see more
                   </div>
-                ))}
+                )}
+                
+                <div className="min-w-full font-mono">
+                  {rows.map((r, i) => (
+                    <div key={i} className={`grid items-start gap-x-1 sm:gap-x-2 px-1 py-0.5 rounded ${rowClass(r.type)} neo:rounded-none neo:border-b-2 neo:border-border ${
+                      wrapMode 
+                        ? 'grid-cols-[2.5rem_2.5rem_1fr] lg:grid-cols-[3rem_3rem_1fr]' 
+                        : 'grid-cols-[2.5rem_2.5rem_1fr] lg:grid-cols-[3rem_3rem_1fr]'
+                    }`}>
+                      <div className="text-right pr-1 text-muted-foreground select-none font-mono text-[10px] sm:text-xs">{r.oldNo ?? ''}</div>
+                      <div className="text-right pr-1 text-muted-foreground select-none font-mono text-[10px] sm:text-xs">{r.newNo ?? ''}</div>
+                      <div className={`px-1 sm:px-2 ${
+                        wrapMode 
+                          ? 'whitespace-pre-wrap break-all' 
+                          : 'whitespace-pre'
+                      }`}>
+                        {r.text || '\u00A0'}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       )}
     </div>

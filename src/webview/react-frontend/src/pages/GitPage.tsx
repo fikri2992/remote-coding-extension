@@ -24,6 +24,8 @@ const GitPage: React.FC = () => {
   const [selectedCommitFiles, setSelectedCommitFiles] = useState<Array<{ file: string; type: 'added' | 'modified' | 'deleted' | 'renamed'; additions: number; deletions: number; content: string }>>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
+  const [historyLoading, setHistoryLoading] = useState<boolean>(false);
+  const [commitDiffLoading, setCommitDiffLoading] = useState<boolean>(false);
   const pendingMap = useRef<Record<string, string>>({}); 
   const [activeTab, setActiveTab] = useState<'status' | 'history'>('status');
   const [logCount, setLogCount] = useState<number>(20);
@@ -33,7 +35,16 @@ const GitPage: React.FC = () => {
   const request = (operation: string, options: any = {}) => {
     const id = `git_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
     pendingMap.current[id] = operation;
-    setLoading(true);
+    
+    // Set appropriate loading states
+    if (operation === 'log') {
+      setHistoryLoading(true);
+    } else if (operation === 'show') {
+      setCommitDiffLoading(true);
+    } else {
+      setLoading(true);
+    }
+    
     sendJson({ type: 'git', id, data: { gitData: { operation, options } } });
   };
 
@@ -43,7 +54,16 @@ const GitPage: React.FC = () => {
       const op = pendingMap.current[msg.id];
       if (!op) return; // not ours
       delete pendingMap.current[msg.id];
-      setLoading(Object.keys(pendingMap.current).length > 0);
+      
+      // Clear appropriate loading states
+      if (op === 'log') {
+        setHistoryLoading(false);
+      } else if (op === 'show') {
+        setCommitDiffLoading(false);
+      } else {
+        setLoading(false);
+      }
+      
       if (msg.data?.ok === false) {
         setError(msg.data?.error || `Git ${op} failed`);
         return;
@@ -71,22 +91,39 @@ const GitPage: React.FC = () => {
         case 'show': {
           if (Array.isArray(result)) {
             if (result.length > 0 && typeof result[0]?.content !== 'undefined') {
-              // Full diffs array
+              // Full diffs array with content
               setSelectedCommitFiles(result as any);
             } else if (result.length > 0 && typeof result[0]?.file === 'string' && typeof result[0]?.type === 'string') {
-              // File list (no patches yet)
-              const files = (result as any[]).map((f) => ({ file: f.file, type: f.type, additions: 0, deletions: 0, content: '' }));
+              // File list (no patches yet) - immediately fetch all file contents
+              const files = (result as any[]).map((f) => ({ 
+                file: f.file, 
+                type: f.type, 
+                additions: f.additions || 0, 
+                deletions: f.deletions || 0, 
+                content: '' 
+              }));
               setSelectedCommitFiles(files as any);
+              
+              // Prefetch all file contents for better UX
+              if (selectedCommit) {
+                files.forEach((f) => {
+                  request('show', { commitHash: selectedCommit.hash, file: f.file });
+                });
+              }
             } else {
               setSelectedCommitFiles([]);
             }
           } else if (result && typeof result === 'object') {
-            // Single file patch
-            if ((result as any).content) {
+            // Single file patch - update the specific file
+            if ((result as any).content !== undefined) {
               setSelectedCommitFiles((prev) => {
                 const arr = Array.isArray(prev) ? [...prev] : [];
-                const idx = arr.findIndex((x) => x.file === (result as any).file || (result as any).file?.endsWith?.(x.file));
-                if (idx >= 0) arr[idx] = result as any; else arr.push(result as any);
+                const idx = arr.findIndex((x) => x.file === (result as any).file);
+                if (idx >= 0) {
+                  arr[idx] = { ...arr[idx], ...(result as any) };
+                } else {
+                  arr.push(result as any);
+                }
                 return arr;
               });
             }
@@ -111,10 +148,10 @@ const GitPage: React.FC = () => {
 
   // When switching to History and we have no commits, fetch them
   useEffect(() => {
-    if (activeTab === 'history' && commits.length === 0 && !loading) {
+    if (activeTab === 'history' && commits.length === 0 && !historyLoading) {
       request('log', { count: logCount });
     }
-  }, [activeTab]);
+  }, [activeTab, commits.length, historyLoading, logCount]);
 
   // Pull-to-refresh (top of scroll)
   usePullToRefresh(scrollRef, () => {
@@ -122,6 +159,7 @@ const GitPage: React.FC = () => {
       request('status');
       request('diff');
     } else {
+      setCommits([]); // Clear existing commits to force fresh load
       request('log', { count: logCount });
     }
   }, 60);
@@ -143,7 +181,28 @@ const GitPage: React.FC = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold text-foreground">Git</h3>
-        <div className="text-xs text-muted-foreground">{loading ? 'Working…' : ''}</div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              const id = `debug_${Date.now()}`;
+              const unsub = addMessageListener((msg) => {
+                if (msg?.type === 'git' && msg.id === id) {
+                  console.log('Debug result:', msg);
+                  unsub();
+                }
+              });
+              sendJson({ type: 'git', id, data: { gitData: { operation: 'debug', options: { debugOperation: 'simple-log' } } } });
+            }}
+            className="px-2 py-1 text-xs bg-red-500 text-white rounded"
+          >
+            Debug
+          </button>
+          <div className="text-xs text-muted-foreground">
+            {loading && 'Working…'}
+            {historyLoading && 'Loading history…'}
+            {commitDiffLoading && 'Loading diff…'}
+          </div>
+        </div>
       </div>
 
       {/* Segmented control */}
@@ -163,7 +222,7 @@ const GitPage: React.FC = () => {
       )}
 
       {/* Content area */}
-      <div ref={scrollRef} className="pb-20 max-h-[70vh] overflow-auto space-y-6">
+      <div ref={scrollRef} className="pb-20 max-h-[70vh] overflow-auto space-y-6 px-2 sm:px-3">
         {/* Repo summary */}
         {repo ? (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -181,7 +240,9 @@ const GitPage: React.FC = () => {
             </div>
           </div>
         ) : (
-          <div className="text-sm text-muted-foreground">No repository detected or not loaded yet.</div>
+          (commits.length === 0 && !historyLoading) ? (
+            <div className="text-sm text-muted-foreground">No repository detected or not loaded yet.</div>
+          ) : null
         )}
 
         {activeTab === 'status' ? (
@@ -216,7 +277,7 @@ const GitPage: React.FC = () => {
               <CommitDiff
                 commit={selectedCommit}
                 files={selectedCommitFiles}
-                loading={loading}
+                loading={commitDiffLoading}
                 onBack={() => {
                   setSelectedCommit(null)
                   setSelectedCommitFiles([])
@@ -224,14 +285,14 @@ const GitPage: React.FC = () => {
                 onExpandFile={(file) => {
                   if (!selectedCommit) return;
                   const existing = selectedCommitFiles.find((f) => f.file === file);
-                  if (existing && existing.content) return; // already loaded
+                  if (existing && existing.content && existing.content.trim()) return; // already loaded
                   request('show', { commitHash: selectedCommit.hash, file })
                 }}
               />
             ) : (
               <GitHistoryViewer
                 commits={commits}
-                loading={loading}
+                loading={historyLoading}
                 canLoadMore={logCount < 1000}
                 onLoadMore={() => {
                   const next = Math.min(logCount + 20, 1000)
@@ -242,8 +303,8 @@ const GitPage: React.FC = () => {
                 onSelect={(c) => {
                   setSelectedCommit(c)
                   setSelectedCommitFiles([])
-                  // Step 1: Fetch file list first for reliability
-                  request('show', { commitHash: c.hash, list: true })
+                  // Fetch the full commit diff immediately
+                  request('show', { commitHash: c.hash })
                 }}
               />
             )}
@@ -251,23 +312,25 @@ const GitPage: React.FC = () => {
         )}
       </div>
 
-      {/* Bottom sticky actions */}
-      <div className="sticky bottom-0 inset-x-0 border-t border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/75 neo:border-t-[3px]">
-        <div className="p-4 grid grid-cols-3 gap-3">
-          <button className="h-12 rounded-lg border border-border text-sm active:bg-muted hover:bg-muted neo:rounded-none neo:border-[3px] neo:shadow-[4px_4px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[4px_4px_0_0_rgba(255,255,255,0.9)]" onClick={() => request('pull')} disabled={loading}>Pull</button>
-          <button
-            className="h-12 rounded-lg bg-primary text-primary-foreground text-sm active:opacity-90 disabled:opacity-50 neo:rounded-none neo:border-[3px] neo:border-border neo:shadow-[4px_4px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[4px_4px_0_0_rgba(255,255,255,0.9)]"
-            onClick={() => {
-              if (activeTab !== 'status') setActiveTab('status')
-              requestAnimationFrame(() => {
-                composerAnchorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-              })
-            }}
-            disabled={loading}
-          >Commit</button>
-          <button className="h-12 rounded-lg border border-border text-sm active:bg-muted hover:bg-muted neo:rounded-none neo:border-[3px] neo:shadow-[4px_4px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[4px_4px_0_0_rgba(255,255,255,0.9)]" onClick={() => request('push')} disabled={loading}>Push</button>
+      {/* Bottom sticky actions - only show on status tab */}
+      {activeTab === 'status' && (
+        <div className="sticky bottom-0 inset-x-0 border-t border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/75 neo:border-t-[3px]">
+          <div className="p-4 grid grid-cols-3 gap-3">
+            <button className="h-12 rounded-lg border border-border text-sm active:bg-muted hover:bg-muted neo:rounded-none neo:border-[3px] neo:shadow-[4px_4px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[4px_4px_0_0_rgba(255,255,255,0.9)]" onClick={() => request('pull')} disabled={loading || historyLoading || commitDiffLoading}>Pull</button>
+            <button
+              className="h-12 rounded-lg bg-primary text-primary-foreground text-sm active:opacity-90 disabled:opacity-50 neo:rounded-none neo:border-[3px] neo:border-border neo:shadow-[4px_4px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[4px_4px_0_0_rgba(255,255,255,0.9)]"
+              onClick={() => {
+                if (activeTab !== 'status') setActiveTab('status')
+                requestAnimationFrame(() => {
+                  composerAnchorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                })
+              }}
+              disabled={loading || historyLoading || commitDiffLoading}
+            >Commit</button>
+            <button className="h-12 rounded-lg border border-border text-sm active:bg-muted hover:bg-muted neo:rounded-none neo:border-[3px] neo:shadow-[4px_4px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[4px_4px_0_0_rgba(255,255,255,0.9)]" onClick={() => request('push')} disabled={loading || historyLoading || commitDiffLoading}>Push</button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Commit details are rendered in /git/commit/$hash route */}
     </div>

@@ -14,6 +14,63 @@ export class GitService {
 
     constructor() {
         this.initializeGitExtension();
+        this.testGitAvailability();
+    }
+
+    /**
+     * Test if git is available in the system
+     */
+    private async testGitAvailability(): Promise<void> {
+        try {
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+            if (workspaceFolders && workspaceFolders.length > 0) {
+                const testPath = (workspaceFolders[0] as vscode.WorkspaceFolder).uri.fsPath;
+
+                console.log(`GitService: Testing git availability in ${testPath}`);
+
+                // Test 1: Git version
+                await this.runGit(testPath, ['--version']);
+                console.log('GitService: Git CLI is available');
+
+                // Test 2: Check if it's a git repo
+                await this.runGit(testPath, ['rev-parse', '--git-dir']);
+                console.log('GitService: Directory is a git repository');
+
+                // Test 3: Simple status check
+                await this.runGit(testPath, ['status', '--porcelain']);
+                console.log('GitService: Git status command works');
+
+            }
+        } catch (error) {
+            console.warn('GitService: Git CLI test failed:', error);
+        }
+    }
+
+    /**
+     * Debug method to test specific git commands
+     */
+    async debugGitCommand(operation: string, options: any = {}): Promise<any> {
+        console.log(`GitService: DEBUG - Testing ${operation}`);
+
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        if (!workspaceFolders || workspaceFolders.length === 0) {
+            throw new Error('No workspace available for git debug');
+        }
+
+        const testPath = (workspaceFolders[0] as vscode.WorkspaceFolder).uri.fsPath;
+
+        switch (operation) {
+            case 'simple-log':
+                return await this.runGit(testPath, ['log', '--oneline', '-n', '5']);
+            case 'log-with-format':
+                return await this.runGit(testPath, ['log', '--max-count=5', '--pretty=format:%H|%an|%ad|%s', '--date=iso-strict']);
+            case 'status':
+                return await this.runGit(testPath, ['status', '--porcelain']);
+            case 'branch':
+                return await this.runGit(testPath, ['branch', '--show-current']);
+            default:
+                throw new Error(`Unknown debug operation: ${operation}`);
+        }
     }
 
     /**
@@ -21,54 +78,72 @@ export class GitService {
      */
     private async initializeGitExtension(): Promise<void> {
         try {
+            console.log('GitService: Initializing Git extension integration...');
+
             // Check if workspace is available
             const workspaceFolders = vscode.workspace.workspaceFolders;
             if (!workspaceFolders || workspaceFolders.length === 0) {
-                console.log('GitService: No workspace folders found, skipping Git integration');
+                console.log('GitService: No workspace folders found, will work with CLI only');
                 return;
             }
 
             this._gitExtension = vscode.extensions.getExtension('vscode.git');
             if (!this._gitExtension) {
-                console.log('GitService: VS Code Git extension not found');
+                console.log('GitService: VS Code Git extension not found, using CLI only');
                 return;
             }
 
             if (!this._gitExtension.isActive) {
                 console.log('GitService: Activating VS Code Git extension...');
-                await this._gitExtension.activate();
-                console.log('GitService: VS Code Git extension activated');
+                try {
+                    await Promise.race([
+                        this._gitExtension.activate(),
+                        new Promise((_, reject) => setTimeout(() => reject(new Error('Git extension activation timeout')), 10000))
+                    ]);
+                    console.log('GitService: VS Code Git extension activated');
+                } catch (error) {
+                    console.warn('GitService: Failed to activate Git extension:', error);
+                    return;
+                }
             }
 
             if (this._gitExtension?.exports) {
-                const gitApi = this._gitExtension.exports.getAPI(1);
-                if (gitApi) {
-                    console.log('GitService: Git API available, setting up repository monitoring');
+                try {
+                    const gitApi = this._gitExtension.exports.getAPI(1);
+                    if (gitApi) {
+                        console.log('GitService: Git API available, setting up repository monitoring');
 
-                    // Monitor repository changes
-                    this._disposables.push(
-                        gitApi.onDidOpenRepository((repo: any) => {
-                            this._repositories.set(repo.rootUri.fsPath, repo);
-                            console.log(`GitService: Git repository opened: ${repo.rootUri.fsPath}`);
-                        })
-                    );
+                        // Monitor repository changes
+                        this._disposables.push(
+                            gitApi.onDidOpenRepository((repo: any) => {
+                                this._repositories.set(repo.rootUri.fsPath, repo);
+                                console.log(`GitService: Git repository opened: ${repo.rootUri.fsPath}`);
+                            })
+                        );
 
-                    this._disposables.push(
-                        gitApi.onDidCloseRepository((repo: any) => {
-                            this._repositories.delete(repo.rootUri.fsPath);
-                            console.log(`GitService: Git repository closed: ${repo.rootUri.fsPath}`);
-                        })
-                    );
+                        this._disposables.push(
+                            gitApi.onDidCloseRepository((repo: any) => {
+                                this._repositories.delete(repo.rootUri.fsPath);
+                                console.log(`GitService: Git repository closed: ${repo.rootUri.fsPath}`);
+                            })
+                        );
 
-                    // Initialize existing repositories
-                    gitApi.repositories.forEach((repo: any) => {
-                        this._repositories.set(repo.rootUri.fsPath, repo);
-                        console.log(`GitService: Existing repository registered: ${repo.rootUri.fsPath}`);
-                    });
+                        // Initialize existing repositories
+                        if (gitApi.repositories && Array.isArray(gitApi.repositories)) {
+                            gitApi.repositories.forEach((repo: any) => {
+                                if (repo && repo.rootUri && repo.rootUri.fsPath) {
+                                    this._repositories.set(repo.rootUri.fsPath, repo);
+                                    console.log(`GitService: Existing repository registered: ${repo.rootUri.fsPath}`);
+                                }
+                            });
+                        }
 
-                    console.log(`GitService: Initialized with ${this._repositories.size} repositories`);
-                } else {
-                    console.log('GitService: Git API not available from extension');
+                        console.log(`GitService: Initialized with ${this._repositories.size} repositories`);
+                    } else {
+                        console.log('GitService: Git API not available from extension');
+                    }
+                } catch (error) {
+                    console.warn('GitService: Error setting up Git API:', error);
                 }
             } else {
                 console.log('GitService: Git extension exports not available');
@@ -94,16 +169,43 @@ export class GitService {
                 this.getRemoteStatus(repo)
             ]);
 
+            // Handle empty repository case
+            const currentBranch = repo.state?.HEAD?.name || await this.getCurrentBranch(repo) || 'master';
+
             return {
-                currentBranch: repo.state.HEAD?.name || 'unknown',
+                currentBranch,
                 status,
-                recentCommits: commits,
+                recentCommits: commits, // Will be empty array for repos with no commits
                 remoteStatus,
                 repositoryRoot: repo.rootUri.fsPath
             };
         } catch (error) {
             console.error('Failed to get repository state:', error);
             return null;
+        }
+    }
+
+    /**
+     * Get current branch name, handling empty repositories
+     */
+    private async getCurrentBranch(repo: any): Promise<string> {
+        try {
+            const root = repo?.rootUri?.fsPath;
+            if (!root) return 'master';
+            
+            const result = await this.runGit(root, ['branch', '--show-current']);
+            return result.trim() || 'master';
+        } catch (error) {
+            // If we can't get current branch, try to get default branch
+            try {
+                const root = repo?.rootUri?.fsPath;
+                if (!root) return 'master';
+                
+                const result = await this.runGit(root, ['symbolic-ref', '--short', 'HEAD']);
+                return result.trim() || 'master';
+            } catch {
+                return 'master'; // Default fallback
+            }
         }
     }
 
@@ -141,41 +243,105 @@ export class GitService {
      * Get recent commits
      */
     private async getRecentCommits(repo: any, count: number = 10): Promise<GitCommit[]> {
+        console.log(`GitService: Getting recent commits (count: ${count})`);
+
+        // Try Git API first
         try {
-            const commits = await repo.log({ maxEntries: count });
-            let list: GitCommit[] = commits.map((commit: any) => ({
-                hash: commit.hash,
-                message: commit.message,
-                author: commit.authorName || 'Unknown',
-                date: new Date(commit.authorDate || Date.now()),
-                files: commit.files || []
-            }));
-            if (Array.isArray(list) && list.length > 0) return list;
+            if (repo && typeof repo.log === 'function') {
+                console.log('GitService: Trying VS Code Git API...');
+                const commits = await Promise.race([
+                    repo.log({ maxEntries: count }),
+                    new Promise((_, reject) => setTimeout(() => reject(new Error('Git API timeout')), 10000))
+                ]);
+
+                if (commits && Array.isArray(commits) && commits.length > 0) {
+                    const list: GitCommit[] = commits.map((commit: any) => ({
+                        hash: commit.hash || '',
+                        message: commit.message || '',
+                        author: commit.authorName || 'Unknown',
+                        date: new Date(commit.authorDate || Date.now()),
+                        files: commit.files || []
+                    }));
+                    console.log(`GitService: Got ${list.length} commits from Git API`);
+                    return list;
+                }
+            }
         } catch (error) {
-            console.warn('Git API log failed, falling back to CLI:', error);
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            
+            // Handle empty repository case
+            if (errorMsg.includes('does not have any commits yet') || 
+                errorMsg.includes('bad default revision')) {
+                console.log('GitService: Git API - Repository has no commits yet');
+                return [];
+            }
+            
+            console.warn('GitService: Git API log failed, falling back to CLI:', error);
         }
+
         // CLI fallback
         try {
-            const root = repo.rootUri?.fsPath;
-            if (!root) return [];
-            const fmt = '%H%x1f%an%x1f%ad%x1f%s';
-            const out = await this.runGit(root, ['log', `-n`, String(count), `--date=iso-strict`, `--pretty=${fmt}`]);
+            const root = repo?.rootUri?.fsPath;
+            if (!root) {
+                console.warn('GitService: No repository root path available');
+                return [];
+            }
+
+            console.log(`GitService: Using CLI fallback for ${root}`);
+
+            // First check if this is a git repository
+            try {
+                await this.runGit(root, ['rev-parse', '--git-dir']);
+                console.log('GitService: Git repository check passed');
+            } catch (error) {
+                console.warn('GitService: Not a git repository:', root);
+                return [];
+            }
+
+            // Check git status to ensure repository is in good state
+            try {
+                await this.runGit(root, ['status', '--porcelain']);
+                console.log('GitService: Git status check passed');
+            } catch (error) {
+                console.warn('GitService: Git status failed, but continuing:', error);
+            }
+
+            // Use a formatted log including author and ISO date; tab delimiter to reduce ambiguity
+            console.log(`GitService: Using formatted log for author/date...`);
+            const fmt = '--pretty=format:%H%x09%an%x09%ad%x09%s'; // hash<TAB>author<TAB>date<TAB>subject
+            const out = await this.runGit(root, ['log', `--max-count=${count}`, '--date=iso-strict', fmt]);
+            console.log(`GitService: Formatted log worked, parsing ${out.length} chars...`);
+
             const lines = out.split('\n').map(l => l.trim()).filter(Boolean);
             const result: GitCommit[] = [];
-            for (const l of lines) {
-                const [hash, author, date, subject] = l.split('\x1f');
-                if (!hash) continue;
+
+            for (const line of lines) {
+                const parts = line.split('\t');
+                const [hash, author, dateStr, subject] = [parts[0] || '', parts[1] || 'Unknown', parts[2] || '', parts.slice(3).join('\t') || ''];
+                const dt = dateStr ? new Date(dateStr) : new Date();
                 result.push({
                     hash: hash.trim(),
-                    message: (subject || '').trim(),
-                    author: (author || 'Unknown').trim(),
-                    date: new Date((date || '').trim() || Date.now()),
+                    message: subject.trim(),
+                    author: author.trim() || 'Unknown',
+                    date: dt,
                     files: []
                 });
             }
+
+            console.log(`GitService: Got ${result.length} commits from CLI`);
             return result;
         } catch (error) {
-            console.warn('Failed to get recent commits via CLI:', error);
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            
+            // Handle empty repository (no commits yet)
+            if (errorMsg.includes('does not have any commits yet') || 
+                errorMsg.includes('bad default revision') ||
+                errorMsg.includes('ambiguous argument \'HEAD\'')) {
+                console.log('GitService: Repository has no commits yet, returning empty array');
+                return [];
+            }
+            
+            console.error('GitService: Failed to get recent commits via CLI:', error);
             return [];
         }
     }
@@ -264,23 +430,27 @@ export class GitService {
             const repo = await this.getRepository(workspacePath);
             if (!repo) return [];
 
-            // Try using Git API diffBetween vs first parent
+            // Strategy (robust across platforms and merges):
+            // 1) Try `git show --format=` (single-commit patch)
+            // 2) If empty, try `git show -m --first-parent --format=` for merges
+            // 3) If still empty, fall back to `git diff <parent> <commit>`
             let unified = '';
+            const root = repo.rootUri.fsPath;
+
             try {
-                const base = `${commitHash}^`;
-                unified = await repo.diffBetween(base, commitHash);
-            } catch (e) {
-                // ignore and fallback below
-            }
-            if (!unified) {
-                // Fallback to CLI. Use diff against first parent to avoid combined diffs
-                const root = repo.rootUri.fsPath;
+                unified = await this.runGit(root, ['show', '--format=', '--unified=3', '--no-color', commitHash]);
+            } catch { /* ignore */ }
+            
+            if (!unified || unified.trim().length === 0) {
                 try {
-                    unified = await this.runGit(root, ['diff', '--unified=3', `${commitHash}^`, commitHash]);
-                } catch {
-                    // As a final fallback, try show with -m to split parents
-                    unified = await this.runGit(root, ['show', '-m', '--first-parent', '--format=', '--unified=3', commitHash]);
-                }
+                    unified = await this.runGit(root, ['show', '-m', '--first-parent', '--format=', '--unified=3', '--no-color', commitHash]);
+                } catch { /* ignore */ }
+            }
+
+            if (!unified || unified.trim().length === 0) {
+                try {
+                    unified = await this.runGit(root, ['diff', '--unified=3', '--no-color', `${commitHash}^`, commitHash]);
+                } catch { /* ignore */ }
             }
 
             return this.parseUnifiedDiff(unified || '');
@@ -376,10 +546,67 @@ export class GitService {
     }
 
     private runGit(cwd: string, args: string[]): Promise<string> {
+        const commandStr = `git ${args.join(' ')}`;
+        console.log(`GitService: Starting command: ${commandStr} in ${cwd}`);
+
         return new Promise((resolve, reject) => {
-            const child = execFile('git', args, { cwd, windowsHide: true, maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
-                if (err) return reject(err);
+            const startTime = Date.now();
+            let child: any;
+
+            const timeout = setTimeout(() => {
+                const elapsed = Date.now() - startTime;
+                console.error(`GitService: Command TIMEOUT after ${elapsed}ms: ${commandStr}`);
+
+                if (child && !child.killed) {
+                    console.log(`GitService: Killing process PID ${child.pid}`);
+                    child.kill('SIGTERM');
+
+                    // Force kill after 5 seconds if SIGTERM doesn't work
+                    setTimeout(() => {
+                        if (child && !child.killed) {
+                            console.log(`GitService: Force killing process PID ${child.pid}`);
+                            child.kill('SIGKILL');
+                        }
+                    }, 5000);
+                }
+                reject(new Error(`Git command timed out after 30 seconds: ${commandStr}`));
+            }, 30000); // 30 second timeout
+
+            child = execFile('git', args, {
+                cwd,
+                windowsHide: true,
+                maxBuffer: 10 * 1024 * 1024,
+                timeout: 30000,
+                env: { ...process.env, GIT_TERMINAL_PROMPT: '0' }
+            }, (err, stdout, stderr) => {
+                clearTimeout(timeout);
+                const elapsed = Date.now() - startTime;
+
+                if (err) {
+                    console.error(`GitService: Command FAILED after ${elapsed}ms: ${commandStr}`);
+                    console.error(`GitService: Error:`, err);
+                    console.error(`GitService: Stderr:`, stderr);
+                    return reject(err);
+                }
+
+                console.log(`GitService: Command SUCCESS after ${elapsed}ms: ${commandStr} (${stdout.length} chars output)`);
                 resolve(stdout.toString());
+            });
+
+            child.on('error', (error: Error) => {
+                clearTimeout(timeout);
+                const elapsed = Date.now() - startTime;
+                console.error(`GitService: Process ERROR after ${elapsed}ms: ${commandStr}`, error);
+                reject(error);
+            });
+
+            child.on('spawn', () => {
+                console.log(`GitService: Process spawned PID ${child.pid}: ${commandStr}`);
+            });
+
+            child.on('exit', (code: number | null, signal: NodeJS.Signals | null) => {
+                const elapsed = Date.now() - startTime;
+                console.log(`GitService: Process exited after ${elapsed}ms with code ${code}, signal ${signal}: ${commandStr}`);
             });
         });
     }
@@ -400,7 +627,7 @@ export class GitService {
         for (let i = 0; i < lines.length; i++) {
             const l = lines[i];
             if (!l) continue; // Skip empty lines
-            
+
             // Support both regular and combined diff headers
             let m = /^diff --git a\/(.*?) b\/(.*)$/.exec(l);
             if (!m) {
@@ -415,12 +642,12 @@ export class GitService {
                     continue;
                 }
             }
-            
+
             if (!current) continue;
-            
+
             // Type assertion to help TypeScript understand current is not null
             const curr = current as { file: string; content: string[]; type: GitDiff['type']; additions: number; deletions: number };
-            
+
             if (/^new file mode /.test(l)) {
                 curr.type = 'added';
             } else if (/^deleted file mode /.test(l)) {
@@ -433,7 +660,7 @@ export class GitService {
                 curr.content.push(l);
                 continue;
             }
-            
+
             if (l.startsWith('+++ /dev/null')) {
                 curr.type = 'deleted';
             } else if (l.startsWith('--- /dev/null')) {
@@ -445,17 +672,17 @@ export class GitService {
             } else if (l.startsWith('-') && !l.startsWith('---')) {
                 curr.deletions++;
             }
-            
+
             curr.content.push(l);
         }
         if (current) {
             const curr = current as { file: string; content: string[]; type: GitDiff['type']; additions: number; deletions: number };
-            diffs.push({ 
-                file: curr.file, 
-                type: curr.type, 
-                additions: curr.additions, 
-                deletions: curr.deletions, 
-                content: curr.content.join('\n') 
+            diffs.push({
+                file: curr.file,
+                type: curr.type,
+                additions: curr.additions,
+                deletions: curr.deletions,
+                content: curr.content.join('\n')
             });
         }
         return diffs;
@@ -465,18 +692,23 @@ export class GitService {
      * Execute git command
      */
     async executeGitCommand(operation: string, options: any = {}): Promise<any> {
+        console.log(`GitService: Executing operation: ${operation}`, options);
+
         try {
             const repo = await this.getRepository(options.workspacePath);
             if (!repo) {
-                throw new Error('No git repository found');
+                throw new Error('No git repository found in workspace');
             }
+
+            console.log(`GitService: Repository found for operation ${operation}`);
 
             switch (operation) {
                 case 'status':
                     return await this.getRepositoryState(options.workspacePath);
 
                 case 'log':
-                    return await this.getRecentCommits(repo, options.count || 10);
+                    const count = Math.min(options.count || 20, 100); // Limit to prevent hanging
+                    return await this.getRecentCommits(repo, count);
 
                 case 'diff':
                     return await this.getCurrentDiff(options.workspacePath);
@@ -498,6 +730,7 @@ export class GitService {
                     return await this.getBranches(repo);
 
                 case 'commit':
+                    if (!options.message) throw new Error('Missing commit message');
                     return await this.commit(repo, options.message, options.files);
 
                 case 'push':
@@ -506,11 +739,14 @@ export class GitService {
                 case 'pull':
                     return await this.pull(repo);
 
+                case 'debug':
+                    return await this.debugGitCommand(options.debugOperation || 'simple-log', options);
+
                 default:
                     throw new Error(`Unsupported git operation: ${operation}`);
             }
         } catch (error) {
-            console.error(`Git operation ${operation} failed:`, error);
+            console.error(`GitService: Operation ${operation} failed:`, error);
             throw error;
         }
     }
@@ -580,41 +816,64 @@ export class GitService {
      * Get repository for workspace path
      */
     private async getRepository(workspacePath?: string): Promise<any> {
-        if (!this._gitExtension?.exports) {
-            console.log('GitService: Git extension not available');
-            return null;
-        }
+        console.log(`GitService: Getting repository for path: ${workspacePath || 'current workspace'}`);
 
-        const gitApi = this._gitExtension.exports.getAPI(1);
-        if (!gitApi) {
-            console.log('GitService: Git API not available');
-            return null;
-        }
-
-        if (workspacePath) {
-            const repo = this._repositories.get(workspacePath);
-            if (repo) {
-                return repo;
-            }
-            console.log(`GitService: No repository found for workspace path: ${workspacePath}`);
-            return null;
-        }
-
-        // Get repository for current workspace
+        // Try to get workspace root first
         const workspaceFolders = vscode.workspace.workspaceFolders;
-        if (workspaceFolders && workspaceFolders.length > 0) {
-            const workspaceRoot = workspaceFolders[0]!.uri.fsPath;
-            const repo = this._repositories.get(workspaceRoot) || gitApi.repositories[0] || null;
+        let targetPath = workspacePath;
 
-            if (!repo) {
-                console.log(`GitService: No Git repository found in workspace: ${workspaceRoot}`);
-            }
-
-            return repo;
+        if (!targetPath && workspaceFolders && workspaceFolders.length > 0) {
+            targetPath = workspaceFolders[0]!.uri.fsPath;
         }
 
-        console.log('GitService: No workspace folders available');
-        return gitApi.repositories[0] || null;
+        if (!targetPath) {
+            console.log('GitService: No workspace path available');
+            return null;
+        }
+
+        // Check if we have a cached repository
+        const cachedRepo = this._repositories.get(targetPath);
+        if (cachedRepo) {
+            console.log(`GitService: Using cached repository for ${targetPath}`);
+            return cachedRepo;
+        }
+
+        // Try Git extension API
+        if (this._gitExtension?.exports) {
+            try {
+                const gitApi = this._gitExtension.exports.getAPI(1);
+                if (gitApi && gitApi.repositories) {
+                    // Look for repository that matches our path
+                    for (const repo of gitApi.repositories) {
+                        if (repo.rootUri && repo.rootUri.fsPath === targetPath) {
+                            console.log(`GitService: Found matching repository via Git API: ${targetPath}`);
+                            this._repositories.set(targetPath, repo);
+                            return repo;
+                        }
+                    }
+
+                    // If no exact match, try the first repository
+                    if (gitApi.repositories.length > 0) {
+                        const repo = gitApi.repositories[0];
+                        console.log(`GitService: Using first available repository: ${repo.rootUri?.fsPath}`);
+                        return repo;
+                    }
+                }
+            } catch (error) {
+                console.warn('GitService: Error accessing Git API:', error);
+            }
+        }
+
+        // Create a minimal repository object for CLI operations
+        console.log(`GitService: Creating minimal repository object for ${targetPath}`);
+        const minimalRepo = {
+            rootUri: { fsPath: targetPath },
+            state: { HEAD: null, indexChanges: [], workingTreeChanges: [], untrackedChanges: [], mergeChanges: [] }
+        };
+
+        // Cache it
+        this._repositories.set(targetPath, minimalRepo);
+        return minimalRepo;
     }
 
     /**

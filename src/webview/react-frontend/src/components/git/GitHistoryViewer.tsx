@@ -44,10 +44,13 @@ export const GitHistoryViewer: React.FC<Props> = ({ commits, loading, canLoadMor
   }, [onLoadMore, canLoadMore, loading, commits.length])
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-4 pr-1">
       {commits.length === 0 && !loading && (
         <div className="rounded-lg border border-border bg-muted p-4 text-sm text-muted-foreground neo:rounded-none neo:border-[3px] neo:shadow-[6px_6px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[6px_6px_0_0_rgba(255,255,255,0.9)]">
-          No commits yet.
+          <div className="text-center">
+            <div className="font-medium mb-1">No commits yet</div>
+            <div className="text-xs">This repository doesn't have any commits. Make your first commit to see history here.</div>
+          </div>
         </div>
       )}
 

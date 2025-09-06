@@ -139,20 +139,20 @@ const GitPage: React.FC = () => {
   const onCommit = (msg: string) => request('commit', { message: msg });
 
   return (
-    <div className="bg-card rounded-lg shadow-sm border border-border">
+    <div className="bg-card rounded-lg shadow-sm border border-border neo:rounded-none neo:border-[5px] neo:shadow-[8px_8px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[8px_8px_0_0_rgba(255,255,255,0.35)]">
       {/* Header & segmented control */}
       <div className="p-4 pb-2">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-lg font-semibold text-foreground">Git</h3>
           <div className="text-xs text-muted-foreground">{loading ? 'Working…' : ''}</div>
         </div>
-        <div className="inline-flex rounded-lg border border-border p-1 w-full sm:w-auto">
+        <div className="inline-flex rounded-lg border border-border p-1 w-full sm:w-auto neo:rounded-none neo:border-[4px]">
           <button
-            className={`flex-1 sm:flex-none rounded-md px-4 py-2 text-sm ${activeTab === 'status' ? 'bg-primary text-primary-foreground shadow-sm' : 'hover:bg-muted active:bg-muted'}`}
+            className={`flex-1 sm:flex-none rounded-md px-4 py-2 text-sm neo:rounded-none neo:border-4 neo:border-border neo:shadow-[6px_6px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[6px_6px_0_0_rgba(255,255,255,0.35)] ${activeTab === 'status' ? 'bg-primary text-primary-foreground shadow-sm neo:bg-primary neo:text-primary-foreground' : 'hover:bg-muted active:bg-muted neo:hover:bg-accent neo:hover:text-accent-foreground'}`}
             onClick={() => setActiveTab('status')}
           >Status</button>
           <button
-            className={`flex-1 sm:flex-none rounded-md px-4 py-2 text-sm ${activeTab === 'history' ? 'bg-primary text-primary-foreground shadow-sm' : 'hover:bg-muted active:bg-muted'}`}
+            className={`flex-1 sm:flex-none rounded-md px-4 py-2 text-sm neo:rounded-none neo:border-4 neo:border-border neo:shadow-[6px_6px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[6px_6px_0_0_rgba(255,255,255,0.35)] ${activeTab === 'history' ? 'bg-primary text-primary-foreground shadow-sm neo:bg-primary neo:text-primary-foreground' : 'hover:bg-muted active:bg-muted neo:hover:bg-accent neo:hover:text-accent-foreground'}`}
             onClick={() => setActiveTab('history')}
           >History</button>
         </div>
@@ -167,15 +167,15 @@ const GitPage: React.FC = () => {
         {/* Repo summary */}
         {repo ? (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
-            <div className="p-3 rounded-lg bg-muted">
+            <div className="p-3 rounded-lg bg-muted neo:rounded-none neo:border-4 neo:border-border neo:shadow-[4px_4px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[4px_4px_0_0_rgba(255,255,255,0.35)]">
               <div className="text-xs text-muted-foreground">Branch</div>
               <div className="text-sm font-medium">{repo.currentBranch}</div>
             </div>
-            <div className="p-3 rounded-lg bg-muted">
+            <div className="p-3 rounded-lg bg-muted neo:rounded-none neo:border-4 neo:border-border neo:shadow-[4px_4px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[4px_4px_0_0_rgba(255,255,255,0.35)]">
               <div className="text-xs text-muted-foreground">Remote</div>
               <div className="text-sm font-medium">{repo.remoteStatus?.remote || 'origin'}</div>
             </div>
-            <div className="p-3 rounded-lg bg-muted">
+            <div className="p-3 rounded-lg bg-muted neo:rounded-none neo:border-4 neo:border-border neo:shadow-[4px_4px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[4px_4px_0_0_rgba(255,255,255,0.35)]">
               <div className="text-xs text-muted-foreground">Ahead/Behind</div>
               <div className="text-sm font-medium">{repo.remoteStatus?.ahead || 0} / {repo.remoteStatus?.behind || 0}</div>
             </div>
@@ -248,11 +248,11 @@ const GitPage: React.FC = () => {
       </div>
 
       {/* Bottom sticky actions */}
-      <div className="sticky bottom-0 inset-x-0 border-t border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/75">
+      <div className="sticky bottom-0 inset-x-0 border-t border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/75 neo:border-t-[5px]">
         <div className="px-4 py-2 grid grid-cols-3 gap-2">
-          <button className="h-11 rounded-lg border border-border text-sm active:bg-muted hover:bg-muted" onClick={() => request('pull')} disabled={loading}>Pull</button>
+          <button className="h-11 rounded-lg border border-border text-sm active:bg-muted hover:bg-muted neo:rounded-none neo:border-[5px] neo:shadow-[5px_5px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[5px_5px_0_0_rgba(255,255,255,0.35)]" onClick={() => request('pull')} disabled={loading}>Pull</button>
           <button
-            className="h-11 rounded-lg bg-primary text-primary-foreground text-sm active:opacity-90 disabled:opacity-50"
+            className="h-11 rounded-lg bg-primary text-primary-foreground text-sm active:opacity-90 disabled:opacity-50 neo:rounded-none neo:border-[5px] neo:border-border neo:shadow-[5px_5px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[5px_5px_0_0_rgba(255,255,255,0.35)]"
             onClick={() => {
               if (activeTab !== 'status') setActiveTab('status')
               requestAnimationFrame(() => {
@@ -261,7 +261,7 @@ const GitPage: React.FC = () => {
             }}
             disabled={loading}
           >Commit</button>
-          <button className="h-11 rounded-lg border border-border text-sm active:bg-muted hover:bg-muted" onClick={() => request('push')} disabled={loading}>Push</button>
+          <button className="h-11 rounded-lg border border-border text-sm active:bg-muted hover:bg-muted neo:rounded-none neo:border-[5px] neo:shadow-[5px_5px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[5px_5px_0_0_rgba(255,255,255,0.35)]" onClick={() => request('push')} disabled={loading}>Push</button>
         </div>
       </div>
 

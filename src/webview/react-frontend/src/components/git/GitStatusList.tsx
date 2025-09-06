@@ -10,9 +10,9 @@ export const GitStatusList: React.FC<{ items: GitStatusItem[]; className?: strin
     itemKey={(it) => `${it.state}:${it.path}`}
     className={className}
     renderItem={(it) => (
-      <div className="flex items-center justify-between px-3 py-3 min-h-[44px] text-sm border-b border-border/60">
-        <span className="truncate mr-3">{it.path}</span>
-        <span className="rounded-full px-2.5 py-1 text-[11px] bg-muted capitalize">
+      <div className="flex items-center justify-between px-3 py-3 min-h-[44px] text-sm border-b border-border/60 neo:border-b-[3px]">
+        <span className="truncate mr-3 neo:font-semibold">{it.path}</span>
+        <span className="rounded-full px-2.5 py-1 text-[11px] bg-muted capitalize neo:rounded-none neo:border-2 neo:border-border">
           {it.state}
         </span>
       </div>

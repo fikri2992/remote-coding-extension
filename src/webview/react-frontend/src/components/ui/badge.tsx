@@ -9,6 +9,5 @@ export function Badge({ className, variant = 'default', ...props }: React.HTMLAt
     warning: 'bg-yellow-100 text-yellow-800',
     destructive: 'bg-red-100 text-red-800',
   }
-  return <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium', variants[variant], className)} {...props} />
+  return <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium', 'neo:rounded-none neo:border-2 neo:border-border neo:shadow-[3px_3px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[3px_3px_0_0_rgba(255,255,255,0.35)]', variants[variant], className)} {...props} />
 }
-

@@ -1,4 +1,6 @@
 /** @type {import('tailwindcss').Config} */
+const plugin = require('tailwindcss/plugin')
+
 module.exports = {
   darkMode: ["class"],
   content: [
@@ -73,5 +75,13 @@ module.exports = {
       },
     },
   },
-  plugins: [require("tailwindcss-animate")],
+  plugins: [
+    require("tailwindcss-animate"),
+    plugin(function({ addVariant }) {
+      // Apply classes when an ancestor has .neo
+      addVariant('neo', '.neo &')
+      // Compose with dark for fine-grained overrides
+      addVariant('dark-neo', '.dark.neo &')
+    })
+  ],
 }

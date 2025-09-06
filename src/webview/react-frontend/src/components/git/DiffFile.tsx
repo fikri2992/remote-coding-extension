@@ -60,7 +60,7 @@ export const DiffFile: React.FC<{ chunk: DiffChunk; loading?: boolean; onExpand?
   = ({ chunk, loading, onExpand }) => {
   const [open, setOpen] = React.useState(false)
   const badge = (n: number, color: string, label: string) => (
-    <span className={`inline-flex items-center justify-center min-w-[36px] h-7 px-2 rounded-full text-xs ${color}`}>
+    <span className={`inline-flex items-center justify-center min-w-[36px] h-7 px-2 rounded-full text-xs ${color} neo:rounded-none neo:border-2 neo:border-border neo:shadow-[3px_3px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[3px_3px_0_0_rgba(255,255,255,0.35)]`}>
       {label} {n}
     </span>
   )
@@ -89,9 +89,9 @@ export const DiffFile: React.FC<{ chunk: DiffChunk; loading?: boolean; onExpand?
   }
 
   return (
-    <div className="rounded-xl border border-border bg-background overflow-hidden">
+    <div className="rounded-xl border border-border bg-background overflow-hidden neo:rounded-none neo:border-[5px] neo:shadow-[6px_6px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[6px_6px_0_0_rgba(255,255,255,0.35)]">
       <button
-        className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left active:bg-muted/60"
+        className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left active:bg-muted/60 neo:duration-100"
         onClick={() => {
           const next = !open
           setOpen(next)
@@ -100,9 +100,9 @@ export const DiffFile: React.FC<{ chunk: DiffChunk; loading?: boolean; onExpand?
         aria-expanded={open}
       >
         <div className="min-w-0">
-          <div className="text-sm font-medium truncate">{chunk.file}</div>
+          <div className="text-sm font-medium truncate neo:font-bold">{chunk.file}</div>
           <div className="text-xs text-muted-foreground mt-0.5 capitalize inline-flex items-center gap-2">
-            <span className={`px-2 py-0.5 rounded ${typeColor}`}>{chunk.type}</span>
+            <span className={`px-2 py-0.5 rounded ${typeColor} neo:rounded-none neo:border-2 neo:border-border`}>{chunk.type}</span>
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -112,14 +112,14 @@ export const DiffFile: React.FC<{ chunk: DiffChunk; loading?: boolean; onExpand?
         </div>
       </button>
       {open && (
-        <div className="px-3 py-3 border-t border-border text-[12px] leading-5">
+        <div className="px-3 py-3 border-t border-border text-[12px] leading-5 neo:border-t-[4px]">
           {loading ? (
             <div className="text-muted-foreground">Loading...</div>
           ) : (
             <div className="overflow-auto">
               <div className="min-w-full font-mono">
                 {rows.map((r, i) => (
-                  <div key={i} className={`grid grid-cols-[3rem_3rem_1fr] items-start gap-x-2 px-1 py-0.5 rounded ${rowClass(r.type)}`}>
+                  <div key={i} className={`grid grid-cols-[3rem_3rem_1fr] items-start gap-x-2 px-1 py-0.5 rounded ${rowClass(r.type)} neo:rounded-none neo:border-b-2 neo:border-border`}>
                     <div className="text-right pr-1 text-muted-foreground select-none font-mono">{r.oldNo ?? ''}</div>
                     <div className="text-right pr-1 text-muted-foreground select-none font-mono">{r.newNo ?? ''}</div>
                     <div className="whitespace-pre px-2">{r.text || '\u00A0'}</div>
@@ -133,4 +133,3 @@ export const DiffFile: React.FC<{ chunk: DiffChunk; loading?: boolean; onExpand?
     </div>
   )
 }
-

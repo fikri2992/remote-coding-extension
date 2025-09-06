@@ -14,19 +14,23 @@ export const CommitCard: React.FC<CommitCardProps> = ({ hash, message, author, d
   return (
     <button
       type="button"
-      className="w-full text-left rounded-xl border border-border bg-background px-4 py-3 active:scale-[0.99] transition-transform cursor-pointer hover:bg-muted"
+      className={
+        "w-full text-left rounded-xl border border-border bg-background px-4 py-3 active:scale-[0.99] transition-transform cursor-pointer hover:bg-muted " +
+        "neo:rounded-none neo:border-[5px] neo:shadow-[6px_6px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[6px_6px_0_0_rgba(255,255,255,0.35)] " +
+        "neo:hover:bg-accent neo:hover:text-accent-foreground neo:transition-[background,box-shadow,transform] neo:duration-100"
+      }
       onClick={onPress}
       aria-label={`Open commit ${short}`}
     >
-      <div className="text-base font-semibold text-foreground leading-snug line-clamp-2">
+      <div className="text-base font-semibold text-foreground leading-snug line-clamp-2 neo:font-extrabold">
         {message || '(no message)'}
       </div>
-      <div className="mt-1 flex items-center gap-3 text-sm text-muted-foreground">
-        <span className="truncate">{(author || '').trim() || 'Unknown'}</span>
+      <div className="mt-2 flex items-center gap-3 text-sm text-muted-foreground neo:text-foreground">
+        <span className="truncate neo:uppercase neo:font-semibold">{(author || '').trim() || 'Unknown'}</span>
         <span>•</span>
         <span>{ts.toLocaleString()}</span>
         <span>•</span>
-        <span className="font-mono text-xs">{short}</span>
+        <span className="font-mono text-xs neo:text-foreground">{short}</span>
       </div>
     </button>
   )

@@ -100,18 +100,19 @@ const ChatPage: React.FC = () => {
     = ({ role }) => (
       <div className={cn(
         'flex h-8 w-8 items-center justify-center rounded-full shadow-sm',
+        'neo:rounded-none neo:border-2 neo:border-border neo:shadow-[4px_4px_0_0_rgba(0,0,0,1)]',
         role === 'user' ? 'bg-blue-600 text-white' : role === 'assistant' ? 'bg-purple-600 text-white' : 'bg-gray-300 text-gray-700'
       )}>
-        {role === 'user' ? <User className="h-4 w-4" /> : role === 'assistant' ? <Bot className="h-4 w-4" /> : <span className="text-xs">SYS</span>}
+        {role === 'user' ? <User className="h-4 w-4" strokeWidth={2.5} /> : role === 'assistant' ? <Bot className="h-4 w-4" strokeWidth={2.5} /> : <span className="text-xs">SYS</span>}
       </div>
     );
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 flex flex-col h-[calc(100vh-11rem)] sm:h-[calc(100vh-12rem)]">
+    <div className="bg-white rounded-lg shadow-sm border border-gray-200 flex flex-col h-[calc(100vh-11rem)] sm:h-[calc(100vh-12rem)] neo:rounded-none neo:border-[5px] neo:shadow-[8px_8px_0_0_rgba(0,0,0,1)]">
       {/* Connection banner for mobile */}
-      <div className="flex items-center justify-between px-3 py-2 text-xs sm:text-sm bg-amber-50 text-amber-800 border-b border-amber-200">
+      <div className="flex items-center justify-between px-3 py-2 text-xs sm:text-sm bg-amber-50 text-amber-800 border-b border-amber-200 neo:border-b-[5px]">
         <div className="flex items-center gap-2">
-          <AlertTriangle className="h-4 w-4" />
+          <AlertTriangle className="h-4 w-4" strokeWidth={2.5} />
           <span>Not connected to server. Messages are kept locally.</span>
         </div>
         {messages.length > 0 && (
@@ -121,7 +122,7 @@ const ChatPage: React.FC = () => {
             size="sm"
             className="h-6 px-2 text-amber-800 hover:bg-amber-100"
           >
-            <Trash2 className="h-3 w-3 mr-1" />
+            <Trash2 className="h-3 w-3 mr-1" strokeWidth={2.5} />
             Clear
           </Button>
         )}
@@ -135,10 +136,11 @@ const ChatPage: React.FC = () => {
           </div>
         )}
         {messages.map((m) => (
-          <div key={m.id} className={cn('flex w-full gap-3', m.role === 'user' ? 'justify-end' : 'justify-start')}>
+          <div key={m.id} className={cn('flex w-full gap-3', 'neo:border-b-2 neo:border-border neo:pb-2', m.role === 'user' ? 'justify-end' : 'justify-start')}>
             {m.role !== 'user' && <MessageAvatar role={m.role} />}
             <div className={cn(
               'max-w-[80%] sm:max-w-[70%] rounded-2xl px-3 py-2 text-sm shadow-sm',
+              'neo:rounded-none neo:border-[3px] neo:border-border neo:shadow-[4px_4px_0_0_rgba(0,0,0,1)]',
               m.role === 'user' ? 'bg-blue-600 text-white rounded-br-sm' : 'bg-gray-100 text-gray-900 rounded-bl-sm'
             )}>
               <div className="whitespace-pre-wrap break-words">{m.text}</div>
@@ -153,10 +155,10 @@ const ChatPage: React.FC = () => {
       </div>
 
       {/* Composer */}
-      <div className="border-t border-gray-200 p-3 sm:p-4 bg-white">
+      <div className="border-t border-gray-200 p-3 sm:p-4 bg-white neo:border-t-[5px]">
         <div className="flex items-end gap-2">
           <textarea
-            className="flex-1 min-h-[44px] max-h-40 resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className="flex-1 min-h-[44px] max-h-40 resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 neo:rounded-none neo:border-[3px] neo:border-border neo:focus:ring-0 neo:focus-visible:outline-4 neo:focus-visible:outline-black"
             placeholder={isConnected ? 'Type a message…' : 'Type a message (offline)…'}
             value={input}
             onChange={(e) => setInput(e.target.value)}

@@ -42,10 +42,10 @@ export const TunnelList: React.FC<TunnelListProps> = ({
   const getStatusIcon = (status: TunnelInfo['status']) => {
     switch (status) {
       case 'running':
-        return <Activity className="w-4 h-4" />;
+        return <Activity className="w-4 h-4" strokeWidth={2.5} />;
       case 'starting':
       case 'stopping':
-        return <Clock className="w-4 h-4" />;
+        return <Clock className="w-4 h-4" strokeWidth={2.5} />;
       default:
         return null;
     }
@@ -75,7 +75,7 @@ export const TunnelList: React.FC<TunnelListProps> = ({
       <Card>
         <CardContent className="p-8 text-center">
           <div className="text-gray-400 mb-4">
-            <Activity className="w-12 h-12 mx-auto" />
+            <Activity className="w-12 h-12 mx-auto" strokeWidth={2.5} />
           </div>
           <h3 className="text-lg font-medium text-gray-900 mb-2">No Active Tunnels</h3>
           <p className="text-gray-600">Create your first tunnel to get started with remote access.</p>
@@ -112,7 +112,7 @@ export const TunnelList: React.FC<TunnelListProps> = ({
                     <span className="shrink-0 font-medium">URL:</span>
                     <a href={tunnel.url} target="_blank" rel="noopener noreferrer" className="truncate text-blue-600 hover:text-blue-800 flex items-center gap-1">
                       <span className="truncate">{tunnel.url}</span>
-                      <ExternalLink className="w-3 h-3 shrink-0" />
+                      <ExternalLink className="w-3 h-3 shrink-0" strokeWidth={2.5} />
                     </a>
                   </div>
                   <div className="flex flex-wrap gap-4">
@@ -124,7 +124,7 @@ export const TunnelList: React.FC<TunnelListProps> = ({
                     <span className="font-medium">Created:</span> {new Date(tunnel.createdAt).toLocaleString()}
                   </div>
                   {tunnel.error && (
-                    <div className="text-red-600 mt-2 p-2 bg-red-50 rounded">
+                    <div className="text-red-600 mt-2 p-2 bg-red-50 rounded neo:rounded-none neo:border-2 neo:border-border">
                       <span className="font-medium">Error:</span> {tunnel.error}
                     </div>
                   )}
@@ -134,12 +134,12 @@ export const TunnelList: React.FC<TunnelListProps> = ({
               <div className="sm:ml-4 flex items-center gap-2">
                 <Tooltip content="Copy URL">
                   <Button variant="secondary" size="icon" onClick={() => copy(tunnel.url)}>
-                    <Copy className="w-4 h-4" />
+                    <Copy className="w-4 h-4" strokeWidth={2.5} />
                   </Button>
                 </Tooltip>
                 <Tooltip content="Show QR">
                   <Button variant="secondary" size="icon" onClick={() => setQr({ open: true, url: tunnel.url })}>
-                    <QrCode className="w-4 h-4" />
+                    <QrCode className="w-4 h-4" strokeWidth={2.5} />
                   </Button>
                 </Tooltip>
                 <Button
@@ -148,7 +148,7 @@ export const TunnelList: React.FC<TunnelListProps> = ({
                   variant="destructive"
                   disabled={tunnel.status !== 'running'}
                 >
-                  <StopCircle className="w-4 h-4" /> Stop
+                  <StopCircle className="w-4 h-4" strokeWidth={2.5} /> Stop
                 </Button>
               </div>
             </div>

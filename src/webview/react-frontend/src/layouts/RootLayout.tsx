@@ -10,7 +10,7 @@ import { cn } from '../lib/utils';
 
 const LayoutContent: React.FC = () => {
   const { isConnected, connectionCount, lastActivity } = useWebSocket();
-  const { theme, toggle } = useTheme();
+  const { theme, toggle, neo, toggleNeo } = useTheme();
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -26,7 +26,7 @@ const LayoutContent: React.FC = () => {
   return (
     <div className="min-h-screen bg-background">
       {/* Mobile Header with Hamburger Menu */}
-      <div className="lg:hidden bg-card border-b border-border px-4 py-3">
+      <div className="lg:hidden bg-card border-b border-border px-4 py-3 neo:border-b-[5px] neo:shadow-[6px_6px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[6px_6px_0_0_rgba(255,255,255,0.35)]">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
             <button
@@ -62,6 +62,13 @@ const LayoutContent: React.FC = () => {
               </span>
             </div>
             <button
+              onClick={toggleNeo}
+              aria-label="Toggle neobrutalist mode"
+              className="p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors neo:bg-primary neo:text-primary-foreground neo:rounded-none neo:border-4 neo:border-border neo:shadow-[5px_5px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[5px_5px_0_0_rgba(255,255,255,0.35)]"
+            >
+              <span className="text-[11px] font-bold">{neo ? 'NEO' : 'UI'}</span>
+            </button>
+            <button
               onClick={toggle}
               aria-label="Toggle theme"
               className="p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
@@ -93,7 +100,7 @@ const LayoutContent: React.FC = () => {
         {/* Sidebar - Mobile: Overlay, Desktop: Fixed */}
         <div className={cn(
           "fixed lg:static inset-y-0 left-0 z-50 lg:z-auto",
-          "w-64 lg:w-64 bg-card border-r border-border",
+          "w-64 lg:w-64 bg-card border-r border-border neo:border-r-[5px]",
           "transform transition-transform duration-200 ease-out lg:transition-none",
           isMobileMenuOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         )}>

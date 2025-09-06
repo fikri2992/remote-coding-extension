@@ -17,9 +17,10 @@ export function BottomSheet({ open, onClose, children, className, ariaLabel }: B
       <div className={cn(
         'absolute inset-x-0 bottom-0 rounded-t-2xl bg-card shadow-xl border-t border-border',
         'p-4 sm:p-6 max-h-[85vh] overflow-auto',
+        'neo:rounded-none neo:border-t-[5px] neo:shadow-[0_-8px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[0_-8px_0_0_rgba(255,255,255,0.35)]',
         className
       )}>
-        <div className="mx-auto h-1.5 w-10 rounded-full bg-muted mb-4" aria-hidden />
+        <div className="mx-auto h-1.5 w-10 rounded-full bg-muted mb-4 neo:rounded-none neo:border-2 neo:border-border" aria-hidden />
         {children}
       </div>
     </div>
@@ -37,4 +38,3 @@ export function BottomSheetTitle({ className, ...props }: React.HTMLAttributes<H
 export function BottomSheetFooter({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return <div className={cn('mt-4 flex items-center justify-end gap-2', className)} {...props} />
 }
-

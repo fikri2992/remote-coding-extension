@@ -43,7 +43,7 @@ export const TunnelForm: React.FC<TunnelFormProps> = ({ onCreateTunnel, loading 
     <Card className="shadow-sm">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Play className="w-5 h-5 text-blue-600" />
+          <Play className="w-5 h-5 text-blue-600" strokeWidth={2.5} />
           Create New Tunnel
         </CardTitle>
         <CardDescription>Expose a local port securely over Cloudflare.</CardDescription>
@@ -99,7 +99,7 @@ export const TunnelForm: React.FC<TunnelFormProps> = ({ onCreateTunnel, loading 
                   id="token"
                   value={formData.token || ''}
                   onChange={(e) => handleInputChange('token', e.target.value)}
-                  className={cn('min-h-[100px] w-full rounded-md border border-gray-300 p-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500')}
+                  className={cn('min-h-[100px] w-full rounded-md border border-gray-300 p-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500', 'neo:rounded-none neo:border-[3px] neo:border-border neo:focus-visible:ring-0 neo:focus-visible:outline-4 neo:focus-visible:outline-black')}
                   placeholder="eyJhbGciOi..."
                   aria-invalid={!!errors.token}
                 />
@@ -119,12 +119,12 @@ export const TunnelForm: React.FC<TunnelFormProps> = ({ onCreateTunnel, loading 
             >
               {loading ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <Loader2 className="w-4 h-4 animate-spin" strokeWidth={2.5} />
                   Creating...
                 </>
               ) : (
                 <>
-                  <Play className="w-4 h-4" />
+                  <Play className="w-4 h-4" strokeWidth={2.5} />
                   Create Tunnel
                 </>
               )}
@@ -133,7 +133,7 @@ export const TunnelForm: React.FC<TunnelFormProps> = ({ onCreateTunnel, loading 
         </form>
 
         <Alert variant="info" className="mt-6">
-          <AlertTitle className="flex items-center gap-2"><Info className="w-4 h-4" /> How it works</AlertTitle>
+          <AlertTitle className="flex items-center gap-2"><Info className="w-4 h-4" strokeWidth={2.5} /> How it works</AlertTitle>
           <AlertDescription>
             <ul className="list-disc space-y-1 pl-5">
               <li><strong>Quick Tunnel</strong> creates a temporary tunnel that expires when stopped.</li>
@@ -146,4 +146,3 @@ export const TunnelForm: React.FC<TunnelFormProps> = ({ onCreateTunnel, loading 
     </Card>
   )
 }
-

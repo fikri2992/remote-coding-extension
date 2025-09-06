@@ -2,15 +2,21 @@ import * as React from 'react'
 
 type Theme = 'light' | 'dark'
 
+type NeoState = boolean
+
 interface ThemeContextType {
   theme: Theme
   setTheme: (t: Theme) => void
   toggle: () => void
+  neo: NeoState
+  setNeo: (n: NeoState) => void
+  toggleNeo: () => void
 }
 
 const ThemeContext = React.createContext<ThemeContextType | null>(null)
 
 const STORAGE_KEY = 'kiro-theme'
+const STORAGE_KEY_NEO = 'kiro-neo'
 
 function getInitialTheme(): Theme {
   try {
@@ -31,8 +37,24 @@ function applyThemeClass(theme: Theme) {
   else root.classList.remove('dark')
 }
 
+function getInitialNeo(): NeoState {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY_NEO)
+    if (stored === '1') return true
+    if (stored === '0') return false
+  } catch {}
+  return false
+}
+
+function applyNeoClass(neo: NeoState) {
+  const root = document.documentElement
+  if (neo) root.classList.add('neo')
+  else root.classList.remove('neo')
+}
+
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = React.useState<Theme>(() => getInitialTheme())
+  const [neo, setNeoState] = React.useState<NeoState>(() => getInitialNeo())
 
   const setTheme = (t: Theme) => {
     setThemeState(t)
@@ -41,10 +63,20 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }
   const toggle = () => setTheme(theme === 'dark' ? 'light' : 'dark')
 
-  React.useEffect(() => { applyThemeClass(theme) }, [])
+  const setNeo = (n: NeoState) => {
+    setNeoState(n)
+    try { localStorage.setItem(STORAGE_KEY_NEO, n ? '1' : '0') } catch {}
+    applyNeoClass(n)
+  }
+  const toggleNeo = () => setNeo(!neo)
+
+  React.useEffect(() => {
+    applyThemeClass(theme)
+    applyNeoClass(neo)
+  }, [])
 
   return (
-    <ThemeContext.Provider value={{ theme, setTheme, toggle }}>
+    <ThemeContext.Provider value={{ theme, setTheme, toggle, neo, setNeo, toggleNeo }}>
       {children}
     </ThemeContext.Provider>
   )
@@ -55,4 +87,3 @@ export function useTheme() {
   if (!ctx) throw new Error('useTheme must be used within ThemeProvider')
   return ctx
 }
-

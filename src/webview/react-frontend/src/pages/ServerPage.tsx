@@ -8,7 +8,7 @@ const ServerPage: React.FC = () => {
   return (
     <div className="space-y-4 lg:space-y-6">
       {/* Server Status Card */}
-      <div className="bg-white p-4 lg:p-6 rounded-lg shadow-sm border border-gray-200">
+      <div className="bg-white p-4 lg:p-6 rounded-lg shadow-sm border border-gray-200 neo:rounded-none neo:border-[5px] neo:shadow-[8px_8px_0_0_rgba(0,0,0,1)]">
         <h3 className="text-lg lg:text-xl font-semibold mb-4 lg:mb-6">Server Controls</h3>
 
         <div className="space-y-4">
@@ -31,7 +31,7 @@ const ServerPage: React.FC = () => {
           </div>
 
           {/* Connection Details */}
-          <div className="bg-white border border-gray-200 rounded-lg p-4">
+          <div className="bg-white border border-gray-200 rounded-lg p-4 neo:rounded-none neo:border-[4px] neo:shadow-[6px_6px_0_0_rgba(0,0,0,1)]">
             <h4 className="font-medium text-sm lg:text-base mb-3">Connection Details</h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
@@ -63,10 +63,10 @@ const ServerPage: React.FC = () => {
 
           {/* Quick Actions */}
           <div className="grid grid-cols-2 gap-3">
-            <button className="flex items-center justify-center p-3 lg:p-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors min-h-[48px]">
+            <button className="flex items-center justify-center p-3 lg:p-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors min-h-[48px] neo:rounded-none neo:border-[5px] neo:border-black neo:shadow-[5px_5px_0_0_rgba(0,0,0,1)]">
               <span className="text-sm lg:text-base font-medium">Refresh Status</span>
             </button>
-            <button className="flex items-center justify-center p-3 lg:p-4 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors min-h-[48px]">
+            <button className="flex items-center justify-center p-3 lg:p-4 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors min-h-[48px] neo:rounded-none neo:border-[5px] neo:border-black neo:shadow-[5px_5px_0_0_rgba(0,0,0,1)]">
               <span className="text-sm lg:text-base font-medium">View Logs</span>
             </button>
           </div>

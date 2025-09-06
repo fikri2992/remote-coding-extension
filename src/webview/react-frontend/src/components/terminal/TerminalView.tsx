@@ -1,6 +1,8 @@
 import React from 'react'
 import { TerminalActionBar } from './TerminalActionBar'
 import { cn } from '../../lib/utils'
+import { Input } from '../ui/input'
+import { Button } from '../ui/button'
 
 export const TerminalView: React.FC<{
   output: string
@@ -19,19 +21,19 @@ export const TerminalView: React.FC<{
 
   return (
     <div className={cn('flex flex-col gap-3', className)}>
-      <div className="rounded-md border border-border bg-background p-3 h-64 overflow-auto text-xs whitespace-pre-wrap">
+      <div className="rounded-md border border-border bg-background p-3 h-64 overflow-auto text-xs whitespace-pre-wrap neo:rounded-none neo:border-[5px] neo:shadow-[6px_6px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[6px_6px_0_0_rgba(255,255,255,0.35)]">
         {output || 'Run a command to see output here.'}
       </div>
       <TerminalActionBar onKey={(seq) => onActionKey && onActionKey(seq)} />
       <div className="flex items-center gap-2">
-        <input
-          className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary"
+        <Input
+          className="flex-1"
           placeholder="Type a command"
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
         />
-        <button className="rounded-md bg-primary px-3 py-2 text-white text-sm hover:bg-primary/90" onClick={send}>Run</button>
+        <Button onClick={send}>Run</Button>
       </div>
     </div>
   )

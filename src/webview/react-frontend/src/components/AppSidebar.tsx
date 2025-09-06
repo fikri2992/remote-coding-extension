@@ -33,9 +33,9 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
   return (
     <div className="flex flex-col h-full bg-background">
       {/* Mobile: Close button at top */}
-      <div className="lg:hidden p-4 border-b border-border">
+      <div className="lg:hidden p-4 border-b border-border neo:border-b-[5px]">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-foreground">Menu</h2>
+          <h2 className="text-lg font-semibold text-foreground neo:font-extrabold">Menu</h2>
         </div>
       </div>
 
@@ -50,10 +50,10 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
                   to={item.path}
                   className={cn(
                     "w-full flex items-center px-3 py-3 lg:px-3 lg:py-2 text-sm font-medium rounded-lg transition-all duration-150 ease-out",
-                    "min-h-[44px] lg:min-h-[40px] active:scale-[0.98]",
+                    "min-h-[44px] lg:min-h-[40px] active:scale-[0.98] neo:rounded-none neo:border-4 neo:border-border neo:shadow-[6px_6px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[6px_6px_0_0_rgba(255,255,255,0.35)] neo:duration-100 neo:ease-linear",
                     activeItem === item.id
-                      ? "bg-primary/15 text-primary shadow-sm"
-                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                      ? "bg-primary/15 text-primary shadow-sm neo:bg-primary neo:text-primary-foreground"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground neo:hover:bg-accent neo:hover:text-accent-foreground"
                   )}
                 >
                   <Icon className="w-5 h-5 mr-3 flex-shrink-0" />
@@ -66,7 +66,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
       </nav>
 
       {/* Footer */}
-      <div className="p-4 border-t border-border bg-card">
+      <div className="p-4 border-t border-border bg-card neo:border-t-[5px]">
         <div className="text-xs text-muted-foreground text-center">
           Kiro Remote v1.0
         </div>

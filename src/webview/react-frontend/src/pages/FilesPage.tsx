@@ -63,10 +63,10 @@ const FilesPage: React.FC = () => {
   }, []);
 
   return (
-    <div className="bg-card p-4 rounded-lg shadow-sm border border-border">
+    <div className="bg-card p-4 rounded-lg shadow-sm border border-border neo:rounded-none neo:border-[5px] neo:shadow-[8px_8px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[8px_8px_0_0_rgba(255,255,255,0.35)]">
       <div className="flex items-center justify-between mb-3">
         <Breadcrumbs items={crumbs} onNavigate={(_p) => { setCrumbs([{ name: 'root', path: '/' }]); requestTree('/'); }} />
-        <button className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted">+ New</button>
+        <button className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted neo:rounded-none neo:border-[5px] neo:shadow-[5px_5px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[5px_5px_0_0_rgba(255,255,255,0.35)]">+ New</button>
       </div>
       {error && (
         <div className="mb-3 rounded-md border border-red-200 bg-red-50 p-2 text-sm text-red-800">{error}</div>
@@ -78,13 +78,13 @@ const FilesPage: React.FC = () => {
           <BottomSheetTitle>{activeNode?.name}</BottomSheetTitle>
         </BottomSheetHeader>
         <div className="flex flex-col gap-2">
-          <button className="w-full text-left px-3 py-2 rounded hover:bg-muted" onClick={() => { if (activeNode) { const p = activeNode.path; setActiveNode(null); navigate({ to: '/files/view', search: { path: p } }); } }}>Open</button>
-          <button className="w-full text-left px-3 py-2 rounded hover:bg-muted">Rename</button>
-          <button className="w-full text-left px-3 py-2 rounded hover:bg-muted">Delete</button>
-          <button className="w-full text-left px-3 py-2 rounded hover:bg-muted">Share</button>
+          <button className="w-full text-left px-3 py-2 rounded hover:bg-muted neo:rounded-none neo:border-[4px] neo:border-border neo:hover:bg-accent/10" onClick={() => { if (activeNode) { const p = activeNode.path; setActiveNode(null); navigate({ to: '/files/view', search: { path: p } }); } }}>Open</button>
+          <button className="w-full text-left px-3 py-2 rounded hover:bg-muted neo:rounded-none neo:border-[4px] neo:border-border neo:hover:bg-accent/10">Rename</button>
+          <button className="w-full text-left px-3 py-2 rounded hover:bg-muted neo:rounded-none neo:border-[4px] neo:border-border neo:hover:bg-accent/10">Delete</button>
+          <button className="w-full text-left px-3 py-2 rounded hover:bg-muted neo:rounded-none neo:border-[4px] neo:border-border neo:hover:bg-accent/10">Share</button>
         </div>
         <BottomSheetFooter>
-          <button className="rounded-md border border-border px-3 py-2 text-sm" onClick={() => setActiveNode(null)}>Close</button>
+          <button className="rounded-md border border-border px-3 py-2 text-sm neo:rounded-none neo:border-[4px] neo:shadow-[5px_5px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[5px_5px_0_0_rgba(255,255,255,0.35)]" onClick={() => setActiveNode(null)}>Close</button>
         </BottomSheetFooter>
       </BottomSheet>
     </div>

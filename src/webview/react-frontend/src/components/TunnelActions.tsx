@@ -35,8 +35,8 @@ export const TunnelActions: React.FC<TunnelActionsProps> = ({
             </div>
 
             {hasErrors && (
-              <div className="flex items-center gap-2 text-yellow-600">
-                <AlertTriangle className="w-4 h-4" />
+            <div className="flex items-center gap-2 text-yellow-600">
+                <AlertTriangle className="w-4 h-4" strokeWidth={2.5} />
                 <span className="text-sm">Some tunnels have errors</span>
               </div>
             )}
@@ -53,7 +53,7 @@ export const TunnelActions: React.FC<TunnelActionsProps> = ({
                 : "bg-gray-100 text-gray-700 hover:bg-gray-200"
             )}
           >
-            <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
+            <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} strokeWidth={2.5} />
             Refresh
           </button>
 
@@ -68,7 +68,7 @@ export const TunnelActions: React.FC<TunnelActionsProps> = ({
                   : "bg-red-100 text-red-700 hover:bg-red-200"
               )}
             >
-              <Square className="w-4 h-4" />
+              <Square className="w-4 h-4" strokeWidth={2.5} />
               Stop All
             </button>
           )}
@@ -76,7 +76,7 @@ export const TunnelActions: React.FC<TunnelActionsProps> = ({
         </div>
 
         {runningTunnels.length > 1 && (
-          <div className="mt-3 pt-3 border-t border-gray-200">
+          <div className="mt-3 pt-3 border-t border-gray-200 neo:border-t-[4px]">
             <div className="text-xs text-muted-foreground">
               Quick actions for individual tunnels are available in the tunnel list below.
             </div>

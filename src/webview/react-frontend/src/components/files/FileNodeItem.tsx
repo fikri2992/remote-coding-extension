@@ -17,7 +17,7 @@ export const FileNodeItem: React.FC<{
   = ({ node, onOpen, onLongPress }) => {
   return (
     <button
-      className={cn('w-full flex items-center gap-2 px-3 py-2 rounded-md hover:bg-muted active:scale-[0.99]')}
+      className={cn('w-full flex items-center gap-2 px-3 py-2 rounded-md hover:bg-muted active:scale-[0.99]', 'neo:rounded-none neo:border-b-2 neo:border-border neo:hover:bg-accent/10 neo:duration-100')}
       style={{ paddingLeft: (node.depth ? node.depth * 12 : 0) + 12 }}
       onClick={() => onOpen(node)}
       onPointerDown={(_e) => {
@@ -30,7 +30,7 @@ export const FileNodeItem: React.FC<{
       }}
     >
       {node.type === 'directory' ? <Folder className="w-4 h-4" /> : <File className="w-4 h-4" />}
-      <span className="truncate text-sm text-foreground">{node.name}</span>
+      <span className="truncate text-sm text-foreground neo:font-semibold">{node.name}</span>
     </button>
   )
 }

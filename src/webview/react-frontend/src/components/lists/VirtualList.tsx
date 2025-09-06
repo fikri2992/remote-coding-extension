@@ -1,4 +1,5 @@
 import React from 'react'
+import { cn } from '../../lib/utils'
 
 export interface VirtualListProps<T> {
   items: T[]
@@ -13,11 +14,12 @@ export interface VirtualListProps<T> {
 // MVP: simple passthrough renderer. Swap with react-virtual/react-window later.
 export function VirtualList<T>({ items, itemKey, renderItem, className }: VirtualListProps<T>) {
   return (
-    <div className={className}>
+    <div className={cn('neo:divide-y-[3px] neo:divide-border', className)}>
       {items.map((it, i) => (
-        <div key={itemKey(it, i)}>{renderItem(it, i)}</div>
+        <div key={itemKey(it, i)} className="neo:bg-background neo:[&:hover]:bg-accent/10">
+          {renderItem(it, i)}
+        </div>
       ))}
     </div>
   )
 }
-

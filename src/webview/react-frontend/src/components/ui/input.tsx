@@ -12,6 +12,10 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(({ className, type,
         'ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium',
         'placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         'disabled:cursor-not-allowed disabled:opacity-50',
+        // Neo style
+        'neo:rounded-none neo:border-[3px] neo:border-border neo:font-semibold',
+        'neo:focus-visible:ring-0 neo:focus-visible:outline-4 neo:focus-visible:outline-black dark:neo:focus-visible:outline-white',
+        'neo:transition-[outline-color,box-shadow,border-color] neo:duration-100 neo:ease-linear',
         className,
       )}
       ref={ref}

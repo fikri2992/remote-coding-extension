@@ -205,7 +205,7 @@ export const TunnelManagerPage: React.FC = () => {
       />
 
       {/* Active Tunnels List */}
-      <div className="space-y-4">
+      <div className="space-y-4 neo:divide-y-[3px] neo:divide-border">
         <h3 className="text-lg font-semibold text-foreground">Active Tunnels</h3>
         <TunnelList
           tunnels={tunnels}
@@ -215,7 +215,7 @@ export const TunnelManagerPage: React.FC = () => {
       </div>
 
       {/* Status Summary */}
-      <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+      <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 neo:rounded-none neo:border-[5px] neo:shadow-[8px_8px_0_0_rgba(0,0,0,1)]">
         <h4 className="text-sm font-medium text-gray-900 mb-2">Status Summary</h4>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
           <div>

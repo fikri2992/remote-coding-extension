@@ -13,9 +13,9 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   isConnected,
   connectionCount
 }) => {
-  const { theme, toggle } = useTheme();
+  const { theme, toggle, neo, toggleNeo } = useTheme();
   return (
-    <header className="bg-card border-b border-border px-4 lg:px-6 py-3 lg:py-4">
+    <header className="bg-card border-b border-border px-4 lg:px-6 py-3 lg:py-4 neo:border-b-[5px] neo:shadow-[6px_6px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[6px_6px_0_0_rgba(255,255,255,0.35)]">
       <div className="flex items-center justify-between max-w-7xl mx-auto">
         {/* App Title */}
         <div className="flex items-center space-x-3 lg:space-x-4">
@@ -45,6 +45,9 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
 
         {/* Desktop Actions */}
         <div className="hidden lg:flex items-center space-x-3">
+          <Button variant="secondary" size="icon" onClick={toggleNeo} aria-label="Toggle neobrutalist mode" className="neo:bg-primary neo:text-primary-foreground">
+            <span className="text-[11px] font-bold">{neo ? 'NEO' : 'UI'}</span>
+          </Button>
           <Button variant="secondary" size="icon" onClick={toggle} aria-label="Toggle theme">
             {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           </Button>

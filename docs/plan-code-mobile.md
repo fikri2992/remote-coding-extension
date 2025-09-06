@@ -194,6 +194,11 @@ Accessibility
 6) Header (tidy)
 - Keep Back + Breadcrumb + filename. Move Copy/Download to sheet; status chips (lines, size, truncated) below the header in a single line.
 
+7) Mobile Breadcrumb Navigation
+- Make path segments tappable: `/src/code/example.js` → `/` `src` `code` `example.js`.
+- Tapping a segment navigates to that folder in Files (preserving query param `path`).
+- Horizontal scroll for long paths; long-press to copy full path.
+
 7) Diff Viewer (tidy)
 - File card header: filename and type chip only. Inline Wrap toggle; all else in Diff Options Sheet. Add note when SxS disabled due to width.
 
@@ -202,6 +207,18 @@ Accessibility
 - Iteration B: Trim FileViewer header; move Copy/Download into Options Sheet; ensure only one chrome is visible at a time.
 - Iteration C: Diff tidy — move most controls into sheet; leave Wrap as inline toggle; add width note for SxS.
 - Iteration D: Accessibility polish — focus order, announce position (x of y), keyboard shortcuts mapping.
+
+## Large File Strategy (Mobile)
+- Early fallback: Switch to static rendering sooner on mobile (e.g., > 500KB or > 10k lines), with a “load in chunks” option.
+- Chunked view: Paginate large files into N-line chunks (e.g., 2k lines) with “Next/Prev chunk” controls docked near the bottom bar.
+- Disable heavy features automatically: Hide word-level highlights and whitespace markers for very large files; keep selection and copy efficient.
+- Streaming indicator: Show a lightweight progress state while loading next chunk.
+- Crash prevention: Guard against unbounded DOM nodes; cap rendered lines; avoid `dangerouslySetInnerHTML` for huge payloads.
+
+## Navigation Improvements (Mobile)
+- Tappable breadcrumbs (above): fast path to parent folders.
+- Quick actions in bar: Go-to-line remains via quick prompt; add a “jump to top/bottom” double-tap on the status line.
+- Optional command palette: bottom-anchored list of actions searchable by keyboard.
 
 ## Alternate Approaches (Consider)
 - Command Palette: Replace More sheet with a command palette (bottom‑anchored) that lists actions (Wrap, Line #, Theme, Download). Searchable and scalable.

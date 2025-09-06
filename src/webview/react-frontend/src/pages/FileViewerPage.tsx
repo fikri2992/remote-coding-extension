@@ -120,11 +120,40 @@ const FileViewerPage: React.FC = () => {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
+  // Close search row on significant scroll in the viewer area
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    const el = scrollContainerRef.current
+    if (!el) return
+    let lastY = el.scrollTop
+    const onScroll = () => {
+      const dy = Math.abs(el.scrollTop - lastY)
+      lastY = el.scrollTop
+      if (dy > 30 && searchOpen) setSearchOpen(false)
+    }
+    el.addEventListener('scroll', onScroll)
+    return () => el.removeEventListener('scroll', onScroll)
+  }, [searchOpen])
+
   const shouldFallback = stats.length > 1_000_000 || stats.lines > 20000 || meta.truncated
   const languageOptions = ['javascript', 'typescript', 'json', 'html', 'css', 'markdown', 'xml']
   const isMarkdown = (filePath || '').toLowerCase().endsWith('.md')
   const selectionActive = selInfo.chars > 0
   const showSelectionRow = selectionActive && !searchOpen && !optionsOpen
+
+  // Chunked viewing for very large files
+  const CHUNK_LINE_THRESHOLD = 4000
+  const CHUNK_SIZE = 2000
+  const [chunkIndex, setChunkIndex] = useState(0)
+  const isChunked = stats.lines >= CHUNK_LINE_THRESHOLD
+  const totalChunks = isChunked ? Math.ceil((stats.lines || 0) / CHUNK_SIZE) : 1
+  const chunkStart = isChunked ? chunkIndex * CHUNK_SIZE + 1 : 1
+  const chunkEnd = isChunked ? Math.min((chunkIndex + 1) * CHUNK_SIZE, stats.lines || 0) : stats.lines || 0
+  const visibleContent = React.useMemo(() => {
+    if (!isChunked) return content
+    const lines = content.split('\n')
+    return lines.slice(chunkStart - 1, chunkEnd).join('\n')
+  }, [content, isChunked, chunkStart, chunkEnd])
 
   return (
     <div className="bg-card rounded-lg shadow-sm border border-border neo:rounded-none neo:border-[3px] neo:shadow-[8px_8px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[8px_8px_0_0_rgba(255,255,255,0.9)] overflow-hidden">
@@ -227,7 +256,7 @@ const FileViewerPage: React.FC = () => {
 
       {/* Code display */}
       {!loading && !error && content && (
-        <div className="max-h-[calc(100vh-16rem)]">
+        <div className="max-h-[calc(100vh-16rem)]" ref={scrollContainerRef}>
           {shouldFallback && (
             <div className="mx-4 mt-4 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 neo:rounded-none neo:border-[2px]">
               Large file detected. Using static rendering for performance. You can still copy/download the file.
@@ -244,14 +273,14 @@ const FileViewerPage: React.FC = () => {
 
           <div className={cn('mt-2', wrap ? 'overflow-hidden' : 'overflow-auto')}>
             {isMarkdown && isMarkdownRendered && !shouldFallback && (
-              <MarkdownRenderer content={content} className="px-3 pb-4 prose prose-sm dark:prose-invert max-w-none" />
+              <MarkdownRenderer content={visibleContent} className="px-3 pb-4 prose prose-sm dark:prose-invert max-w-none" />
             )}
 
             {!shouldFallback && (!isMarkdown || !isMarkdownRendered) && (
               <div style={{ maxWidth: wrap && wrapColumn ? `${wrapColumn}ch` : undefined }}>
                 <CodeViewer
                   ref={viewerRef as any}
-                  code={content}
+                  code={visibleContent}
                   filename={filePath}
                   language={languageOverride}
                   wrap={wrap}
@@ -271,13 +300,32 @@ const FileViewerPage: React.FC = () => {
             {shouldFallback && (
               <div className={cn('px-3 py-2', wrap ? 'whitespace-pre-wrap break-words' : 'whitespace-pre overflow-auto')}>
                 <SyntaxHighlighter
-                  code={content}
+                  code={visibleContent}
                   filename={filePath}
                   showLineNumbers={showLineNumbers}
                   fontSize={isMobile && fontSize === 'base' ? 'lg' : fontSize}
                   theme={theme === 'one-dark' ? 'default' : theme}
                   className="border-0 rounded-none"
                 />
+              </div>
+            )}
+
+            {/* Chunk navigation for large files */}
+            {isChunked && (
+              <div className="px-3 py-2 flex items-center justify-between text-xs text-muted-foreground">
+                <div>Chunk {chunkIndex + 1} / {totalChunks} • Lines {chunkStart}–{chunkEnd}</div>
+                <div className="flex items-center gap-2">
+                  <button
+                    disabled={chunkIndex === 0}
+                    onClick={() => { setChunkIndex((i) => Math.max(0, i - 1)); setSearchOpen(false) }}
+                    className={cn('px-2 py-1 rounded border border-border neo:rounded-none neo:border-[2px]', chunkIndex === 0 ? 'opacity-60 cursor-not-allowed' : 'hover:bg-muted')}
+                  >Prev</button>
+                  <button
+                    disabled={chunkIndex >= totalChunks - 1}
+                    onClick={() => { setChunkIndex((i) => Math.min(totalChunks - 1, i + 1)); setSearchOpen(false) }}
+                    className={cn('px-2 py-1 rounded border border-border neo:rounded-none neo:border-[2px]', chunkIndex >= totalChunks - 1 ? 'opacity-60 cursor-not-allowed' : 'hover:bg-muted')}
+                  >Next</button>
+                </div>
               </div>
             )}
 

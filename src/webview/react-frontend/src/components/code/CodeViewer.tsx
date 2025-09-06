@@ -275,7 +275,21 @@ export const CodeViewer = React.forwardRef<CodeViewerHandle, CodeViewerProps>(fu
 
   React.useImperativeHandle(ref, (): CodeViewerHandle => ({
     focus: () => { viewRef.current?.focus() },
-    setSearch: (q) => { const v = viewRef.current; if (!v) return; (setSearchQuery as any)(v, q) },
+    setSearch: (q) => {
+      const v = viewRef.current; if (!v) return;
+      const anySet = setSearchQuery as any
+      try {
+        if (typeof anySet === 'function') {
+          anySet(v, q)
+          return
+        }
+      } catch { /* fallthrough */ }
+      try {
+        if (anySet && typeof anySet.of === 'function') {
+          v.dispatch({ effects: anySet.of(q) })
+        }
+      } catch {/* ignore */}
+    },
     findNext: () => { const v = viewRef.current; if (!v) return; findNext(v) },
     findPrevious: () => { const v = viewRef.current; if (!v) return; findPrevious(v) },
     gotoLine: (line, col = 1) => {

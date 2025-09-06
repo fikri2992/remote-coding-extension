@@ -5,7 +5,7 @@ import { FileTree } from '../components/files/FileTree';
 import { FileNodeLike } from '../components/files/FileNodeItem';
 import { BottomSheet, BottomSheetHeader, BottomSheetTitle, BottomSheetFooter } from '../components/ui/bottom-sheet';
 import { useWebSocket } from '../components/WebSocketProvider';
-import { useNavigate } from '@tanstack/react-router';
+import { useNavigate, useLocation } from '@tanstack/react-router';
 
 function mapServerNodes(children: any[], depth = 0): FileNodeLike[] {
   return (children || []).map((n: any) => ({
@@ -18,8 +18,9 @@ function mapServerNodes(children: any[], depth = 0): FileNodeLike[] {
 
 const FilesPage: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { sendJson, addMessageListener } = useWebSocket();
-  const [crumbs, setCrumbs] = React.useState<Crumb[]>([{ name: 'root', path: '/' }]);
+  const [crumbs, setCrumbs] = React.useState<Crumb[]>([]);
   const [nodes, setNodes] = React.useState<FileNodeLike[]>([]);
   const [activeNode, setActiveNode] = React.useState<FileNodeLike | null>(null);
   const [_currentPath, setCurrentPath] = React.useState<string>('/');
@@ -28,9 +29,21 @@ const FilesPage: React.FC = () => {
   const [viewMode, setViewMode] = React.useState<'compact' | 'detailed'>('detailed');
   const [loading, setLoading] = React.useState<boolean>(false);
 
+  const buildCrumbs = (path: string): Crumb[] => {
+    const clean = (path || '/').replace(/\\/g, '/').replace(/^\/+/, '');
+    if (clean === '') return [];
+    const parts = clean.split('/');
+    const arr: Crumb[] = [];
+    parts.forEach((p, i) => {
+      const full = '/' + parts.slice(0, i + 1).join('/');
+      arr.push({ name: p, path: full });
+    });
+    return arr;
+  };
+
   const openNode = (node: FileNodeLike) => {
     if (node.type === 'directory') {
-      setCrumbs((c) => [...c, { name: node.name, path: node.path }]);
+      setCrumbs(buildCrumbs(node.path));
       requestTree(node.path);
     } else {
       // Navigate to file viewer route with search param
@@ -47,8 +60,10 @@ const FilesPage: React.FC = () => {
   };
 
   useEffect(() => {
-    // initial load
-    requestTree('/');
+    // initial load respects ?path= in URL
+    const initialPath = ((location.search as any)?.path as string) || '/';
+    setCrumbs(buildCrumbs(initialPath));
+    requestTree(initialPath);
     const unsub = addMessageListener((msg) => {
       if (msg?.type !== 'fileSystem') return;
       if (msg.data?.operation === 'tree') {
@@ -65,15 +80,34 @@ const FilesPage: React.FC = () => {
       // watch events can be handled here later
     });
     return unsub;
-  }, []);
+  }, [location.search]);
 
   return (
     <div className="bg-card rounded-lg shadow-sm border border-border neo:rounded-none neo:border-[3px] neo:shadow-[8px_8px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[8px_8px_0_0_rgba(255,255,255,0.9)] overflow-hidden">
       {/* Enhanced header with view controls */}
       <div className="p-4 border-b border-border bg-muted/20 neo:border-b-[2px]">
         <div className="flex items-center justify-between mb-3">
-          <Breadcrumbs items={crumbs} onNavigate={(_p) => { setCrumbs([{ name: 'root', path: '/' }]); requestTree('/'); }} />
-          <button className="rounded-md border border-border px-4 py-2 text-sm font-medium hover:bg-muted transition-colors neo:rounded-none neo:border-[3px] neo:shadow-[5px_5px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[5px_5px_0_0_rgba(255,255,255,0.9)]">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            {/* Mobile back button */}
+            <button
+              className="md:hidden inline-flex items-center justify-center w-8 h-8 rounded-md border border-border neo:rounded-none neo:border-[2px]"
+              aria-label="Back"
+              onClick={() => {
+                const parent = crumbs.length > 1 ? crumbs[crumbs.length - 2].path : '/'
+                setCrumbs(buildCrumbs(parent));
+                requestTree(parent);
+              }}
+            >
+              <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor"><path d="M11.78 15.22a.75.75 0 01-1.06 0l-5-5a.75.75 0 010-1.06l5-5a.75.75 0 111.06 1.06L7.56 9H16a.75.75 0 010 1.5H7.56l4.22 4.22a.75.75 0 010 1.06z"/></svg>
+            </button>
+            <div className="min-w-0 flex-1">
+              <Breadcrumbs
+                items={crumbs}
+                onNavigate={(path) => { setCrumbs(buildCrumbs(path)); requestTree(path); }}
+              />
+            </div>
+          </div>
+          <button className="shrink-0 ml-2 rounded-md border border-border px-4 py-2 text-sm font-medium hover:bg-muted transition-colors neo:rounded-none neo:border-[3px] neo:shadow-[5px_5px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[5px_5px_0_0_rgba(255,255,255,0.9)]">
             + New
           </button>
         </div>

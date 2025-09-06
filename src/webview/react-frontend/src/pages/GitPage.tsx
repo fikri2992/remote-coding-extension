@@ -181,27 +181,28 @@ const GitPage: React.FC = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold text-foreground">Git</h3>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => {
-              const id = `debug_${Date.now()}`;
-              const unsub = addMessageListener((msg) => {
-                if (msg?.type === 'git' && msg.id === id) {
-                  console.log('Debug result:', msg);
-                  unsub();
-                }
-              });
-              sendJson({ type: 'git', id, data: { gitData: { operation: 'debug', options: { debugOperation: 'simple-log' } } } });
-            }}
-            className="px-2 py-1 text-xs bg-red-500 text-white rounded"
-          >
-            Debug
-          </button>
-          <div className="text-xs text-muted-foreground">
-            {loading && 'Working…'}
-            {historyLoading && 'Loading history…'}
-            {commitDiffLoading && 'Loading diff…'}
-          </div>
+        
+        {/* Enhanced Status Indicator */}
+        <div className="flex items-center gap-3">
+          {(loading || historyLoading || commitDiffLoading) && (
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-50 border border-blue-200 dark:bg-blue-950 dark:border-blue-800 neo:rounded-none neo:border-[2px] neo:shadow-[3px_3px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[3px_3px_0_0_rgba(255,255,255,0.9)]">
+              {/* Animated spinner */}
+              <div className="w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+              <span className="text-xs font-medium text-blue-700 dark:text-blue-300">
+                {loading && 'Working'}
+                {historyLoading && 'Loading history'}
+                {commitDiffLoading && 'Loading diff'}
+              </span>
+            </div>
+          )}
+          
+          {/* Repository status indicator */}
+          {repo && !loading && !historyLoading && (
+            <div className="flex items-center gap-2 px-2 py-1 rounded-full bg-green-50 border border-green-200 dark:bg-green-950 dark:border-green-800 neo:rounded-none neo:border-[2px]">
+              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+              <span className="text-xs text-green-700 dark:text-green-300">Connected</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -228,7 +229,10 @@ const GitPage: React.FC = () => {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="p-4 rounded-lg bg-muted neo:rounded-none neo:border-[3px] neo:border-border neo:shadow-[4px_4px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[4px_4px_0_0_rgba(255,255,255,0.9)]">
               <div className="text-xs text-muted-foreground mb-1">Branch</div>
-              <div className="text-sm font-medium">{repo.currentBranch}</div>
+              <div className="text-sm font-medium flex items-center gap-2">
+                <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
+                {repo.currentBranch}
+              </div>
             </div>
             <div className="p-4 rounded-lg bg-muted neo:rounded-none neo:border-[3px] neo:border-border neo:shadow-[4px_4px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[4px_4px_0_0_rgba(255,255,255,0.9)]">
               <div className="text-xs text-muted-foreground mb-1">Remote</div>
@@ -236,13 +240,42 @@ const GitPage: React.FC = () => {
             </div>
             <div className="p-4 rounded-lg bg-muted neo:rounded-none neo:border-[3px] neo:border-border neo:shadow-[4px_4px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[4px_4px_0_0_rgba(255,255,255,0.9)]">
               <div className="text-xs text-muted-foreground mb-1">Ahead/Behind</div>
-              <div className="text-sm font-medium">{repo.remoteStatus?.ahead || 0} / {repo.remoteStatus?.behind || 0}</div>
+              <div className="text-sm font-medium flex items-center gap-2">
+                {repo.remoteStatus?.ahead > 0 && (
+                  <span className="px-1.5 py-0.5 bg-green-100 text-green-700 rounded text-xs dark:bg-green-900 dark:text-green-300 neo:rounded-none">
+                    ↑{repo.remoteStatus.ahead}
+                  </span>
+                )}
+                {repo.remoteStatus?.behind > 0 && (
+                  <span className="px-1.5 py-0.5 bg-orange-100 text-orange-700 rounded text-xs dark:bg-orange-900 dark:text-orange-300 neo:rounded-none">
+                    ↓{repo.remoteStatus.behind}
+                  </span>
+                )}
+                {(!repo.remoteStatus?.ahead && !repo.remoteStatus?.behind) && (
+                  <span className="text-muted-foreground">Up to date</span>
+                )}
+              </div>
             </div>
           </div>
+        ) : loading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="p-4 rounded-lg bg-muted animate-pulse neo:rounded-none neo:border-[3px] neo:border-border neo:shadow-[4px_4px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[4px_4px_0_0_rgba(255,255,255,0.9)]">
+                <div className="h-3 bg-muted-foreground/20 rounded mb-2 neo:rounded-none"></div>
+                <div className="h-4 bg-muted-foreground/30 rounded w-3/4 neo:rounded-none"></div>
+              </div>
+            ))}
+          </div>
         ) : (
-          (commits.length === 0 && !historyLoading) ? (
-            <div className="text-sm text-muted-foreground">No repository detected or not loaded yet.</div>
-          ) : null
+          <div className="rounded-lg border border-dashed border-border p-8 text-center neo:rounded-none neo:border-[3px]">
+            <div className="text-muted-foreground">
+              <svg className="w-12 h-12 mx-auto mb-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              <div className="text-sm font-medium mb-1">No Git repository detected</div>
+              <div className="text-xs">Initialize a repository or open a folder with an existing Git repo</div>
+            </div>
+          </div>
         )}
 
         {activeTab === 'status' ? (

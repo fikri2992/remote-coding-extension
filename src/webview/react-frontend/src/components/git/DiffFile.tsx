@@ -60,7 +60,7 @@ export const DiffFile: React.FC<{ chunk: DiffChunk; loading?: boolean; onExpand?
   = ({ chunk, loading, onExpand }) => {
   const [open, setOpen] = React.useState(false)
   const badge = (n: number, color: string, label: string) => (
-    <span className={`inline-flex items-center justify-center min-w-[36px] h-7 px-2 rounded-full text-xs ${color} neo:rounded-none neo:border-2 neo:border-border neo:shadow-[3px_3px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[3px_3px_0_0_rgba(255,255,255,0.35)]`}>
+    <span className={`inline-flex items-center justify-center min-w-[36px] h-7 px-2 rounded-full text-xs ${color} neo:rounded-none neo:border-2 neo:border-border neo:shadow-[3px_3px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[3px_3px_0_0_rgba(255,255,255,0.9)]`}>
       {label} {n}
     </span>
   )
@@ -89,7 +89,7 @@ export const DiffFile: React.FC<{ chunk: DiffChunk; loading?: boolean; onExpand?
   }
 
   return (
-    <div className="rounded-xl border border-border bg-background overflow-hidden neo:rounded-none neo:border-[5px] neo:shadow-[6px_6px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[6px_6px_0_0_rgba(255,255,255,0.35)]">
+    <div className="rounded-xl border border-border bg-background overflow-hidden neo:rounded-none neo:border-[3px] neo:shadow-[6px_6px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[6px_6px_0_0_rgba(255,255,255,0.9)]">
       <button
         className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left active:bg-muted/60 neo:duration-100"
         onClick={() => {
@@ -112,7 +112,7 @@ export const DiffFile: React.FC<{ chunk: DiffChunk; loading?: boolean; onExpand?
         </div>
       </button>
       {open && (
-        <div className="px-3 py-3 border-t border-border text-[12px] leading-5 neo:border-t-[4px]">
+        <div className="px-3 py-3 border-t border-border text-[12px] leading-5 neo:border-t-[2px]">
           {loading ? (
             <div className="text-muted-foreground">Loading...</div>
           ) : (

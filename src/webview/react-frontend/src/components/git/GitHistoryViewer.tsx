@@ -46,7 +46,7 @@ export const GitHistoryViewer: React.FC<Props> = ({ commits, loading, canLoadMor
   return (
     <div className="flex flex-col gap-3">
       {commits.length === 0 && !loading && (
-        <div className="rounded-lg border border-border bg-muted p-4 text-sm text-muted-foreground neo:rounded-none neo:border-[5px] neo:shadow-[6px_6px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[6px_6px_0_0_rgba(255,255,255,0.35)]">
+        <div className="rounded-lg border border-border bg-muted p-4 text-sm text-muted-foreground neo:rounded-none neo:border-[3px] neo:shadow-[6px_6px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[6px_6px_0_0_rgba(255,255,255,0.9)]">
           No commits yet.
         </div>
       )}
@@ -61,7 +61,7 @@ export const GitHistoryViewer: React.FC<Props> = ({ commits, loading, canLoadMor
           <div className="text-center text-sm text-muted-foreground">Loading...</div>
         )}
         {!loading && onLoadMore && canLoadMore && commits.length > 0 && (
-          <button className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm neo:rounded-none neo:border-[5px] neo:shadow-[6px_6px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[6px_6px_0_0_rgba(255,255,255,0.35)] neo:hover:bg-accent neo:hover:text-accent-foreground neo:duration-100" onClick={onLoadMore}>
+          <button className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm neo:rounded-none neo:border-[3px] neo:shadow-[6px_6px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[6px_6px_0_0_rgba(255,255,255,0.9)] neo:hover:bg-accent neo:hover:text-accent-foreground neo:duration-100" onClick={onLoadMore}>
             Load more
           </button>
         )}

@@ -88,7 +88,7 @@ export const TerminalXterm = React.forwardRef<TerminalXtermHandle, {
     <div className={className}>
       <div
         ref={containerRef}
-        className="rounded-md border border-border overflow-hidden neo:rounded-none neo:border-[5px] neo:shadow-[6px_6px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[6px_6px_0_0_rgba(255,255,255,0.35)]"
+        className="rounded-md border border-border overflow-hidden neo:rounded-none neo:border-[3px] neo:shadow-[6px_6px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[6px_6px_0_0_rgba(255,255,255,0.9)]"
         style={{ minHeight: 240 }}
         aria-label={ready ? 'Terminal' : 'Loading terminal'}
       />

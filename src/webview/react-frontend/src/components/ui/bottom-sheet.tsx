@@ -17,7 +17,7 @@ export function BottomSheet({ open, onClose, children, className, ariaLabel }: B
       <div className={cn(
         'absolute inset-x-0 bottom-0 rounded-t-2xl bg-card shadow-xl border-t border-border',
         'p-4 sm:p-6 max-h-[85vh] overflow-auto',
-        'neo:rounded-none neo:border-t-[5px] neo:shadow-[0_-8px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[0_-8px_0_0_rgba(255,255,255,0.35)]',
+        'neo:rounded-none neo:border-t-[3px] neo:shadow-[0_-6px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[0_-6px_0_0_rgba(255,255,255,0.9)]',
         className
       )}>
         <div className="mx-auto h-1.5 w-10 rounded-full bg-muted mb-4 neo:rounded-none neo:border-2 neo:border-border" aria-hidden />

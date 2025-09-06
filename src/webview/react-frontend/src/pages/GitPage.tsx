@@ -139,66 +139,70 @@ const GitPage: React.FC = () => {
   const onCommit = (msg: string) => request('commit', { message: msg });
 
   return (
-    <div className="bg-card rounded-lg shadow-sm border border-border neo:rounded-none neo:border-[5px] neo:shadow-[8px_8px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[8px_8px_0_0_rgba(255,255,255,0.35)]">
-      {/* Header & segmented control */}
-      <div className="p-4 pb-2">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-lg font-semibold text-foreground">Git</h3>
-          <div className="text-xs text-muted-foreground">{loading ? 'Working…' : ''}</div>
-        </div>
-        <div className="inline-flex rounded-lg border border-border p-1 w-full sm:w-auto neo:rounded-none neo:border-[4px]">
-          <button
-            className={`flex-1 sm:flex-none rounded-md px-4 py-2 text-sm neo:rounded-none neo:border-4 neo:border-border neo:shadow-[6px_6px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[6px_6px_0_0_rgba(255,255,255,0.35)] ${activeTab === 'status' ? 'bg-primary text-primary-foreground shadow-sm neo:bg-primary neo:text-primary-foreground' : 'hover:bg-muted active:bg-muted neo:hover:bg-accent neo:hover:text-accent-foreground'}`}
-            onClick={() => setActiveTab('status')}
-          >Status</button>
-          <button
-            className={`flex-1 sm:flex-none rounded-md px-4 py-2 text-sm neo:rounded-none neo:border-4 neo:border-border neo:shadow-[6px_6px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[6px_6px_0_0_rgba(255,255,255,0.35)] ${activeTab === 'history' ? 'bg-primary text-primary-foreground shadow-sm neo:bg-primary neo:text-primary-foreground' : 'hover:bg-muted active:bg-muted neo:hover:bg-accent neo:hover:text-accent-foreground'}`}
-            onClick={() => setActiveTab('history')}
-          >History</button>
-        </div>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold text-foreground">Git</h3>
+        <div className="text-xs text-muted-foreground">{loading ? 'Working…' : ''}</div>
+      </div>
+
+      {/* Segmented control */}
+      <div className="inline-flex rounded-lg border border-border p-1 w-full sm:w-auto neo:rounded-none neo:border-[3px] neo:shadow-[4px_4px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[4px_4px_0_0_rgba(255,255,255,0.9)]">
+        <button
+          className={`flex-1 sm:flex-none rounded-md px-4 py-2 text-sm neo:rounded-none ${activeTab === 'status' ? 'bg-primary text-primary-foreground shadow-sm neo:bg-primary neo:text-primary-foreground' : 'hover:bg-muted active:bg-muted neo:hover:bg-accent neo:hover:text-accent-foreground'}`}
+          onClick={() => setActiveTab('status')}
+        >Status</button>
+        <button
+          className={`flex-1 sm:flex-none rounded-md px-4 py-2 text-sm neo:rounded-none ${activeTab === 'history' ? 'bg-primary text-primary-foreground shadow-sm neo:bg-primary neo:text-primary-foreground' : 'hover:bg-muted active:bg-muted neo:hover:bg-accent neo:hover:text-accent-foreground'}`}
+          onClick={() => setActiveTab('history')}
+        >History</button>
       </div>
 
       {error && (
-        <div className="mx-4 mb-3 rounded-md border border-red-200 bg-red-50 p-2 text-sm text-red-800">{error}</div>
+        <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800 neo:rounded-none neo:border-[3px] neo:shadow-[4px_4px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[4px_4px_0_0_rgba(255,255,255,0.9)]">{error}</div>
       )}
 
-      {/* Scrollable content */}
-      <div ref={scrollRef} className="px-4 pb-20 max-h-[70vh] overflow-auto">
+      {/* Content area */}
+      <div ref={scrollRef} className="pb-20 max-h-[70vh] overflow-auto space-y-6">
         {/* Repo summary */}
         {repo ? (
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
-            <div className="p-3 rounded-lg bg-muted neo:rounded-none neo:border-4 neo:border-border neo:shadow-[4px_4px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[4px_4px_0_0_rgba(255,255,255,0.35)]">
-              <div className="text-xs text-muted-foreground">Branch</div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="p-4 rounded-lg bg-muted neo:rounded-none neo:border-[3px] neo:border-border neo:shadow-[4px_4px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[4px_4px_0_0_rgba(255,255,255,0.9)]">
+              <div className="text-xs text-muted-foreground mb-1">Branch</div>
               <div className="text-sm font-medium">{repo.currentBranch}</div>
             </div>
-            <div className="p-3 rounded-lg bg-muted neo:rounded-none neo:border-4 neo:border-border neo:shadow-[4px_4px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[4px_4px_0_0_rgba(255,255,255,0.35)]">
-              <div className="text-xs text-muted-foreground">Remote</div>
+            <div className="p-4 rounded-lg bg-muted neo:rounded-none neo:border-[3px] neo:border-border neo:shadow-[4px_4px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[4px_4px_0_0_rgba(255,255,255,0.9)]">
+              <div className="text-xs text-muted-foreground mb-1">Remote</div>
               <div className="text-sm font-medium">{repo.remoteStatus?.remote || 'origin'}</div>
             </div>
-            <div className="p-3 rounded-lg bg-muted neo:rounded-none neo:border-4 neo:border-border neo:shadow-[4px_4px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[4px_4px_0_0_rgba(255,255,255,0.35)]">
-              <div className="text-xs text-muted-foreground">Ahead/Behind</div>
+            <div className="p-4 rounded-lg bg-muted neo:rounded-none neo:border-[3px] neo:border-border neo:shadow-[4px_4px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[4px_4px_0_0_rgba(255,255,255,0.9)]">
+              <div className="text-xs text-muted-foreground mb-1">Ahead/Behind</div>
               <div className="text-sm font-medium">{repo.remoteStatus?.ahead || 0} / {repo.remoteStatus?.behind || 0}</div>
             </div>
           </div>
         ) : (
-          <div className="mb-4 text-sm text-muted-foreground">No repository detected or not loaded yet.</div>
+          <div className="text-sm text-muted-foreground">No repository detected or not loaded yet.</div>
         )}
 
         {activeTab === 'status' ? (
           <>
             {/* Status lists */}
-            <GitStatusList items={statusItems} className="mb-4" />
+            {statusItems.length > 0 && (
+              <div className="bg-card rounded-lg border border-border neo:rounded-none neo:border-[3px] neo:shadow-[4px_4px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[4px_4px_0_0_rgba(255,255,255,0.9)]">
+                <GitStatusList items={statusItems} />
+              </div>
+            )}
 
             {/* Commit composer */}
-            <div ref={composerAnchorRef} id="commit-composer">
+            <div ref={composerAnchorRef} id="commit-composer" className="bg-card rounded-lg border border-border p-4 neo:rounded-none neo:border-[3px] neo:shadow-[4px_4px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[4px_4px_0_0_rgba(255,255,255,0.9)]">
               <CommitComposer onCommit={onCommit} disabled={loading} />
             </div>
 
             {/* Diff (working tree) */}
             {diffFiles && diffFiles.length > 0 && (
-              <div className="mt-4">
-                <div className="text-sm font-medium mb-2">Changes</div>
-                <div className="space-y-2">
+              <div className="bg-card rounded-lg border border-border p-4 neo:rounded-none neo:border-[3px] neo:shadow-[4px_4px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[4px_4px_0_0_rgba(255,255,255,0.9)]">
+                <div className="text-sm font-medium mb-4">Changes</div>
+                <div className="space-y-3">
                   {diffFiles.map((d, i) => (
                     <DiffFile key={`${d.file}:${i}`} chunk={d} />
                   ))}
@@ -207,7 +211,7 @@ const GitPage: React.FC = () => {
             )}
           </>
         ) : (
-          <div className="mt-2">
+          <div className="bg-card rounded-lg border border-border neo:rounded-none neo:border-[3px] neo:shadow-[4px_4px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[4px_4px_0_0_rgba(255,255,255,0.9)]">
             {selectedCommit ? (
               <CommitDiff
                 commit={selectedCommit}
@@ -248,11 +252,11 @@ const GitPage: React.FC = () => {
       </div>
 
       {/* Bottom sticky actions */}
-      <div className="sticky bottom-0 inset-x-0 border-t border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/75 neo:border-t-[5px]">
-        <div className="px-4 py-2 grid grid-cols-3 gap-2">
-          <button className="h-11 rounded-lg border border-border text-sm active:bg-muted hover:bg-muted neo:rounded-none neo:border-[5px] neo:shadow-[5px_5px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[5px_5px_0_0_rgba(255,255,255,0.35)]" onClick={() => request('pull')} disabled={loading}>Pull</button>
+      <div className="sticky bottom-0 inset-x-0 border-t border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/75 neo:border-t-[3px]">
+        <div className="p-4 grid grid-cols-3 gap-3">
+          <button className="h-12 rounded-lg border border-border text-sm active:bg-muted hover:bg-muted neo:rounded-none neo:border-[3px] neo:shadow-[4px_4px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[4px_4px_0_0_rgba(255,255,255,0.9)]" onClick={() => request('pull')} disabled={loading}>Pull</button>
           <button
-            className="h-11 rounded-lg bg-primary text-primary-foreground text-sm active:opacity-90 disabled:opacity-50 neo:rounded-none neo:border-[5px] neo:border-border neo:shadow-[5px_5px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[5px_5px_0_0_rgba(255,255,255,0.35)]"
+            className="h-12 rounded-lg bg-primary text-primary-foreground text-sm active:opacity-90 disabled:opacity-50 neo:rounded-none neo:border-[3px] neo:border-border neo:shadow-[4px_4px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[4px_4px_0_0_rgba(255,255,255,0.9)]"
             onClick={() => {
               if (activeTab !== 'status') setActiveTab('status')
               requestAnimationFrame(() => {
@@ -261,7 +265,7 @@ const GitPage: React.FC = () => {
             }}
             disabled={loading}
           >Commit</button>
-          <button className="h-11 rounded-lg border border-border text-sm active:bg-muted hover:bg-muted neo:rounded-none neo:border-[5px] neo:shadow-[5px_5px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[5px_5px_0_0_rgba(255,255,255,0.35)]" onClick={() => request('push')} disabled={loading}>Push</button>
+          <button className="h-12 rounded-lg border border-border text-sm active:bg-muted hover:bg-muted neo:rounded-none neo:border-[3px] neo:shadow-[4px_4px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[4px_4px_0_0_rgba(255,255,255,0.9)]" onClick={() => request('push')} disabled={loading}>Push</button>
         </div>
       </div>
 

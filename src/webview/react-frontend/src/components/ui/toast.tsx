@@ -32,12 +32,12 @@ export function useToast() {
 export function Toaster() {
   const ctx = React.useContext(ToastContext)
   if (!ctx) return null
-  const color = (v?: Toast['variant']) => v === 'success' ? 'bg-green-600' : v === 'destructive' ? 'bg-red-600' : v === 'info' ? 'bg-blue-600' : 'bg-gray-800'
+  const color = (v?: Toast['variant']) => v === 'success' ? 'bg-green-600 neo:bg-green-500' : v === 'destructive' ? 'bg-red-600 neo:bg-destructive' : v === 'info' ? 'bg-blue-600 neo:bg-blue-500' : 'bg-gray-800 neo:bg-card'
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-4 z-50 flex w-full justify-center px-4">
       <div className="flex w-full max-w-md flex-col gap-2">
         {ctx.toasts.map(t => (
-          <div key={t.id} className="pointer-events-auto overflow-hidden rounded-md shadow-lg neo:rounded-none neo:border-[5px] neo:border-border neo:shadow-[8px_8px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[8px_8px_0_0_rgba(255,255,255,0.35)]">
+          <div key={t.id} className="pointer-events-auto overflow-hidden rounded-md shadow-lg neo:rounded-none neo:border-[3px] neo:border-border neo:shadow-[8px_8px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[8px_8px_0_0_rgba(255,255,255,0.9)]">
             <div className={`flex items-start gap-3 p-3 text-white ${color(t.variant)} neo:text-foreground neo:bg-accent`}>
               <div className="font-medium">{t.title || ''}</div>
               <div className="text-sm opacity-90">{t.description || ''}</div>

@@ -76,7 +76,7 @@ export const TunnelActions: React.FC<TunnelActionsProps> = ({
         </div>
 
         {runningTunnels.length > 1 && (
-          <div className="mt-3 pt-3 border-t border-gray-200 neo:border-t-[4px]">
+          <div className="mt-3 pt-3 border-t border-gray-200 neo:border-t-[2px]">
             <div className="text-xs text-muted-foreground">
               Quick actions for individual tunnels are available in the tunnel list below.
             </div>

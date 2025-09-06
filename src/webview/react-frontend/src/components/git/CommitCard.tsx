@@ -16,7 +16,7 @@ export const CommitCard: React.FC<CommitCardProps> = ({ hash, message, author, d
       type="button"
       className={
         "w-full text-left rounded-xl border border-border bg-background px-4 py-3 active:scale-[0.99] transition-transform cursor-pointer hover:bg-muted " +
-        "neo:rounded-none neo:border-[5px] neo:shadow-[6px_6px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[6px_6px_0_0_rgba(255,255,255,0.35)] " +
+        "neo:rounded-none neo:border-[3px] neo:shadow-[6px_6px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[6px_6px_0_0_rgba(255,255,255,0.9)] " +
         "neo:hover:bg-accent neo:hover:text-accent-foreground neo:transition-[background,box-shadow,transform] neo:duration-100"
       }
       onClick={onPress}

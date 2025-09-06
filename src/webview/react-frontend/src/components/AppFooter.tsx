@@ -13,7 +13,7 @@ export const AppFooter: React.FC<AppFooterProps> = ({
   lastActivity
 }) => {
   return (
-    <footer className="bg-card border-t border-border px-6 py-3 neo:border-t-[5px] neo:shadow-[6px_-6px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[6px_-6px_0_0_rgba(255,255,255,0.35)]">
+    <footer className="bg-card border-t border-border px-6 py-3 neo:border-t-[2px] neo:shadow-[6px_-6px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[6px_-6px_0_0_rgba(255,255,255,0.9)]">
       <div className="flex items-center justify-between text-sm text-muted-foreground">
         <div className="flex items-center space-x-4">
           <div className="flex items-center space-x-1">

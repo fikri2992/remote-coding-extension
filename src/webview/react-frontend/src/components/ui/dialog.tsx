@@ -6,7 +6,7 @@ export function Dialog({ open, onClose, children }: { open: boolean; onClose: ()
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className={cn('relative z-50 w-[92%] max-w-md rounded-lg bg-white p-4 shadow-xl sm:p-6', 'neo:rounded-none neo:border-[5px] neo:border-border neo:shadow-[8px_8px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[8px_8px_0_0_rgba(255,255,255,0.35)]')}>
+      <div className={cn('relative z-50 w-[92%] max-w-md rounded-lg bg-card p-4 shadow-xl sm:p-6', 'neo:rounded-none neo:border-[3px] neo:border-border neo:shadow-[8px_8px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[8px_8px_0_0_rgba(255,255,255,0.9)]')}>
         {children}
       </div>
     </div>

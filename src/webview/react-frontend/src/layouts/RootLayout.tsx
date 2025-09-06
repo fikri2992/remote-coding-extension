@@ -26,7 +26,7 @@ const LayoutContent: React.FC = () => {
   return (
     <div className="min-h-screen bg-background">
       {/* Mobile Header with Hamburger Menu */}
-      <div className="lg:hidden bg-card border-b border-border px-4 py-3 neo:border-b-[5px] neo:shadow-[6px_6px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[6px_6px_0_0_rgba(255,255,255,0.35)]">
+      <div className="lg:hidden bg-card border-b border-border px-4 py-3 neo:border-b-[2px] neo:shadow-[6px_6px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[6px_6px_0_0_rgba(255,255,255,0.9)]">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
             <button
@@ -64,7 +64,7 @@ const LayoutContent: React.FC = () => {
             <button
               onClick={toggleNeo}
               aria-label="Toggle neobrutalist mode"
-              className="p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors neo:bg-primary neo:text-primary-foreground neo:rounded-none neo:border-4 neo:border-border neo:shadow-[5px_5px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[5px_5px_0_0_rgba(255,255,255,0.35)]"
+              className="p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors neo:bg-primary neo:text-primary-foreground neo:rounded-none neo:border-4 neo:border-border neo:shadow-[5px_5px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[5px_5px_0_0_rgba(255,255,255,0.9)]"
             >
               <span className="text-[11px] font-bold">{neo ? 'NEO' : 'UI'}</span>
             </button>

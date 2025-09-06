@@ -112,9 +112,9 @@ const ChatPage: React.FC = () => {
     );
 
   return (
-    <div className="bg-white dark:bg-gray-900 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 flex flex-col h-[calc(100vh-11rem)] sm:h-[calc(100vh-12rem)] neo:rounded-none neo:border-[5px] neo:shadow-[8px_8px_0_0_rgba(0,0,0,1)]">
+    <div className="bg-card rounded-lg shadow-sm border border-border flex flex-col h-[calc(100vh-11rem)] sm:h-[calc(100vh-12rem)] neo:rounded-none neo:border-[3px] neo:shadow-[8px_8px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[8px_8px_0_0_rgba(255,255,255,0.9)]">
       {/* Connection banner for mobile */}
-      <div className="flex items-center justify-between px-3 py-2 text-xs sm:text-sm bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-200 border-b border-amber-200 dark:border-amber-700 neo:border-b-[5px]">
+      <div className="flex items-center justify-between px-3 py-2 text-xs sm:text-sm bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-200 border-b border-amber-200 dark:border-amber-700 neo:border-b-[2px]">
         <div className="flex items-center gap-2">
           <AlertTriangle className="h-4 w-4" strokeWidth={2.5} />
           <span>Not connected to server. Messages are kept locally.</span>
@@ -161,10 +161,10 @@ const ChatPage: React.FC = () => {
       </div>
 
       {/* Composer */}
-      <div className="border-t border-gray-200 dark:border-gray-700 p-3 sm:p-4 bg-white dark:bg-gray-900 neo:border-t-[5px]">
+      <div className="border-t border-border p-3 sm:p-4 bg-card neo:border-t-[2px]">
         <div className="flex items-end gap-2">
           <textarea
-            className="flex-1 min-h-[44px] max-h-40 resize-none rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:focus:ring-blue-400 dark:focus:border-blue-400 neo:rounded-none neo:border-[3px] neo:border-border neo:focus:ring-0 neo:focus-visible:outline-4 neo:focus-visible:outline-black placeholder:text-gray-500 dark:placeholder:text-gray-400"
+            className="flex-1 min-h-[44px] max-h-40 resize-none rounded-lg border border-input bg-background text-foreground px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring neo:rounded-none neo:border-[3px] neo:border-border neo:focus:ring-0 neo:focus-visible:outline-4 neo:focus-visible:outline-black dark:neo:focus-visible:outline-white placeholder:text-muted-foreground"
             placeholder={isConnected ? 'Type a message…' : 'Type a message (offline)…'}
             value={input}
             onChange={(e) => setInput(e.target.value)}

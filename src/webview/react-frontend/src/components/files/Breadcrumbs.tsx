@@ -10,7 +10,7 @@ export const Breadcrumbs: React.FC<{ items: Crumb[]; onNavigate: (path: string) 
       {items.map((c, idx) => (
         <li key={c.path} className="flex items-center">
           <button
-            className={cn('px-1 py-0.5 rounded hover:text-foreground', 'neo:px-2 neo:py-1 neo:rounded-none neo:border-2 neo:border-border neo:shadow-[3px_3px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[3px_3px_0_0_rgba(255,255,255,0.35)]', idx === items.length - 1 && 'font-medium text-foreground neo:bg-primary neo:text-primary-foreground')}
+            className={cn('px-1 py-0.5 rounded hover:text-foreground', 'neo:px-2 neo:py-1 neo:rounded-none neo:border-2 neo:border-border neo:shadow-[3px_3px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[3px_3px_0_0_rgba(255,255,255,0.9)]', idx === items.length - 1 && 'font-medium text-foreground neo:bg-primary neo:text-primary-foreground')}
             onClick={() => onNavigate(c.path)}
           >
             {c.name}

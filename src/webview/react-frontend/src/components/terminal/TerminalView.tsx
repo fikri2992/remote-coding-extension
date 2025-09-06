@@ -21,7 +21,7 @@ export const TerminalView: React.FC<{
 
   return (
     <div className={cn('flex flex-col gap-3', className)}>
-      <div className="rounded-md border border-border bg-background p-3 h-64 overflow-auto text-xs whitespace-pre-wrap neo:rounded-none neo:border-[5px] neo:shadow-[6px_6px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[6px_6px_0_0_rgba(255,255,255,0.35)]">
+      <div className="rounded-md border border-border bg-background p-3 h-64 overflow-auto text-xs whitespace-pre-wrap neo:rounded-none neo:border-[3px] neo:shadow-[6px_6px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[6px_6px_0_0_rgba(255,255,255,0.9)]">
         {output || 'Run a command to see output here.'}
       </div>
       <TerminalActionBar onKey={(seq) => onActionKey && onActionKey(seq)} />

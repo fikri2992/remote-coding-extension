@@ -15,7 +15,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
 }) => {
   const { theme, toggle, neo, toggleNeo } = useTheme();
   return (
-    <header className="bg-card border-b border-border px-4 lg:px-6 py-3 lg:py-4 neo:border-b-[5px] neo:shadow-[6px_6px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[6px_6px_0_0_rgba(255,255,255,0.35)]">
+    <header className="bg-card border-b border-border px-4 lg:px-6 py-3 lg:py-4 neo:border-b-[2px] neo:shadow-[6px_6px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[6px_6px_0_0_rgba(255,255,255,0.9)]">
       <div className="flex items-center justify-between max-w-7xl mx-auto">
         {/* App Title */}
         <div className="flex items-center space-x-3 lg:space-x-4">

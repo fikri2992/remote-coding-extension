@@ -215,8 +215,8 @@ export const TunnelManagerPage: React.FC = () => {
       </div>
 
       {/* Status Summary */}
-      <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 neo:rounded-none neo:border-[5px] neo:shadow-[8px_8px_0_0_rgba(0,0,0,1)]">
-        <h4 className="text-sm font-medium text-gray-900 mb-2">Status Summary</h4>
+      <div className="bg-card p-4 rounded-lg shadow-sm border border-border neo:rounded-none neo:border-[3px] neo:shadow-[8px_8px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[8px_8px_0_0_rgba(255,255,255,0.9)]">
+        <h4 className="text-sm font-medium text-foreground mb-2">Status Summary</h4>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
           <div>
             <span className="text-gray-600">Total:</span>

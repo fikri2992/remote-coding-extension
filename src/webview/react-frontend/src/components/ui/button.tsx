@@ -32,8 +32,8 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60 disabled:cursor-not-allowed',
           // Neobrutalist overrides (toggle via .neo on html)
           'neo:rounded-none neo:border-4 neo:border-border neo:font-bold',
-          'neo:shadow-[8px_8px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[8px_8px_0_0_rgba(255,255,255,0.35)]',
-          'neo:transition-[background,box-shadow,transform] neo:duration-100 neo:ease-linear neo:active:shadow-[4px_4px_0_0_rgba(0,0,0,1)] dark:neo:active:shadow-[4px_4px_0_0_rgba(255,255,255,0.35)]',
+          'neo:shadow-[8px_8px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[8px_8px_0_0_rgba(255,255,255,0.9)]',
+          'neo:transition-[background,box-shadow,transform] neo:duration-100 neo:ease-linear neo:active:shadow-[4px_4px_0_0_rgba(0,0,0,1)] dark:neo:active:shadow-[4px_4px_0_0_rgba(255,255,255,0.9)]',
           'neo:focus-visible:ring-0 neo:focus-visible:outline-4 neo:focus-visible:outline-black dark:neo:focus-visible:outline-white',
           variants[variant],
           sizes[size],

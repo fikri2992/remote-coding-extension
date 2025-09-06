@@ -101,16 +101,20 @@ const ChatPage: React.FC = () => {
       <div className={cn(
         'flex h-8 w-8 items-center justify-center rounded-full shadow-sm',
         'neo:rounded-none neo:border-2 neo:border-border neo:shadow-[4px_4px_0_0_rgba(0,0,0,1)]',
-        role === 'user' ? 'bg-blue-600 text-white' : role === 'assistant' ? 'bg-purple-600 text-white' : 'bg-gray-300 text-gray-700'
+        role === 'user' 
+          ? 'bg-blue-600 text-white dark:bg-blue-500' 
+          : role === 'assistant' 
+          ? 'bg-purple-600 text-white dark:bg-purple-500' 
+          : 'bg-gray-300 text-gray-700 dark:bg-gray-600 dark:text-gray-200'
       )}>
         {role === 'user' ? <User className="h-4 w-4" strokeWidth={2.5} /> : role === 'assistant' ? <Bot className="h-4 w-4" strokeWidth={2.5} /> : <span className="text-xs">SYS</span>}
       </div>
     );
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 flex flex-col h-[calc(100vh-11rem)] sm:h-[calc(100vh-12rem)] neo:rounded-none neo:border-[5px] neo:shadow-[8px_8px_0_0_rgba(0,0,0,1)]">
+    <div className="bg-white dark:bg-gray-900 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 flex flex-col h-[calc(100vh-11rem)] sm:h-[calc(100vh-12rem)] neo:rounded-none neo:border-[5px] neo:shadow-[8px_8px_0_0_rgba(0,0,0,1)]">
       {/* Connection banner for mobile */}
-      <div className="flex items-center justify-between px-3 py-2 text-xs sm:text-sm bg-amber-50 text-amber-800 border-b border-amber-200 neo:border-b-[5px]">
+      <div className="flex items-center justify-between px-3 py-2 text-xs sm:text-sm bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-200 border-b border-amber-200 dark:border-amber-700 neo:border-b-[5px]">
         <div className="flex items-center gap-2">
           <AlertTriangle className="h-4 w-4" strokeWidth={2.5} />
           <span>Not connected to server. Messages are kept locally.</span>
@@ -120,7 +124,7 @@ const ChatPage: React.FC = () => {
             onClick={handleClearChat}
             variant="ghost"
             size="sm"
-            className="h-6 px-2 text-amber-800 hover:bg-amber-100"
+            className="h-6 px-2 text-amber-800 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-800/20"
           >
             <Trash2 className="h-3 w-3 mr-1" strokeWidth={2.5} />
             Clear
@@ -131,7 +135,7 @@ const ChatPage: React.FC = () => {
       {/* Messages list */}
       <div ref={listRef} className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3">
         {messages.length === 0 && (
-          <div className="text-center text-gray-500 text-sm mt-10">
+          <div className="text-center text-gray-500 dark:text-gray-400 text-sm mt-10">
             Start a conversation. Shift+Enter for newline.
           </div>
         )}
@@ -141,10 +145,12 @@ const ChatPage: React.FC = () => {
             <div className={cn(
               'max-w-[80%] sm:max-w-[70%] rounded-2xl px-3 py-2 text-sm shadow-sm',
               'neo:rounded-none neo:border-[3px] neo:border-border neo:shadow-[4px_4px_0_0_rgba(0,0,0,1)]',
-              m.role === 'user' ? 'bg-blue-600 text-white rounded-br-sm' : 'bg-gray-100 text-gray-900 rounded-bl-sm'
+              m.role === 'user' 
+                ? 'bg-blue-600 dark:bg-blue-500 text-white rounded-br-sm' 
+                : 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-bl-sm'
             )}>
               <div className="whitespace-pre-wrap break-words">{m.text}</div>
-              <div className={cn('mt-1 text-[10px] opacity-70', m.role === 'user' ? 'text-blue-100' : 'text-gray-500')}>
+              <div className={cn('mt-1 text-[10px] opacity-70', m.role === 'user' ? 'text-blue-100 dark:text-blue-200' : 'text-gray-500 dark:text-gray-400')}>
                 {new Date(m.timestamp).toLocaleTimeString()}
               </div>
             </div>
@@ -155,10 +161,10 @@ const ChatPage: React.FC = () => {
       </div>
 
       {/* Composer */}
-      <div className="border-t border-gray-200 p-3 sm:p-4 bg-white neo:border-t-[5px]">
+      <div className="border-t border-gray-200 dark:border-gray-700 p-3 sm:p-4 bg-white dark:bg-gray-900 neo:border-t-[5px]">
         <div className="flex items-end gap-2">
           <textarea
-            className="flex-1 min-h-[44px] max-h-40 resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 neo:rounded-none neo:border-[3px] neo:border-border neo:focus:ring-0 neo:focus-visible:outline-4 neo:focus-visible:outline-black"
+            className="flex-1 min-h-[44px] max-h-40 resize-none rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:focus:ring-blue-400 dark:focus:border-blue-400 neo:rounded-none neo:border-[3px] neo:border-border neo:focus:ring-0 neo:focus-visible:outline-4 neo:focus-visible:outline-black placeholder:text-gray-500 dark:placeholder:text-gray-400"
             placeholder={isConnected ? 'Type a message…' : 'Type a message (offline)…'}
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -174,9 +180,9 @@ const ChatPage: React.FC = () => {
             <span className="hidden sm:inline">Send</span>
           </Button>
         </div>
-        <div className="mt-1 text-[11px] text-gray-500 flex justify-between">
+        <div className="mt-1 text-[11px] text-gray-500 dark:text-gray-400 flex justify-between">
           <span>Press Enter to send • Shift+Enter for newline</span>
-          <span className={cn('font-medium', isConnected ? 'text-green-600' : 'text-amber-600')}>
+          <span className={cn('font-medium', isConnected ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400')}>
             {isConnected ? 'Online' : 'Offline'}
           </span>
         </div>

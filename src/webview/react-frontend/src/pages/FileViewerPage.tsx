@@ -45,6 +45,17 @@ const FileViewerPage: React.FC = () => {
   const pendingIdRef = useRef<string | null>(null)
 
   const filePath = (location.search as any)?.path || ''
+  const breadcrumbs = React.useMemo(() => {
+    const path = (meta.path || filePath || '').replace(/\\/g, '/').replace(/^\/+/, '')
+    if (!path) return [] as { name: string; full: string }[]
+    const parts = path.split('/')
+    const acc: { name: string; full: string }[] = []
+    parts.forEach((p: string, i: number) => {
+      const full = '/' + parts.slice(0, i + 1).join('/')
+      acc.push({ name: p || '/', full })
+    })
+    return acc
+  }, [meta.path, filePath])
 
   useEffect(() => {
     if (!filePath) return
@@ -122,7 +133,21 @@ const FileViewerPage: React.FC = () => {
         <div className="flex items-center justify-between mb-3">
           <div className="min-w-0 flex-1">
             <div className="text-base font-medium text-foreground truncate">
-              {meta.path || filePath || 'File'}
+              <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
+                {breadcrumbs.length === 0 && (meta.path || filePath || 'File')}
+                {breadcrumbs.map((b, idx) => (
+                  <React.Fragment key={b.full}>
+                    {idx > 0 && <span className="text-muted-foreground/60">/</span>}
+                    <button
+                      className="text-foreground/90 hover:underline truncate"
+                      onClick={() => navigate({ to: '/files', search: { path: b.full } as any })}
+                      title={b.full}
+                    >
+                      {b.name || '/'}
+                    </button>
+                  </React.Fragment>
+                ))}
+              </div>
             </div>
             <div className="hidden md:flex items-center gap-3 mt-1 text-xs text-muted-foreground">
               {meta.size && <span>{formatFileSize(meta.size)}</span>}

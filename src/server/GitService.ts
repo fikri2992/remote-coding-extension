@@ -143,15 +143,39 @@ export class GitService {
     private async getRecentCommits(repo: any, count: number = 10): Promise<GitCommit[]> {
         try {
             const commits = await repo.log({ maxEntries: count });
-            return commits.map((commit: any) => ({
+            let list: GitCommit[] = commits.map((commit: any) => ({
                 hash: commit.hash,
                 message: commit.message,
                 author: commit.authorName || 'Unknown',
                 date: new Date(commit.authorDate || Date.now()),
                 files: commit.files || []
             }));
+            if (Array.isArray(list) && list.length > 0) return list;
         } catch (error) {
-            console.warn('Failed to get recent commits:', error);
+            console.warn('Git API log failed, falling back to CLI:', error);
+        }
+        // CLI fallback
+        try {
+            const root = repo.rootUri?.fsPath;
+            if (!root) return [];
+            const fmt = '%H%x1f%an%x1f%ad%x1f%s';
+            const out = await this.runGit(root, ['log', `-n`, String(count), `--date=iso-strict`, `--pretty=${fmt}`]);
+            const lines = out.split('\n').map(l => l.trim()).filter(Boolean);
+            const result: GitCommit[] = [];
+            for (const l of lines) {
+                const [hash, author, date, subject] = l.split('\x1f');
+                if (!hash) continue;
+                result.push({
+                    hash: hash.trim(),
+                    message: (subject || '').trim(),
+                    author: (author || 'Unknown').trim(),
+                    date: new Date((date || '').trim() || Date.now()),
+                    files: []
+                });
+            }
+            return result;
+        } catch (error) {
+            console.warn('Failed to get recent commits via CLI:', error);
             return [];
         }
     }
@@ -240,18 +264,26 @@ export class GitService {
             const repo = await this.getRepository(workspacePath);
             if (!repo) return [];
 
-            // Try using Git API diffBetween
+            // Try using Git API diffBetween vs first parent
             let unified = '';
             try {
                 const base = `${commitHash}^`;
                 unified = await repo.diffBetween(base, commitHash);
             } catch (e) {
-                // Fallback to executing git show
+                // ignore and fallback below
+            }
+            if (!unified) {
+                // Fallback to CLI. Use diff against first parent to avoid combined diffs
                 const root = repo.rootUri.fsPath;
-                unified = await this.runGit(root, ['show', '--format=', '--unified=3', commitHash]);
+                try {
+                    unified = await this.runGit(root, ['diff', '--unified=3', `${commitHash}^`, commitHash]);
+                } catch {
+                    // As a final fallback, try show with -m to split parents
+                    unified = await this.runGit(root, ['show', '-m', '--first-parent', '--format=', '--unified=3', commitHash]);
+                }
             }
 
-            return this.parseUnifiedDiff(unified);
+            return this.parseUnifiedDiff(unified || '');
         } catch (error) {
             console.error('Failed to get commit diff:', error);
             return [];
@@ -369,10 +401,19 @@ export class GitService {
             const l = lines[i];
             if (!l) continue; // Skip empty lines
             
-            const m = /^diff --git a\/(.*?) b\/(.*)$/.exec(l);
-            if (m && m[1] && m[2]) {
-                startFile(m[2] || m[1]);
-                continue;
+            // Support both regular and combined diff headers
+            let m = /^diff --git a\/(.*?) b\/(.*)$/.exec(l);
+            if (!m) {
+                const mcc = /^diff --cc (.*)$/.exec(l);
+                if (mcc && mcc[1]) {
+                    startFile(mcc[1]);
+                    continue;
+                }
+            } else {
+                if (m[1] && m[2]) {
+                    startFile(m[2] || m[1]);
+                    continue;
+                }
             }
             
             if (!current) continue;

@@ -4,6 +4,7 @@ import { CommitComposer } from '../components/git/CommitComposer';
 import { useWebSocket } from '../components/WebSocketProvider';
 import { GitHistoryViewer } from '../components/git/GitHistoryViewer';
 import { DiffFile } from '../components/git/DiffFile';
+import { CommitDiff } from '../components/git/CommitDiff';
 import { usePullToRefresh } from '../lib/hooks/usePullToRefresh';
 
 interface GitRepositoryState {
@@ -19,6 +20,8 @@ const GitPage: React.FC = () => {
   const [repo, setRepo] = useState<GitRepositoryState | null>(null);
   const [diffFiles, setDiffFiles] = useState<Array<{ file: string; type: 'added' | 'modified' | 'deleted' | 'renamed'; additions: number; deletions: number; content: string }>>([]);
   const [commits, setCommits] = useState<Array<{ hash: string; message: string; author: string; date: string | Date }>>([]);
+  const [selectedCommit, setSelectedCommit] = useState<{ hash: string; message: string; author: string; date: string | Date } | null>(null);
+  const [selectedCommitFiles, setSelectedCommitFiles] = useState<Array<{ file: string; type: 'added' | 'modified' | 'deleted' | 'renamed'; additions: number; deletions: number; content: string }>>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const pendingMap = useRef<Record<string, string>>({}); 
@@ -65,6 +68,31 @@ const GitPage: React.FC = () => {
         case 'log':
           if (Array.isArray(result)) setCommits(result as any);
           break;
+        case 'show': {
+          if (Array.isArray(result)) {
+            if (result.length > 0 && typeof result[0]?.content !== 'undefined') {
+              // Full diffs array
+              setSelectedCommitFiles(result as any);
+            } else if (result.length > 0 && typeof result[0]?.file === 'string' && typeof result[0]?.type === 'string') {
+              // File list (no patches yet)
+              const files = (result as any[]).map((f) => ({ file: f.file, type: f.type, additions: 0, deletions: 0, content: '' }));
+              setSelectedCommitFiles(files as any);
+            } else {
+              setSelectedCommitFiles([]);
+            }
+          } else if (result && typeof result === 'object') {
+            // Single file patch
+            if ((result as any).content) {
+              setSelectedCommitFiles((prev) => {
+                const arr = Array.isArray(prev) ? [...prev] : [];
+                const idx = arr.findIndex((x) => x.file === (result as any).file || (result as any).file?.endsWith?.(x.file));
+                if (idx >= 0) arr[idx] = result as any; else arr.push(result as any);
+                return arr;
+              });
+            }
+          }
+          break;
+        }
         case 'commit':
         case 'push':
         case 'pull':
@@ -80,6 +108,13 @@ const GitPage: React.FC = () => {
     request('log', { count: logCount });
     return unsub;
   }, []);
+
+  // When switching to History and we have no commits, fetch them
+  useEffect(() => {
+    if (activeTab === 'history' && commits.length === 0 && !loading) {
+      request('log', { count: logCount });
+    }
+  }, [activeTab]);
 
   // Pull-to-refresh (top of scroll)
   usePullToRefresh(scrollRef, () => {
@@ -173,21 +208,41 @@ const GitPage: React.FC = () => {
           </>
         ) : (
           <div className="mt-2">
-            <GitHistoryViewer
-              commits={commits}
-              loading={loading}
-              canLoadMore={logCount < 1000}
-              onLoadMore={() => {
-                const next = Math.min(logCount + 20, 1000)
-                if (next === logCount) return
-                setLogCount(next)
-                request('log', { count: next })
-              }}
-              onSelect={(c) => {
-                // TODO: Implement commit details view
-                console.log('Selected commit:', c);
-              }}
-            />
+            {selectedCommit ? (
+              <CommitDiff
+                commit={selectedCommit}
+                files={selectedCommitFiles}
+                loading={loading}
+                onBack={() => {
+                  setSelectedCommit(null)
+                  setSelectedCommitFiles([])
+                }}
+                onExpandFile={(file) => {
+                  if (!selectedCommit) return;
+                  const existing = selectedCommitFiles.find((f) => f.file === file);
+                  if (existing && existing.content) return; // already loaded
+                  request('show', { commitHash: selectedCommit.hash, file })
+                }}
+              />
+            ) : (
+              <GitHistoryViewer
+                commits={commits}
+                loading={loading}
+                canLoadMore={logCount < 1000}
+                onLoadMore={() => {
+                  const next = Math.min(logCount + 20, 1000)
+                  if (next === logCount) return
+                  setLogCount(next)
+                  request('log', { count: next })
+                }}
+                onSelect={(c) => {
+                  setSelectedCommit(c)
+                  setSelectedCommitFiles([])
+                  // Step 1: Fetch file list first for reliability
+                  request('show', { commitHash: c.hash, list: true })
+                }}
+              />
+            )}
           </div>
         )}
       </div>

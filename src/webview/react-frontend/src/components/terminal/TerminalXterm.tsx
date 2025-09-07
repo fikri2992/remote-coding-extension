@@ -13,11 +13,13 @@ export const TerminalXterm = React.forwardRef<TerminalXtermHandle, {
   onInput: (data: string) => void
   onResize?: (cols: number, rows: number) => void
   className?: string
-}>(({ onInput, onResize, className }, ref) => {
+  autoFocus?: boolean
+}>(({ onInput, onResize, className, autoFocus = false }, ref) => {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const termRef = useRef<any>(null)
   const fitAddonRef = useRef<any>(null)
   const [ready, setReady] = useState(false)
+  const [focused, setFocused] = useState(false)
 
   useEffect(() => {
     let disposed = false
@@ -37,8 +39,18 @@ export const TerminalXterm = React.forwardRef<TerminalXtermHandle, {
         convertEol: true,
         cursorBlink: true,
         scrollback: 2000,
-        theme: {
-          background: isDark ? '#0b0b0b' : '#ffffff'
+        theme: isDark ? {
+          background: '#0b0b0b',
+          foreground: '#e5e7eb',
+          cursor: '#e5e7eb',
+          cursorAccent: '#0b0b0b',
+          selectionBackground: 'rgba(59,130,246,0.35)'
+        } : {
+          background: '#ffffff',
+          foreground: '#111827',
+          cursor: '#111827',
+          cursorAccent: '#ffffff',
+          selectionBackground: 'rgba(59,130,246,0.25)'
         }
       })
       const fit = new FitAddon()
@@ -47,6 +59,10 @@ export const TerminalXterm = React.forwardRef<TerminalXtermHandle, {
       fitAddonRef.current = fit
 
       term.onData((d: string) => onInput(d))
+      if (term.textarea) {
+        term.textarea.addEventListener('focus', () => setFocused(true))
+        term.textarea.addEventListener('blur', () => setFocused(false))
+      }
 
       if (containerRef.current) {
         term.open(containerRef.current)
@@ -55,6 +71,9 @@ export const TerminalXterm = React.forwardRef<TerminalXtermHandle, {
           const size = { cols: term.cols, rows: term.rows }
           onResize && onResize(size.cols, size.rows)
           setReady(true)
+          if (autoFocus) {
+            try { term.focus() } catch {}
+          }
         })
       }
 
@@ -88,10 +107,16 @@ export const TerminalXterm = React.forwardRef<TerminalXtermHandle, {
     <div className={className}>
       <div
         ref={containerRef}
-        className="rounded-md border border-border overflow-hidden neo:rounded-none neo:border-[3px] neo:shadow-[6px_6px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[6px_6px_0_0_rgba(255,255,255,0.9)]"
+        className="rounded-md border border-border overflow-hidden"
         style={{ minHeight: 240 }}
         aria-label={ready ? 'Terminal' : 'Loading terminal'}
+        tabIndex={0}
+        onClick={() => { try { termRef.current?.focus?.() } catch {} }}
+        onTouchStart={() => { try { termRef.current?.focus?.() } catch {} }}
       />
+      {!focused && ready && (
+        <div className="mt-1 text-xs text-muted-foreground">Tap the terminal to focus and open the keyboard.</div>
+      )}
     </div>
   )
 })

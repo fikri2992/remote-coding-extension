@@ -1,8 +1,11 @@
 import React, { useState } from 'react'
 import { Button } from '../ui/button'
 
-export const TerminalActionBar: React.FC<{ onKey: (seq: string) => void; className?: string }>
-  = ({ onKey, className }) => {
+export const TerminalActionBar: React.FC<{ 
+  onKey: (seq: string) => void; 
+  onClear?: () => void;
+  className?: string 
+}> = ({ onKey, onClear, className }) => {
   const [ctrl, setCtrl] = useState(false)
   const [alt, setAlt] = useState(false)
 
@@ -11,11 +14,25 @@ export const TerminalActionBar: React.FC<{ onKey: (seq: string) => void; classNa
     // Ctrl: map A-Z to control codes
     if (ctrl && /^[A-Za-z]$/.test(ch)) {
       const code = ch.toUpperCase().charCodeAt(0) - 64
-      return String.fromCharCode(code)
+      send(String.fromCharCode(code))
+      setCtrl(false)
+      return
     }
     // Alt: prefix ESC
-    if (alt) return "\u001b" + ch
-    return ch
+    if (alt) {
+      setAlt(false)
+      return send("\u001b" + ch)
+    }
+    send(ch)
+  }
+  
+  const handleClear = () => {
+    if (onClear) {
+      onClear()
+    } else {
+      // Fallback: send clear command
+      send('clear\r')
+    }
   }
 
   return (
@@ -28,10 +45,12 @@ export const TerminalActionBar: React.FC<{ onKey: (seq: string) => void; classNa
       <Button size="sm" variant="secondary" onClick={() => send("\u001b[B")}>↓</Button>
       <Button size="sm" variant="secondary" onClick={() => send("\u001b[D")}>←</Button>
       <Button size="sm" variant="secondary" onClick={() => send("\u001b[C")}>→</Button>
+      {/* Terminal actions */}
+      <Button size="sm" variant="ghost" onClick={handleClear} title="Clear terminal screen">Clear</Button>
       {/* quick combos */}
       <Button size="sm" variant="secondary" onClick={() => send("\u0003")/* Ctrl+C */}>Ctrl+C</Button>
-      <Button size="sm" variant="secondary" onClick={() => send(combo('c'))}>c</Button>
-      <Button size="sm" variant="secondary" onClick={() => send(combo('z'))}>z</Button>
+      <Button size="sm" variant="secondary" onClick={() => combo('c')}>c</Button>
+      <Button size="sm" variant="secondary" onClick={() => combo('z')}>z</Button>
     </div>
   )
 }

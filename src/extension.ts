@@ -3,6 +3,9 @@ import * as vscode from 'vscode';
 import { WebviewProvider } from './webview/provider';
 import { registerButtonCommands } from './commands/buttonCommands';
 import { registerIntegrationTestCommand } from './integration-test';
+import { registerDiagnosePtyCommand } from './commands/diagnosePTY';
+import { SessionEngine } from './server/pseudo/SessionEngine';
+import { KiroPseudoTerminal } from './server/pseudo/KiroPseudoTerminal';
 
 export function activate(context: vscode.ExtensionContext) {
     console.log('Basic VSCode Extension is now active!');
@@ -18,12 +21,18 @@ export function activate(context: vscode.ExtensionContext) {
 
     // Register commands for button functionality
     registerButtonCommands(context);
+    registerDiagnosePtyCommand(context);
 
     // Register server management commands
     const startServerCommand = vscode.commands.registerCommand('webAutomationTunnel.startServer', async () => {
         try {
             await webviewProvider.startServer();
             vscode.window.showInformationMessage('Web Automation Server started successfully');
+            // Auto-open pseudo terminal if configured
+            const cfg = vscode.workspace.getConfiguration('webAutomationTunnel');
+            if (cfg.get<boolean>('terminal.autoOpenPseudoTerminal', false)) {
+                try { await vscode.commands.executeCommand('webAutomationTunnel.openPseudoTerminal'); } catch {}
+            }
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
             vscode.window.showErrorMessage(`Failed to start server: ${errorMessage}`);
@@ -282,6 +291,26 @@ export function activate(context: vscode.ExtensionContext) {
 
     context.subscriptions.push(statusBarItem, serverDisp, tunnelDisp);
 
+    // Pseudo Terminal command (Solution 1)
+    const pseudoEngine = new SessionEngine();
+    const openPseudoTerminal = vscode.commands.registerCommand('webAutomationTunnel.openPseudoTerminal', async () => {
+        const sid = `pt_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        const cwd = vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders[0]
+            ? vscode.workspace.workspaceFolders[0].uri.fsPath
+            : process.cwd();
+        const env = { ...process.env } as NodeJS.ProcessEnv;
+        if (!env.TERM) (env as any).TERM = 'xterm-256color';
+        // Read preferred engine for VS Code pseudo terminal as well
+        const modeCfg = (vscode.workspace.getConfiguration('webAutomationTunnel').get<string>('terminal.engineMode', 'auto') || 'auto');
+        const usePipe = modeCfg === 'pipe' || (process.env.KIRO_TERMINAL_ENGINE || '').toLowerCase() === 'pipe';
+        const cfg = vscode.workspace.getConfiguration('webAutomationTunnel');
+        const promptEnabled = cfg.get<boolean>('terminal.prompt.enabled', true) ?? true;
+        const hiddenEchoEnabled = cfg.get<boolean>('terminal.hiddenEcho.enabled', true) ?? true;
+        const pty = new KiroPseudoTerminal(pseudoEngine, sid, { cwd, env, mode: usePipe ? 'pipe' : 'line', interceptClear: true, promptEnabled, hiddenEchoEnabled });
+        const terminal = vscode.window.createTerminal({ name: 'Kiro Pseudo Terminal', pty });
+        terminal.show(true);
+    });
+
     context.subscriptions.push(
         startServerCommand, 
         stopServerCommand, 
@@ -293,7 +322,8 @@ export function activate(context: vscode.ExtensionContext) {
         installCloudflaredCommand,
         tunnelStatusCommand,
         quickStartCommand,
-        statusBarActionCommand
+        statusBarActionCommand,
+        openPseudoTerminal
     );
 
     // Register integration test command

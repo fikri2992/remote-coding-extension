@@ -192,7 +192,7 @@ export class GitService {
         try {
             const root = repo?.rootUri?.fsPath;
             if (!root) return 'master';
-            
+
             const result = await this.runGit(root, ['branch', '--show-current']);
             return result.trim() || 'master';
         } catch (error) {
@@ -200,7 +200,7 @@ export class GitService {
             try {
                 const root = repo?.rootUri?.fsPath;
                 if (!root) return 'master';
-                
+
                 const result = await this.runGit(root, ['symbolic-ref', '--short', 'HEAD']);
                 return result.trim() || 'master';
             } catch {
@@ -268,14 +268,14 @@ export class GitService {
             }
         } catch (error) {
             const errorMsg = error instanceof Error ? error.message : String(error);
-            
+
             // Handle empty repository case
-            if (errorMsg.includes('does not have any commits yet') || 
+            if (errorMsg.includes('does not have any commits yet') ||
                 errorMsg.includes('bad default revision')) {
                 console.log('GitService: Git API - Repository has no commits yet');
                 return [];
             }
-            
+
             console.warn('GitService: Git API log failed, falling back to CLI:', error);
         }
 
@@ -332,15 +332,15 @@ export class GitService {
             return result;
         } catch (error) {
             const errorMsg = error instanceof Error ? error.message : String(error);
-            
+
             // Handle empty repository (no commits yet)
-            if (errorMsg.includes('does not have any commits yet') || 
+            if (errorMsg.includes('does not have any commits yet') ||
                 errorMsg.includes('bad default revision') ||
                 errorMsg.includes('ambiguous argument \'HEAD\'')) {
                 console.log('GitService: Repository has no commits yet, returning empty array');
                 return [];
             }
-            
+
             console.error('GitService: Failed to get recent commits via CLI:', error);
             return [];
         }
@@ -440,7 +440,7 @@ export class GitService {
             try {
                 unified = await this.runGit(root, ['show', '--format=', '--unified=3', '--no-color', commitHash]);
             } catch { /* ignore */ }
-            
+
             if (!unified || unified.trim().length === 0) {
                 try {
                     unified = await this.runGit(root, ['show', '-m', '--first-parent', '--format=', '--unified=3', '--no-color', commitHash]);

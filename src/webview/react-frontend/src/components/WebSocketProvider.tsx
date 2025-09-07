@@ -49,6 +49,12 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
   const listenersRef = useRef<Array<(data: any) => void>>([]);
 
   useEffect(() => {
+    // Force-enable debug logging for terminal communication debugging
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.setItem('KIRO_DEBUG_WS', '1');
+      window.localStorage.setItem('KIRO_DEBUG_TERMINAL_CLIENT', '1');
+    }
+
     const connectUrl = url || defaultUrl;
     const websocket = new ReconnectingWebSocket(connectUrl, [], {
       maxReconnectionDelay: 10000,
@@ -74,7 +80,17 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
         const data = JSON.parse(event.data);
         try {
           const debug = (typeof window !== 'undefined' && (window as any).localStorage?.getItem('KIRO_DEBUG_WS') === '1');
-          if (debug) console.log('Received message:', data);
+          if (debug) {
+            console.log('🔽 WebSocket Received:', data);
+            // Track terminal frames specifically
+            if (data.type === 'terminal') {
+              console.log('📟 Terminal Frame:', {
+                op: data.data?.op,
+                sessionId: data.data?.sessionId,
+                payloadSize: JSON.stringify(data).length
+              });
+            }
+          }
         } catch {}
 
         if (data.type === 'connection_established') {
@@ -123,7 +139,22 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
     try {
       if (!ws) return false;
       if (ws.readyState !== WebSocket.OPEN) return false;
-      ws.send(JSON.stringify(message));
+      const msg = JSON.stringify(message);
+      try {
+        const debug = (typeof window !== 'undefined' && ((window as any).localStorage?.getItem('KIRO_DEBUG_WS') === '1' || (window as any).localStorage?.getItem('KIRO_DEBUG_TERMINAL_CLIENT') === '1'));
+        if (debug) {
+          console.log('🔼 WebSocket Sending:', message);
+          // Track terminal frames specifically
+          if (message.type === 'terminal') {
+            console.log('📟 Terminal Frame Out:', {
+              op: message.data?.op,
+              sessionId: message.data?.sessionId,
+              payloadSize: msg.length
+            });
+          }
+        }
+      } catch {}
+      ws.send(msg);
       setLastActivity(new Date().toLocaleTimeString());
       return true;
     } catch (e) {

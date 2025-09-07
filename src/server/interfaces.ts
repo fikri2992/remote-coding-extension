@@ -47,7 +47,7 @@ export interface ServerStatus {
  */
 export interface WebSocketMessage {
     /** Message type for routing */
-    type: 'command' | 'response' | 'broadcast' | 'status' | 'fileSystem' | 'prompt' | 'git' | 'config';
+    type: 'command' | 'response' | 'broadcast' | 'status' | 'fileSystem' | 'prompt' | 'git' | 'config' | 'terminal';
     /** Unique identifier for request/response correlation */
     id?: string;
     /** VS Code command name to execute */
@@ -65,6 +65,8 @@ export interface WebSocketMessage {
  */
 export interface EnhancedWebSocketMessage extends WebSocketMessage {
     data?: {
+        // Terminal-specific data
+        terminalData?: TerminalMessageData;
         // Prompt-specific data
         promptData?: {
             operation?: string;
@@ -104,6 +106,29 @@ export interface EnhancedWebSocketMessage extends WebSocketMessage {
         // Generic data for backward compatibility
         [key: string]: any;
     };
+}
+
+// Enhanced terminal message data
+export interface TerminalMessageData {
+    op: 'exec' | 'create' | 'input' | 'resize' | 'dispose' | 'keepalive' | 'list-sessions' | 'reconnect';
+    sessionId?: string;
+    command?: string;
+    cwd?: string;
+    cols?: number;
+    rows?: number;
+    data?: string;
+    persistent?: boolean;
+    availableProviders?: string[];
+    sessions?: SessionInfo[];
+}
+
+export interface SessionInfo {
+    sessionId: string;
+    persistent: boolean;
+    status: 'active' | 'idle' | 'disconnected';
+    lastActivity: number;
+    createdAt: number;
+    availableProviders: string[];
 }
 
 /**

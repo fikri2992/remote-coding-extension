@@ -21,6 +21,7 @@ export class WebSocketServer {
   private _fsService: FileSystemService;
   private _gitService: GitService | null = null;
   private _terminalService: TerminalService;
+  private debug: boolean = true; // Hardcoded debug mode for WebSocket frame tracking
 
   constructor(config: any, attachedHttpServer?: HttpServer, upgradePath: string = '/ws') {
     // Handle both number and config object
@@ -31,6 +32,11 @@ export class WebSocketServer {
     }
     this._attachedHttpServer = attachedHttpServer || null;
     this._upgradePath = upgradePath;
+    
+    if (this.debug) {
+      console.log('🔧 WebSocketServer: Debug mode ENABLED (hardcoded)');
+    }
+    
     // Initialize services that need to send responses
     this._fsService = new FileSystemService((clientId, payload) => this.sendToClient(clientId, payload));
     this._terminalService = new TerminalService((clientId, payload) => this.sendToClient(clientId, payload));
@@ -226,7 +232,27 @@ export class WebSocketServer {
   public sendToClient(clientId: string, message: any): boolean {
     const connection = this.connections.get(clientId);
     if (connection && connection.ws.readyState === WebSocket.OPEN) {
-      connection.ws.send(JSON.stringify(message));
+      const messageStr = JSON.stringify(message);
+      
+      // Debug logging for outgoing messages
+      if (this.debug) {
+        console.log(`🔼 WebSocket Send [${clientId.substring(0, 8)}...]:`, {
+          type: message.type,
+          payloadSize: messageStr.length,
+          messageId: message.id
+        });
+        
+        // Special tracking for terminal frames
+        if (message.type === 'terminal') {
+          console.log(`📟 Terminal Frame Out [${clientId.substring(0, 8)}...]:`, {
+            op: message.data?.op,
+            sessionId: message.data?.sessionId,
+            payloadSize: messageStr.length
+          });
+        }
+      }
+      
+      connection.ws.send(messageStr);
       return true;
     }
     return false;
@@ -292,7 +318,26 @@ export class WebSocketServer {
   }
 
   private handleMessage(connectionId: string, message: any): void {
-    console.log(`Message from ${connectionId}:`, message);
+    // Enhanced debug logging for all WebSocket messages
+    if (this.debug) {
+      const payloadSize = JSON.stringify(message).length;
+      console.log(`🔽 WebSocket Frame [${connectionId.substring(0, 8)}...]:`, {
+        type: message.type,
+        payloadSize,
+        messageId: message.id
+      });
+      
+      // Special tracking for terminal frames
+      if (message.type === 'terminal') {
+        console.log(`📟 Terminal Frame In [${connectionId.substring(0, 8)}...]:`, {
+          op: message.data?.op,
+          sessionId: message.data?.sessionId,
+          payloadSize
+        });
+      }
+    } else {
+      console.log(`Message from ${connectionId}:`, message);
+    }
 
     // Handle ping messages
     if (message.type === 'ping') {
@@ -376,9 +421,24 @@ export class WebSocketServer {
 
     // Terminal protocol (Stage 1: exec)
     if (message.type === 'terminal') {
+      if (this.debug) {
+        console.log(`🔄 Processing Terminal Frame [${connectionId.substring(0, 8)}...]:`, {
+          op: message.data?.op,
+          sessionId: message.data?.sessionId
+        });
+      }
+      
       this._terminalService.handle(connectionId, message).catch(err => {
         const id = message.id;
         const errMsg = err instanceof Error ? err.message : String(err);
+        
+        if (this.debug) {
+          console.log(`❌ Terminal Error [${connectionId.substring(0, 8)}...]:`, {
+            error: errMsg,
+            messageId: id
+          });
+        }
+        
         this.sendToClient(connectionId, { type: 'terminal', id, data: { ok: false, error: errMsg } });
       });
     }

@@ -1,9 +1,12 @@
 import WebSocket from 'ws';
 import { IncomingMessage, Server as HttpServer } from 'http';
 import { Socket } from 'net';
-import { FileSystemService } from './FileSystemService';
-import { GitService } from './GitService';
-import { TerminalService } from './TerminalService';
+import { CLIFileSystemService } from '../cli/services/FileSystemService';
+import { CLIGitService } from '../cli/services/GitService';
+import { TerminalService } from '../cli/services/TerminalService';
+import { FileSystemConfigManager } from '../cli/services/FileSystemConfig';
+import { GitConfigManager } from '../cli/services/GitService';
+import { TerminalConfigManager } from '../cli/services/TerminalConfig';
 
 type ICommandHandler = {
   addAllowedCommand: (cmd: string) => void;
@@ -11,6 +14,12 @@ type ICommandHandler = {
   dispose: () => void;
   setStateChangeCallback?: (cb: any) => void;
 } | null;
+
+// Service interface for WebSocket registration
+interface ServiceRegistration {
+  handle: (clientId: string, message: any) => Promise<any>;
+  onClientDisconnect: (clientId: string) => void;
+}
 
 export interface WebSocketConnection {
   ws: WebSocket;
@@ -25,10 +34,11 @@ export class WebSocketServer {
   private _clientCount: number = 0;
   private _attachedHttpServer: HttpServer | null = null;
   private _upgradePath: string = '/ws';
-  private _fsService: FileSystemService;
-  private _gitService: GitService | null = null;
+  private _fsService: CLIFileSystemService;
+  private _gitService: CLIGitService | null = null;
   private _terminalService: TerminalService;
   private _commandHandler: ICommandHandler = null;
+  private services: Map<string, ServiceRegistration> = new Map();
   private debug: boolean = true; // Hardcoded debug mode for WebSocket frame tracking
 
   constructor(config: any, attachedHttpServer?: HttpServer, upgradePath: string = '/ws') {
@@ -45,9 +55,131 @@ export class WebSocketServer {
       console.log('🔧 WebSocketServer: Debug mode ENABLED (hardcoded)');
     }
     
-    // Initialize services that need to send responses
-    this._fsService = new FileSystemService((clientId, payload) => this.sendToClient(clientId, payload));
+    // Initialize CLI services with proper configuration
+    const fsConfig = new FileSystemConfigManager();
+    this._fsService = new CLIFileSystemService((clientId, payload) => this.sendToClient(clientId, payload), fsConfig.config);
+    
+    const gitConfig = new GitConfigManager();
+    this._gitService = new CLIGitService({
+      workspaceRoot: process.cwd(),
+      enableDebug: process.env.KIRO_GIT_DEBUG === '1'
+    });
+    
+    const terminalConfig = new TerminalConfigManager();
     this._terminalService = new TerminalService((clientId, payload) => this.sendToClient(clientId, payload));
+    
+    // Register services for WebSocket handling
+    this.registerService('fileSystem', {
+      handle: (clientId: string, message: any) => {
+        return this._fsService.handle(clientId, message);
+      },
+      onClientDisconnect: (clientId: string) => {
+        this._fsService.onClientDisconnect(clientId);
+      }
+    });
+    
+    this.registerService('git', {
+      handle: async (clientId: string, message: any) => {
+        const { operation, params } = message;
+        
+        try {
+          switch (operation) {
+            case 'status':
+              const status = await this._gitService!.getStatus(params.workspacePath);
+              return { success: true, data: status };
+              
+            case 'log':
+              const commits = await this._gitService!.getRecentCommits(params.count || 10, params.workspacePath);
+              return { success: true, data: commits };
+              
+            case 'diff':
+              const diffs = await this._gitService!.getCurrentDiff(params.workspacePath);
+              return { success: true, data: diffs };
+              
+            case 'add':
+              await this._gitService!.add(params.files, params.workspacePath);
+              return { success: true };
+              
+            case 'commit':
+              await this._gitService!.commit(params.message, params.files, params.workspacePath);
+              return { success: true };
+              
+            case 'push':
+              await this._gitService!.push(params.remote, params.branch, params.workspacePath);
+              return { success: true };
+              
+            case 'pull':
+              await this._gitService!.pull(params.remote, params.branch, params.workspacePath);
+              return { success: true };
+              
+            case 'state':
+              const state = await this._gitService!.getRepositoryState(params.workspacePath);
+              return { success: true, data: state };
+              
+            case 'find-repos':
+              const repos = await this._gitService!.findRepositories(params.rootPath);
+              return { success: true, data: repos };
+              
+            case 'config':
+              const config = this._gitService!.getConfig();
+              return { success: true, data: config };
+              
+            case 'branch':
+              if (params.create) {
+                await this._gitService!.executeSafeOperation('create-branch', {
+                  name: params.create,
+                  from: params.from,
+                  workspacePath: params.workspacePath
+                });
+              } else if (params.switch) {
+                await this._gitService!.executeSafeOperation('switch-branch', {
+                  name: params.switch,
+                  workspacePath: params.workspacePath
+                });
+              } else {
+                const repo = await this._gitService!.getRepository(params.workspacePath);
+                const currentBranch = repo ? await repo.getCurrentBranch() : null;
+                return { success: true, data: { currentBranch } };
+              }
+              return { success: true };
+              
+            default:
+              return { error: `Unknown git operation: ${operation}` };
+          }
+        } catch (error) {
+          return { 
+            success: false, 
+            error: error instanceof Error ? error.message : 'Unknown error' 
+          };
+        }
+      },
+      onClientDisconnect: (clientId: string) => {
+        // Git service doesn't need special disconnect handling
+      }
+    });
+    
+    this.registerService('terminal', {
+      handle: (clientId: string, message: any) => {
+        return this._terminalService.handle(clientId, message);
+      },
+      onClientDisconnect: (clientId: string) => {
+        this._terminalService.onClientDisconnect(clientId);
+      }
+    });
+    
+    // Try to initialize command handler for VS Code compatibility
+    try {
+      const mod = require('./CommandHandler');
+      this._commandHandler = new mod.CommandHandler();
+      const ch = this._commandHandler as any;
+      ch.addAllowedCommand('kiroAgent.focusContinueInputWithoutClear');
+      ch.addAllowedCommand('type');
+      ch.addAllowedCommand('editor.action.clipboardPasteAction');
+      ch.addAllowedCommand('kiroAgent.focusPasteEnter');
+    } catch {
+      this._commandHandler = null;
+      if (this.debug) console.log('WebSocketServer: CommandHandler unavailable (CLI mode)');
+    }
     try {
       const mod = require('./CommandHandler');
       this._commandHandler = new mod.CommandHandler();
@@ -151,8 +283,13 @@ export class WebSocketServer {
           ws.on('close', () => {
             console.log(`WebSocket connection closed: ${connectionId}`);
             // Cleanup any per-client watchers/listeners
-            try { this._fsService.onClientDisconnect(connectionId); } catch {}
-            try { this._terminalService.onClientDisconnect(connectionId); } catch {}
+            this.services.forEach((service, serviceName) => {
+              try {
+                service.onClientDisconnect(connectionId);
+              } catch (error) {
+                console.error(`Error in ${serviceName} service disconnect:`, error);
+              }
+            });
             this.connections.delete(connectionId);
             this._clientCount = this.connections.size;
           });
@@ -397,45 +534,29 @@ export class WebSocketServer {
       });
     }
 
-    // Git protocol
-    if (message.type === 'git') {
+    // Git protocol - This is now handled by the service registration above
+    // Keeping this for backward compatibility but it will be handled by the service
+    if (message.type === 'git' && !this.services.has('git')) {
       const id = message.id;
       const op = message?.data?.gitData?.operation as string | undefined;
-      const options = message?.data?.gitData?.options || {};
       if (!op) {
         this.sendToClient(connectionId, { type: 'git', id, data: { gitData: { operation: 'unknown' }, ok: false, error: 'Missing git operation' } });
         return;
       }
-      try {
-        if (!this._gitService) {
-          console.log('WebSocketServer: Initializing GitService...');
-          this._gitService = new GitService();
-        }
-        
-        console.log(`WebSocketServer: Executing git operation: ${op}`);
-        
-        // Add timeout to prevent hanging
-        const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error(`Git operation '${op}' timed out after 45 seconds`)), 45000);
-        });
-        
-        Promise.race([
-          this._gitService.executeGitCommand(op, options),
-          timeoutPromise
-        ])
-          .then((result) => {
-            console.log(`WebSocketServer: Git operation '${op}' completed successfully`);
-            this.sendToClient(connectionId, { type: 'git', id, data: { gitData: { operation: op, result }, ok: true } });
+      
+      // Forward to the git service if it exists
+      const gitService = this.services.get('git');
+      if (gitService) {
+        gitService.handle(connectionId, message)
+          .then(result => {
+            this.sendToClient(connectionId, { type: 'git', id, data: result });
           })
-          .catch((err) => {
-            const errMsg = err instanceof Error ? err.message : String(err);
-            console.error(`WebSocketServer: Git operation '${op}' failed:`, errMsg);
-            this.sendToClient(connectionId, { type: 'git', id, data: { gitData: { operation: op }, ok: false, error: errMsg } });
+          .catch(error => {
+            const errMsg = error instanceof Error ? error.message : String(error);
+            this.sendToClient(connectionId, { type: 'git', id, data: { ok: false, error: errMsg } });
           });
-      } catch (err) {
-        const errMsg = err instanceof Error ? err.message : String(err);
-        console.error(`WebSocketServer: Git operation '${op}' error:`, errMsg);
-        this.sendToClient(connectionId, { type: 'git', id, data: { gitData: { operation: op }, ok: false, error: errMsg } });
+      } else {
+        this.sendToClient(connectionId, { type: 'git', id, data: { ok: false, error: 'Git service not available' } });
       }
     }
 
@@ -503,5 +624,26 @@ export class WebSocketServer {
 
   private generateConnectionId(): string {
     return `conn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  }
+
+  // Register a service for WebSocket message handling
+  public registerService(serviceName: string, registration: ServiceRegistration): void {
+    this.services.set(serviceName, registration);
+    if (this.debug) {
+      console.log(`WebSocketServer: Registered service '${serviceName}'`);
+    }
+  }
+
+  // Unregister a service
+  public unregisterService(serviceName: string): void {
+    this.services.delete(serviceName);
+    if (this.debug) {
+      console.log(`WebSocketServer: Unregistered service '${serviceName}'`);
+    }
+  }
+
+  // Get registered services
+  public getRegisteredServices(): string[] {
+    return Array.from(this.services.keys());
   }
 }

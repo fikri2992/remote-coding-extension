@@ -1,6 +1,8 @@
 import { WebServer, WebServerConfig } from '../server/WebServer';
 import { WebSocketServer } from '../server/WebSocketServer';
 import { TerminalService } from './services/TerminalService';
+import { CLIGitService } from './services/GitService';
+import { CLIFileSystemService } from './services/FileSystemService';
 import fs from 'fs/promises';
 import path from 'path';
 
@@ -41,12 +43,23 @@ export interface CliServerStatus {
     activeSessions: number;
     idleSessions: number;
   } | undefined;
+  gitStats?: {
+    repositoryCache: number;
+    config: any;
+  } | undefined;
+  filesystemStats?: {
+    cacheSize: number;
+    config: any;
+    watcherStats: any;
+  } | undefined;
 }
 
 export class CliServer {
   private webServer?: WebServer | undefined;
   private webSocketServer?: WebSocketServer | undefined;
   private terminalService?: TerminalService | undefined;
+  private gitService?: CLIGitService | undefined;
+  private filesystemService?: CLIFileSystemService | undefined;
   private isRunning = false;
   private config?: CliConfig;
   private configPath?: string;
@@ -113,6 +126,21 @@ export class CliServer {
         return false;
       });
       
+      // Initialize git service
+      this.gitService = new CLIGitService({
+        workspaceRoot: process.cwd(),
+        enableDebug: process.env.KIRO_GIT_DEBUG === '1'
+      });
+      
+      // Initialize filesystem service
+      this.filesystemService = new CLIFileSystemService((clientId: string, message: any) => {
+        // Send filesystem messages through WebSocket
+        if (this.webSocketServer) {
+          return this.webSocketServer.sendToClient(clientId, message);
+        }
+        return false;
+      });
+      
       // Register terminal service with WebSocket server
       if (this.webSocketServer) {
         (this.webSocketServer as any).registerService('terminal', {
@@ -125,6 +153,158 @@ export class CliServer {
           onClientDisconnect: (clientId: string) => {
             if (this.terminalService) {
               this.terminalService.onClientDisconnect(clientId);
+            }
+          }
+        });
+        
+        // Register git service with WebSocket server
+        (this.webSocketServer as any).registerService('git', {
+          handle: async (clientId: string, message: any) => {
+            if (!this.gitService) {
+              return { error: 'Git service not available' };
+            }
+
+            try {
+              const { operation, params } = message;
+              
+              switch (operation) {
+                case 'status':
+                  const status = await this.gitService.getStatus(params.workspacePath);
+                  return { success: true, data: status };
+                  
+                case 'log':
+                  const commits = await this.gitService.getRecentCommits(params.count || 10, params.workspacePath);
+                  return { success: true, data: commits };
+                  
+                case 'diff':
+                  const diffs = await this.gitService.getCurrentDiff(params.workspacePath);
+                  return { success: true, data: diffs };
+                  
+                case 'add':
+                  await this.gitService.add(params.files, params.workspacePath);
+                  return { success: true };
+                  
+                case 'commit':
+                  await this.gitService.commit(params.message, params.files, params.workspacePath);
+                  return { success: true };
+                  
+                case 'push':
+                  await this.gitService.push(params.remote, params.branch, params.workspacePath);
+                  return { success: true };
+                  
+                case 'pull':
+                  await this.gitService.pull(params.remote, params.branch, params.workspacePath);
+                  return { success: true };
+                  
+                case 'state':
+                  const state = await this.gitService.getRepositoryState(params.workspacePath);
+                  return { success: true, data: state };
+                  
+                case 'find-repos':
+                  const repos = await this.gitService.findRepositories(params.rootPath);
+                  return { success: true, data: repos };
+                  
+                case 'config':
+                  const config = this.gitService.getConfig();
+                  return { success: true, data: config };
+                  
+                case 'branch':
+                  if (params.create) {
+                    await this.gitService.executeSafeOperation('create-branch', {
+                      name: params.create,
+                      from: params.from,
+                      workspacePath: params.workspacePath
+                    });
+                  } else if (params.switch) {
+                    await this.gitService.executeSafeOperation('switch-branch', {
+                      name: params.switch,
+                      workspacePath: params.workspacePath
+                    });
+                  } else {
+                    const repo = await this.gitService.getRepository(params.workspacePath);
+                    const currentBranch = repo ? await repo.getCurrentBranch() : null;
+                    return { success: true, data: { currentBranch } };
+                  }
+                  return { success: true };
+                  
+                default:
+                  return { error: `Unknown git operation: ${operation}` };
+              }
+            } catch (error) {
+              return { 
+                success: false, 
+                error: error instanceof Error ? error.message : 'Unknown error' 
+              };
+            }
+          },
+          onClientDisconnect: (clientId: string) => {
+            // Git service doesn't need special disconnect handling
+          }
+        });
+        
+        // Register filesystem service with WebSocket server
+        (this.webSocketServer as any).registerService('fileSystem', {
+          handle: async (clientId: string, message: any) => {
+            if (!this.filesystemService) {
+              return { error: 'Filesystem service not available' };
+            }
+
+            try {
+              const { operation, params } = message;
+              
+              switch (operation) {
+                case 'tree':
+                  const treeResult = await this.filesystemService.getTree(params.path, params.maxDepth);
+                  return { success: true, data: treeResult };
+                  
+                case 'open':
+                  const fileResult = await this.filesystemService.openFile(params.path, {
+                    encoding: params.encoding,
+                    maxLength: params.maxLength
+                  });
+                  return { success: true, data: fileResult };
+                  
+                case 'create':
+                  await this.filesystemService.createFile(params.path, params.content, params.options);
+                  return { success: true };
+                  
+                case 'delete':
+                  await this.filesystemService.deleteFile(params.path, params.options);
+                  return { success: true };
+                  
+                case 'rename':
+                  await this.filesystemService.renameFile(params.path, params.options.newPath);
+                  return { success: true };
+                  
+                case 'watch':
+                  const watchResult = await this.filesystemService.addWatcher(clientId, params.path);
+                  return { success: true, data: watchResult };
+                  
+                case 'unwatch':
+                  const unwatchResult = this.filesystemService.removeWatcher(clientId, params.path);
+                  return { success: true, data: unwatchResult };
+                  
+                case 'stats':
+                  const statsResult = await this.filesystemService.getFileStats(params.path);
+                  return { success: true, data: statsResult };
+                  
+                case 'config':
+                  const fsConfig = this.filesystemService.getConfig();
+                  return { success: true, data: fsConfig };
+                  
+                default:
+                  return { error: `Unknown filesystem operation: ${operation}` };
+              }
+            } catch (error) {
+              return { 
+                success: false, 
+                error: error instanceof Error ? error.message : 'Unknown error' 
+              };
+            }
+          },
+          onClientDisconnect: (clientId: string) => {
+            if (this.filesystemService) {
+              this.filesystemService.onClientDisconnect(clientId);
             }
           }
         });
@@ -170,6 +350,16 @@ export class CliServer {
         this.terminalService = undefined;
       }
       
+      if (this.gitService) {
+        this.gitService.clearCache();
+        this.gitService = undefined;
+      }
+      
+      if (this.filesystemService) {
+        this.filesystemService.cleanup();
+        this.filesystemService = undefined;
+      }
+      
       this.isRunning = false;
       console.log('✅ Server stopped successfully');
       
@@ -188,7 +378,16 @@ export class CliServer {
       uptime: this.isRunning && this.startTime ? Date.now() - this.startTime.getTime() : undefined,
       startTime: this.startTime,
       webServerStatus: this.webServer ? (this.webServer as any).status : undefined,
-      terminalStats: this.terminalService ? this.terminalService.getStats() : undefined
+  terminalStats: this.terminalService ? this.terminalService.getStats() : undefined,
+  gitStats: this.gitService ? {
+    repositoryCache: this.gitService['repositoryCache'].size,
+    config: this.gitService.getConfig()
+  } : undefined,
+  filesystemStats: this.filesystemService ? {
+    cacheSize: (this.filesystemService as any).cache.size,
+    config: this.filesystemService.getConfig(),
+    watcherStats: this.filesystemService.getWatcherStats()
+  } : undefined
     };
   }
 
@@ -226,6 +425,19 @@ export class CliServer {
       console.log(`   Persistent: ${status.terminalStats.persistentSessions}`);
     }
     
+    if (status.gitStats) {
+      console.log(`🔀 Git Service: ${status.gitStats.repositoryCache} cached repositories`);
+      console.log(`   Default Branch: ${status.gitStats.config.defaultBranch}`);
+      console.log(`   Debug: ${status.gitStats.config.enableDebug}`);
+    }
+    
+    if (status.filesystemStats) {
+      console.log(`📁 File System Service: ${status.filesystemStats.cacheSize} cached items`);
+      console.log(`   Max Text File Size: ${formatBytes(status.filesystemStats.config.maxTextFileSize)}`);
+      console.log(`   File Watching: ${status.filesystemStats.config.enableFileWatching}`);
+      console.log(`   Watchers: ${status.filesystemStats.watcherStats.totalClients} clients, ${status.filesystemStats.watcherStats.totalWatchers} total watchers`);
+    }
+    
     console.log('================================');
   }
 
@@ -242,4 +454,12 @@ export class CliServer {
       return `${seconds}s`;
     }
   }
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }

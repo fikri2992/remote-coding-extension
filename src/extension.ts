@@ -1,11 +1,14 @@
 // Main extension entry point
 import * as vscode from 'vscode';
+import { spawn } from 'child_process';
 import { WebviewProvider } from './webview/provider';
 import { registerButtonCommands } from './commands/buttonCommands';
 import { registerIntegrationTestCommand } from './integration-test';
 import { registerDiagnosePtyCommand } from './commands/diagnosePTY';
 import { SessionEngine } from './server/pseudo/SessionEngine';
 import { KiroPseudoTerminal } from './server/pseudo/KiroPseudoTerminal';
+
+
 
 export function activate(context: vscode.ExtensionContext) {
     console.log('Basic VSCode Extension is now active!');
@@ -328,16 +331,44 @@ export function activate(context: vscode.ExtensionContext) {
 
     // Kiro Agent: Focus, Paste, Enter (for keyboard shortcut binding)
     const sleep = (ms: number) => new Promise<void>(res => setTimeout(res, ms));
+    
+    // Windows-only: send keystrokes via PowerShell (WScript.Shell)
+    function sendKeysPS(keys: string) {
+        if (process.platform !== 'win32') return; // no-op on non-Windows
+        try {
+            // PowerShell single-quote escaping: double single quotes inside '...'
+            const safeKeys = keys.replace(/'/g, "''");
+            // Use COM WScript.Shell SendKeys
+            const psScript = `$ws = New-Object -ComObject WScript.Shell; $ws.SendKeys('${safeKeys}')`;
+            const ps = spawn('powershell.exe', [
+                '-NoProfile',
+                '-WindowStyle','Hidden',
+                '-STA', // SendKeys requires STA
+                '-Command', psScript
+            ], { detached: true, stdio: 'ignore' });
+            ps.unref();
+        } catch (e) {
+            // Swallow errors; fallback path below will still try
+        }
+    }
     const kiroFocusPasteEnter = vscode.commands.registerCommand('kiroAgent.focusPasteEnter', async () => {
         try {
-            await vscode.commands.executeCommand('kiroAgent.focusContinueInputWithoutClear');
+            try { await vscode.commands.executeCommand('kiroAgent.focusContinueInputWithoutClear'); } catch {}
             await sleep(300);
-            await vscode.commands.executeCommand('editor.action.clipboardPasteAction');
+            try { await vscode.commands.executeCommand('editor.action.clipboardPasteAction'); } catch {}
             await sleep(150);
-            await vscode.commands.executeCommand('type', { text: '\n' });
-            // Fallback for inputs expecting CR
-            await sleep(80);
-            await vscode.commands.executeCommand('type', { text: '\r' });
+            // Experiment: try Enter via PowerShell SendKeys on Windows
+            if (process.platform === 'win32') {
+                console.log('Kiro Agent: using PowerShell SendKeys to send ENTER');
+                sendKeysPS('{ENTER}');
+                // Small delay to allow SendKeys to dispatch
+                await sleep(120);
+            } else {
+                // Fallback for non-Windows
+                await vscode.commands.executeCommand('type', { text: '\n' });
+                await sleep(80);
+                await vscode.commands.executeCommand('type', { text: '\r' });
+            }
             vscode.window.showInformationMessage('Kiro Agent: Pasted and submitted.');
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);

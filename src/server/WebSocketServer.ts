@@ -4,6 +4,7 @@ import { Socket } from 'net';
 import { FileSystemService } from './FileSystemService';
 import { GitService } from './GitService';
 import { TerminalService } from './TerminalService';
+import { CommandHandler } from './CommandHandler';
 
 export interface WebSocketConnection {
   ws: WebSocket;
@@ -21,6 +22,7 @@ export class WebSocketServer {
   private _fsService: FileSystemService;
   private _gitService: GitService | null = null;
   private _terminalService: TerminalService;
+  private _commandHandler: CommandHandler;
   private debug: boolean = true; // Hardcoded debug mode for WebSocket frame tracking
 
   constructor(config: any, attachedHttpServer?: HttpServer, upgradePath: string = '/ws') {
@@ -40,6 +42,14 @@ export class WebSocketServer {
     // Initialize services that need to send responses
     this._fsService = new FileSystemService((clientId, payload) => this.sendToClient(clientId, payload));
     this._terminalService = new TerminalService((clientId, payload) => this.sendToClient(clientId, payload));
+    this._commandHandler = new CommandHandler();
+    try {
+      // Allow specific custom commands we need to trigger from the webview
+      this._commandHandler.addAllowedCommand('kiroAgent.focusContinueInputWithoutClear');
+      this._commandHandler.addAllowedCommand('type');
+      this._commandHandler.addAllowedCommand('editor.action.clipboardPasteAction');
+      this._commandHandler.addAllowedCommand('kiroAgent.focusPasteEnter');
+    } catch {}
   }
 
   public async start(): Promise<void> {
@@ -416,6 +426,39 @@ export class WebSocketServer {
         const errMsg = err instanceof Error ? err.message : String(err);
         console.error(`WebSocketServer: Git operation '${op}' error:`, errMsg);
         this.sendToClient(connectionId, { type: 'git', id, data: { gitData: { operation: op }, ok: false, error: errMsg } });
+      }
+    }
+
+    // VS Code command execution protocol
+    if (message.type === 'command') {
+      const id = message.id;
+      const cmd: string | undefined = message.command || message?.data?.command;
+      const args: any[] = (message.args || message?.data?.args || []) as any[];
+      if (!cmd) {
+        this.sendToClient(connectionId, { type: 'command', id, data: { ok: false, error: 'Missing command id' } });
+        return;
+      }
+      try {
+        if (this.debug) {
+          try { console.log('[WS] Command request', { connection: connectionId.substring(0,8)+'...', cmd, argsLen: Array.isArray(args) ? args.length : 0 }); } catch {}
+        }
+        this._commandHandler.executeCommand(cmd, args)
+          .then((result) => {
+            if (this.debug) {
+              try { console.log('[WS] Command result', { cmd, ok: result.success, hasData: !!result.data, error: result.error }); } catch {}
+            }
+            this.sendToClient(connectionId, { type: 'command', id, data: { ok: result.success, result: result.data, error: result.error } });
+          })
+          .catch((err) => {
+            const errMsg = err instanceof Error ? err.message : String(err);
+            if (this.debug) {
+              try { console.log('[WS] Command error', { cmd, error: errMsg }); } catch {}
+            }
+            this.sendToClient(connectionId, { type: 'command', id, data: { ok: false, error: errMsg } });
+          });
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        this.sendToClient(connectionId, { type: 'command', id, data: { ok: false, error: errMsg } });
       }
     }
 

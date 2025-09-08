@@ -326,6 +326,26 @@ export function activate(context: vscode.ExtensionContext) {
         openPseudoTerminal
     );
 
+    // Kiro Agent: Focus, Paste, Enter (for keyboard shortcut binding)
+    const sleep = (ms: number) => new Promise<void>(res => setTimeout(res, ms));
+    const kiroFocusPasteEnter = vscode.commands.registerCommand('kiroAgent.focusPasteEnter', async () => {
+        try {
+            await vscode.commands.executeCommand('kiroAgent.focusContinueInputWithoutClear');
+            await sleep(300);
+            await vscode.commands.executeCommand('editor.action.clipboardPasteAction');
+            await sleep(150);
+            await vscode.commands.executeCommand('type', { text: '\n' });
+            // Fallback for inputs expecting CR
+            await sleep(80);
+            await vscode.commands.executeCommand('type', { text: '\r' });
+            vscode.window.showInformationMessage('Kiro Agent: Pasted and submitted.');
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            vscode.window.showErrorMessage(`Kiro Agent: Failed to paste/submit: ${msg}`);
+        }
+    });
+    context.subscriptions.push(kiroFocusPasteEnter);
+
     // Register integration test command
     registerIntegrationTestCommand(context);
 

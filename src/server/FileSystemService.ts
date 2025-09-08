@@ -48,7 +48,24 @@ export class FileSystemService {
           if (isDir) {
             await vscode.workspace.fs.createDirectory(vscode.Uri.file(target));
           } else {
-            await vscode.workspace.fs.writeFile(vscode.Uri.file(target), new Uint8Array());
+            // Ensure parent directory exists for file creation
+            try {
+              const parent = path.dirname(target);
+              await vscode.workspace.fs.createDirectory(vscode.Uri.file(parent));
+            } catch {}
+            const raw = data?.content;
+            let bytes: Uint8Array;
+            if (typeof raw === 'string') {
+              bytes = Buffer.from(raw, 'utf8');
+            } else if (raw instanceof Uint8Array) {
+              bytes = raw;
+            } else if (raw && typeof raw === 'object' && 'data' in raw && Array.isArray((raw as any).data)) {
+              // Support for ArrayLike data payloads
+              bytes = Uint8Array.from((raw as any).data as number[]);
+            } else {
+              bytes = new Uint8Array();
+            }
+            await vscode.workspace.fs.writeFile(vscode.Uri.file(target), bytes);
           }
           this.reply(clientId, id, op, { ok: true });
           break;

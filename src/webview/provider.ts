@@ -42,6 +42,9 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
                     case 'executeAction':
                         this._handleExecuteAction(message.data);
                         break;
+                    case 'focusContinuePasteEnter':
+                        this._handleFocusContinuePasteEnter();
+                        break;
                     case 'startServer':
                         this._handleStartServer();
                         break;
@@ -131,6 +134,24 @@ export class WebviewProvider implements vscode.WebviewViewProvider {
             this._sendServerStatus();
             this._sendTunnelStatus();
         });
+    }
+
+    /**
+     * Focus external Continue input, paste clipboard contents, then press Enter.
+     * Mirrors the flow used from the React webview but runs directly via VS Code API.
+     */
+    private async _handleFocusContinuePasteEnter(): Promise<void> {
+        try {
+            await vscode.commands.executeCommand('kiroAgent.focusContinueInputWithoutClear');
+            await new Promise(res => setTimeout(res, 300));
+            await vscode.commands.executeCommand('editor.action.clipboardPasteAction');
+            await new Promise(res => setTimeout(res, 150));
+            await vscode.commands.executeCommand('type', { text: '\n' });
+            vscode.window.showInformationMessage('Pasted and submitted (Enter) to Continue input.');
+        } catch (error) {
+            vscode.window.showErrorMessage(`Failed to paste/submit: ${error}`);
+            console.error('Error focus/paste/enter:', error);
+        }
     }
 
     private _getHtmlForWebview(webview: vscode.Webview): string {

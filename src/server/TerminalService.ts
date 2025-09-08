@@ -2,7 +2,10 @@
  * TerminalService - PseudoTerminal session manager over WebSocket
  */
 
-import * as vscode from 'vscode';
+// VS Code is optional in CLI mode; access lazily when present
+function getVSCode(): any | null {
+  try { return require('vscode'); } catch { return null; }
+}
 import { spawn } from 'child_process';
 import * as path from 'path';
 import { CredentialManager } from './CredentialManager';
@@ -37,8 +40,13 @@ export class TerminalService {
     this.pseudoEngine = new SessionEngine();
 
     try {
-      const cfg = vscode.workspace.getConfiguration('webAutomationTunnel');
-      this.debug = !!(cfg.get<boolean>('terminal.debug', false) || process.env.KIRO_DEBUG_TERMINAL === '1');
+      const vs = getVSCode();
+      if (vs?.workspace?.getConfiguration) {
+        const cfg = vs.workspace.getConfiguration('webAutomationTunnel');
+        this.debug = !!((cfg.get('terminal.debug', false) as boolean) || process.env.KIRO_DEBUG_TERMINAL === '1');
+      } else {
+        this.debug = process.env.KIRO_DEBUG_TERMINAL === '1';
+      }
     } catch {
       this.debug = process.env.KIRO_DEBUG_TERMINAL === '1';
     }
@@ -107,9 +115,12 @@ export class TerminalService {
   }
 
   private getWorkspaceRoot(): string {
-    const folders = vscode.workspace.workspaceFolders;
-    if (!folders || folders.length === 0) return process.cwd();
-    return folders[0]!.uri.fsPath;
+    const vs = getVSCode();
+    try {
+      const folders = vs?.workspace?.workspaceFolders;
+      if (folders && folders.length > 0) return folders[0]!.uri.fsPath;
+    } catch {}
+    return process.cwd();
   }
 
   private async exec(clientId: string, id: string | undefined, data: any) {
@@ -139,12 +150,13 @@ export class TerminalService {
     const cwdRaw: string | undefined = data.cwd;
     const cwd = cwdRaw ? (path.isAbsolute(cwdRaw) ? cwdRaw : path.join(this.getWorkspaceRoot(), cwdRaw)) : this.getWorkspaceRoot();
     const persistent: boolean = !!data.persistent;
-    const cfg = vscode.workspace.getConfiguration('webAutomationTunnel');
-    const inject = cfg.get<boolean>('terminal.injectAICredentials', false) || process.env.KIRO_INJECT_AI_CREDS === '1';
+    const vs = getVSCode();
+    const cfg = vs?.workspace?.getConfiguration?.('webAutomationTunnel');
+    const inject = (cfg?.get?.('terminal.injectAICredentials', false) as boolean | undefined) || process.env.KIRO_INJECT_AI_CREDS === '1';
     const enhancedEnv = ({ ...process.env } as NodeJS.ProcessEnv);
     if (inject) Object.assign(enhancedEnv, this.credentialManager.getAllAICredentials());
     if (!enhancedEnv.TERM) (enhancedEnv as any).TERM = 'xterm-256color';
-    const engineMode = (cfg.get<string>('terminal.engineMode', 'line') || 'line');
+    const engineMode = (cfg?.get?.('terminal.engineMode', 'auto') as string | undefined) || (process.env.KIRO_TERMINAL_ENGINE || 'line');
     const override = (process.env.KIRO_TERMINAL_ENGINE || '').toLowerCase();
     const requestedEngine = (String(data.engine || data.engineMode || '')).toLowerCase();
     const usePseudoPipe = requestedEngine === 'pipe' || engineMode === 'pipe' || override === 'pipe';
@@ -160,8 +172,8 @@ export class TerminalService {
         }
       }
     };
-    const promptEnabled = cfg.get<boolean>('terminal.prompt.enabled', true) ?? true;
-    const hiddenEchoEnabled = cfg.get<boolean>('terminal.hiddenEcho.enabled', true) ?? true;
+    const promptEnabled = (cfg?.get?.('terminal.prompt.enabled', true) as boolean | undefined) ?? true;
+    const hiddenEchoEnabled = (cfg?.get?.('terminal.hiddenEcho.enabled', true) as boolean | undefined) ?? true;
     this.pseudoEngine.create(sessionId, { cwd, env: enhancedEnv, mode: usePseudoPipe ? 'pipe' : 'line', interceptClear: true, promptEnabled, hiddenEchoEnabled }, sink);
     if (usePseudoPipe) { try { (this.pseudoEngine as any).startPipeShell?.(sessionId) } catch {} }
     const wrapper = {
@@ -255,4 +267,3 @@ export class TerminalService {
     }
   }
 }
-

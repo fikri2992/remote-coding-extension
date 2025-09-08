@@ -2,68 +2,124 @@
 
 ## Overview
 
-This design document outlines the architecture for migrating the VS Code extension-based web automation tunnel to a standalone Terminal User Interface (TUI) application. The migration will preserve all existing functionality while replacing VS Code-specific APIs with Node.js native equivalents and modern TUI libraries.
+This design migrates the existing VS Code extension-based "Web Automation Tunnel" into a standalone CLI + TUI application while preserving the current server/tunnel features. We will remove direct dependencies on the VS Code API, introduce a CLI entrypoint, and add a terminal UX powered by Commander (CLI), Ink (TUI), and Chalk (styling). Terminal execution migrates from VS Code's PseudoTerminal to node-pty (with a robust fallback to the existing pseudo line/pipe engine).
 
 ## Architecture
 
-### High-Level Architecture
+### High‑Level Architecture
 
 ```mermaid
 graph TB
-    CLI[CLI Entry Point] --> TUI[TUI Application]
+    CLI[CLI Entry Point] --> TUI[TUI Shell]
     CLI --> Config[Configuration Manager]
-    
+    CLI --> Core[Server Core]
+
     TUI --> Dashboard[Main Dashboard]
     TUI --> ServerMgmt[Server Management]
     TUI --> TunnelMgmt[Tunnel Management]
-    TUI --> TerminalMgmt[Terminal Management]
+    TUI --> TerminalMgmt[Terminal Sessions]
     TUI --> LogViewer[Log Viewer]
-    
-    Dashboard --> ServerCore[Server Core]
-    ServerMgmt --> ServerCore
-    TunnelMgmt --> ServerCore
-    TerminalMgmt --> PTY[Node-PTY]
-    
-    ServerCore --> HTTP[HTTP Server]
-    ServerCore --> WS[WebSocket Server]
-    ServerCore --> Tunnel[Tunnel Manager]
-    
+
+    Dashboard --> Core
+    ServerMgmt --> Core
+    TunnelMgmt --> Core
+    TerminalMgmt --> PTY[PTY Layer]
+
+    Core --> HTTP[HTTP Server]
+    Core --> WS[WebSocket Server]
+    Core --> CF[Cloudflare Tunnels]
+
+    PTY --> NodePTY[node-pty]
+    PTY --> Fallback[SessionEngine (line/pipe)]
+
     Config --> FileConfig[File-based Config]
-    Config --> CLIArgs[CLI Arguments]
-    
+    Config --> CLIArgs[CLI Overrides]
+
     TUI --> Ink[Ink Components]
     TUI --> Chalk[Chalk Styling]
+    TUI --> React[React for TUI]
+```
+
+### Enhanced TUI Architecture
+
+```mermaid
+graph TD
+    App[Ink App] --> Layout[Responsive Layout]
+    Layout --> Header[Header - Status/Actions]
+    Layout --> Main[Main Content Area]
+    Layout --> Footer[Footer - Shortcuts/Help]
+
+    Main --> TabView[Tabbed Interface]
+    TabView --> ServerTab[Server Status]
+    TabView --> TunnelTab[Tunnel Management]
+    TabView --> TerminalTab[Terminal Sessions]
+    TabView --> LogsTab[Log Viewer]
+    TabView --> ConfigTab[Configuration]
+
+    ServerTab --> ServerStatus[Real-time Status]
+    ServerTab --> ServerControls[Start/Stop/Restart]
+    ServerTab --> ClientList[Connected Clients]
+
+    TunnelTab --> TunnelList[Active Tunnels]
+    TunnelTab --> TunnelControls[Create/Stop]
+    TunnelTab --> TunnelForm[Tunnel Configuration]
+
+    TerminalTab --> TermList[Session List]
+    TerminalTab --> TermView[Terminal Output]
+    TerminalTab --> TermControls[New Session/Attach]
+
+    State --> EventSystem[Event System]
+    EventSystem --> AllComponents[All Components]
 ```
 
 ### Core Components Migration
 
-#### 1. Entry Point Migration
-- **From:** VS Code extension activation
-- **To:** CLI application with commander.js
-- **Changes:** Replace `activate()` function with CLI argument parsing and TUI initialization
+1) Entry Point
+- From: `activate()` in VS Code extension
+- To: `src/cli/index.ts` using `commander` with subcommands (`start`, `stop`, `status`, `tunnel`, `term`)
 
-#### 2. Configuration System Migration
-- **From:** VS Code workspace configuration
-- **To:** File-based configuration with CLI overrides
-- **Location:** `~/.kiro-tunnel/config.json` or project-local `.kiro-tunnel/config.json`
-- **Format:** JSON with schema validation
+2) Configuration
+- From: `vscode.workspace.getConfiguration('webAutomationTunnel')` and `.remote-coding/config.json`
+- To: file-based config loaded by `src/config/ConfigManager.ts` with CLI overrides; supports global (`~/.kiro-remote/config.json`) and project (`.kiro-remote/config.json`) levels; JSON schema validation via `ajv`.
 
-#### 3. UI System Migration
-- **From:** VS Code webview with React frontend
-- **To:** Terminal UI with Ink components
-- **Components:** Dashboard, forms, status displays, log viewers
+3) UI System
+- From: VS Code webview React app and commands
+- To: Ink-based TUI (dashboard + detail panes) with Chalk for text emphasis and clear error output. A CLI-only mode prints concise status to stdout with chalked formatting.
 
-#### 4. Terminal System Migration
-- **From:** VS Code PseudoTerminal API
-- **To:** node-pty with TUI integration
-- **Features:** Multiple terminal tabs, session persistence, output streaming
+4) Terminal
+- From: VS Code `Pseudoterminal` (`KiroPseudoTerminal`) and pseudo line/pipe engine
+- To: node-pty as primary PTY backend. If node-pty not loadable (no native binary), fall back to the existing `SessionEngine` (line/pipe). Sessions are renderable inside the TUI and also controllable via WebSocket protocol.
+
+5) Events/Notifications
+- From: `vscode.EventEmitter`, `window.showInformationMessage`/`showErrorMessage`
+- To: Node `events.EventEmitter` for internal events, and CLI/TUI notifications via Chalk-rendered toasts in Ink or plain console output in CLI-only mode.
+
+## API Migration Matrix
+
+- VS Code: `vscode.window.showInformationMessage/WarningMessage/ErrorMessage`
+  - CLI/TUI: logger + Ink toast; `chalk` for severity coloring
+
+- VS Code: `vscode.workspace.getConfiguration`
+  - CLI/TUI: `ConfigManager` (reads JSON); CLI flags override
+
+- VS Code: `vscode.workspace.fs`, `FileSystemWatcher`
+  - CLI/TUI: Node `fs` + `chokidar`
+
+- VS Code: `vscode.commands.executeCommand`
+  - CLI/TUI: replace with local `CommandRegistry`; for now, only TUI actions and host-OS helpers (open file in `$EDITOR`)
+
+- VS Code: `Pseudoterminal`
+  - CLI/TUI: `node-pty` via `PTYManager` with fallback to `SessionEngine`
+
+- VS Code: `workspaceFolders`
+  - CLI/TUI: `process.cwd()` or user-configured `root`
 
 ## Components and Interfaces
 
-### 1. CLI Application Structure
+### 1) CLI Application Structure
 
 ```typescript
-// src/cli/index.ts
+// src/cli/index.ts (outline)
 interface CLIOptions {
   config?: string;
   port?: number;
@@ -71,363 +127,184 @@ interface CLIOptions {
   logLevel?: 'debug' | 'info' | 'warn' | 'error';
 }
 
-interface TUIApplication {
-  start(options: CLIOptions): Promise<void>;
+interface AppController {
+  start(opts: CLIOptions): Promise<void>;
   stop(): Promise<void>;
-  restart(): Promise<void>;
+  status(): Promise<void>;
 }
 ```
 
-### 2. Configuration Manager
+### 2) Configuration Manager (CLI)
 
 ```typescript
-// src/config/ConfigManager.ts
+// src/config/ConfigManager.ts (outline)
 interface TUIConfig {
-  server: {
-    httpPort: number;
-    websocketPort?: number;
-    autoStart: boolean;
-  };
-  tunnel: {
-    autoStartTunnel: boolean;
-    defaultTunnelName?: string;
-    cloudflareToken?: string;
-  };
-  terminal: {
-    engineMode: 'auto' | 'line' | 'pipe';
-    injectAICredentials: boolean;
-    debug: boolean;
-  };
-  ui: {
-    theme: 'dark' | 'light';
-    refreshInterval: number;
-    logLevel: string;
-  };
-}
-
-class ConfigManager {
-  loadConfig(): Promise<TUIConfig>;
-  saveConfig(config: TUIConfig): Promise<void>;
-  watchConfig(callback: (config: TUIConfig) => void): void;
-  migrateFromVSCode(): Promise<TUIConfig>;
+  server: { httpPort: number; websocketPort?: number; autoStart: boolean };
+  tunnel: { autoStartTunnel: boolean; defaultTunnelName?: string; cloudflareToken?: string };
+  terminal: { engineMode: 'auto' | 'line' | 'pipe'; injectAICredentials: boolean; debug: boolean };
+  ui: { theme: 'dark' | 'light'; refreshInterval: number; logLevel: 'debug'|'info'|'warn'|'error' };
 }
 ```
 
-### 3. TUI Components Architecture
+### 3) PTY Layer
 
 ```typescript
-// src/tui/components/
-interface TUIComponent {
-  render(): React.ReactElement;
-  handleInput(input: string): void;
-  onFocus(): void;
-  onBlur(): void;
-}
-
-// Main Dashboard Component
-class Dashboard extends TUIComponent {
-  // Server status, tunnel status, quick actions
-}
-
-// Server Management Component
-class ServerManager extends TUIComponent {
-  // Start/stop servers, view logs, configuration
-}
-
-// Tunnel Management Component
-class TunnelManager extends TUIComponent {
-  // Create/stop tunnels, view status, manage credentials
-}
-
-// Terminal Component
-class TerminalManager extends TUIComponent {
-  // Multiple terminal tabs, session management
+// src/terminal/PTYManager.ts (outline)
+export function createPty(opts: { cwd: string; env: NodeJS.ProcessEnv; cols: number; rows: number; shell?: string; args?: string[] }) {
+  // Try vendor node-pty first, fallback to require('node-pty'), else return null
 }
 ```
 
-### 4. Server Core Migration
+## Migration‑Affected Files
 
-The existing server core (HTTP, WebSocket, Tunnel management) will be preserved with minimal changes:
+### Remove (extension-only UI and activation)
+- `src/extension.ts` - Main extension entry point with all VS Code command registrations
+- `src/commands/buttonCommands.ts` - VS Code command palette integrations
+- `src/commands/diagnosePTY.ts` - VS Code PTY diagnostics command
+- `src/webview/provider.ts` - WebView provider for VS Code UI
+- `src/webview/**` - WebView assets (React frontend served by HTTP server now)
+- `src/integration-test.ts` - Extension-specific integration tests
 
-```typescript
-// src/server/ServerCore.ts - Migrated from ServerManager
-class ServerCore {
-  // Remove VS Code dependencies
-  // Replace vscode.window.showInformationMessage with TUI notifications
-  // Replace vscode.workspace.getConfiguration with ConfigManager
-  // Replace vscode.ExtensionContext with custom context
-}
-```
+### Refactor (remove VS Code runtime reliance)
 
-### 5. Terminal Integration
+#### High Priority (Core Server Components)
+- `src/server/ServerManager.ts`
+  - Remove all VS Code EventEmitters, replace with Node EventEmitter
+  - Replace `vscode.window.showInformationMessage` with logger/TUI notifications
+  - Remove VS Code configuration dependency, use ConfigManager
+  - Remove status bar and quick pick functionality
+  - Update error handling to work without VS Code UI
 
-```typescript
-// src/terminal/PTYManager.ts
-interface PTYSession {
-  id: string;
-  pty: NodePty.IPty;
-  title: string;
-  cwd: string;
-  active: boolean;
-}
+- `src/server/TerminalService.ts`
+  - Already has optional VS Code support, enhance for CLI mode
+  - Ensure node-pty integration works properly without VS Code fallback
+  - Update workspace root detection for CLI environment
 
-class PTYManager {
-  createSession(options: PTYOptions): PTYSession;
-  destroySession(id: string): void;
-  writeToSession(id: string, data: string): void;
-  resizeSession(id: string, cols: number, rows: number): void;
-  listSessions(): PTYSession[];
-}
-```
+- `src/server/CloudflaredManager.ts`
+  - Remove VS Code secret storage dependency
+  - Implement file-based credential storage
+  - Update extension context usage for CLI environment
 
-## Data Models
+- `src/server/ConfigurationManager.ts`
+  - Remove VS Code workspace configuration entirely
+  - Replace with file-based configuration system
+  - Keep as legacy wrapper during migration
 
-### 1. Application State
+#### Medium Priority (Supporting Services)
+- `src/server/ErrorHandler.ts`
+  - Remove VS Code notification system
+  - Implement file-based and console error logging
+  - Add TUI-compatible error display
 
-```typescript
-interface ApplicationState {
-  servers: {
-    http: ServerStatus;
-    websocket: ServerStatus;
-  };
-  tunnels: TunnelStatus[];
-  terminals: PTYSession[];
-  config: TUIConfig;
-  logs: LogEntry[];
-}
+- `src/server/WebSocketServer.ts`
+  - Update CommandHandler to work without VS Code commands
+  - Implement CLI-safe command execution
+  - Remove VS Code-specific error handling
 
-interface ServerStatus {
-  isRunning: boolean;
-  port: number;
-  uptime?: number;
-  connections: number;
-  lastError?: string;
-}
+- `src/server/pseudo/KiroPseudoTerminal.ts`
+  - Keep as-is (implements VS Code Pseudoterminal interface)
+  - Will only be used when running in VS Code extension mode
 
-interface TunnelStatus {
-  id: string;
-  name?: string;
-  isRunning: boolean;
-  publicUrl?: string;
-  localUrl: string;
-  startTime?: Date;
-  type: 'quick' | 'named';
-}
-```
+- `src/server/LocalTunnel.ts`
+  - Remove VS Code-specific status displays
+  - Update notification system for CLI compatibility
 
-### 2. Configuration Schema
+#### Low Priority (Utilities)
+- `src/server/FileSystemService.ts` - Already uses Node.js APIs, minimal changes needed
+- `src/server/GitService.ts` - Already uses Node.js APIs, minimal changes needed
+- `src/server/ConnectionRecoveryManager.ts` - Already Node.js compatible
+- `src/server/interfaces.ts` - Type definitions, no changes needed
+- `src/server/index.ts` - Entry point, no VS Code dependencies
 
-```json
-{
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "type": "object",
-  "properties": {
-    "server": {
-      "type": "object",
-      "properties": {
-        "httpPort": { "type": "number", "minimum": 1024, "maximum": 65535 },
-        "autoStart": { "type": "boolean" }
-      }
-    },
-    "tunnel": {
-      "type": "object",
-      "properties": {
-        "autoStartTunnel": { "type": "boolean" },
-        "defaultTunnelName": { "type": "string" }
-      }
-    }
-  }
-}
-```
+### Keep (Already CLI-Compatible)
+- `src/cli/index.ts` - Commander-based CLI entrypoint (already implemented)
+- `src/cli/controller.ts` - Server controller for CLI (already implemented)
+- `src/config/ConfigManager.ts` - File-based configuration (already implemented)
+- `src/terminal/PTYManager.ts` - node-pty integration (already implemented)
+- `src/utils/logger.ts` - Chalk-based logger (already implemented)
+- `src/server/pseudo/SessionEngine.ts` - Terminal session engine (CLI-compatible)
 
-## Error Handling
+### Add (TUI Components and Enhanced Features)
 
-### 1. TUI Error Display
+#### TUI Framework Structure
+- `src/tui/App.tsx` - Main Ink application component
+- `src/tui/components/Layout.tsx` - Responsive layout component
+- `src/tui/components/Header.tsx` - Status and actions header
+- `src/tui/components/Footer.tsx` - Shortcuts and help footer
+- `src/tui/components/TabView.tsx` - Tabbed navigation interface
 
-```typescript
-// src/tui/components/ErrorDisplay.ts
-interface ErrorDisplayProps {
-  error: Error;
-  onDismiss: () => void;
-  onRetry?: () => void;
-}
+#### Feature Components
+- `src/tui/components/ServerTab.tsx` - Server status and controls
+- `src/tui/components/TunnelTab.tsx` - Tunnel management interface
+- `src/tui/components/TerminalTab.tsx` - Terminal session management
+- `src/tui/components/LogsTab.tsx` - Log viewer with filtering
+- `src/tui/components/ConfigTab.tsx` - Configuration editor
 
-class ErrorDisplay extends TUIComponent {
-  // Display errors in modal overlays
-  // Provide action buttons (Dismiss, Retry, View Details)
-  // Support error categorization and severity levels
-}
-```
+#### Supporting Components
+- `src/tui/components/ServerStatus.tsx` - Real-time server status display
+- `src/tui/components/TunnelList.tsx` - Active tunnels list
+- `src/tui/components/TerminalView.tsx` - Terminal output display
+- `src/tui/components/LogViewer.tsx` - Real-time log streaming
+- `src/tui/components/Form.tsx` - Reusable form components
 
-### 2. Graceful Degradation
+#### State Management
+- `src/tui/state/` - State management directory
+- `src/tui/state/AppState.ts` - Global application state
+- `src/tui/state/ServerState.ts` - Server state management
+- `src/tui/state/TunnelState.ts` - Tunnel state management
+- `src/tui/state/TerminalState.ts` - Terminal session state
 
-- Network errors: Show offline mode with cached status
-- Configuration errors: Provide inline editing and validation
-- Server startup errors: Offer port alternatives and diagnostics
-- Terminal errors: Fallback to basic command execution
+#### Hooks and Utilities
+- `src/tui/hooks/` - Custom React hooks directory
+- `src/tui/hooks/useServerState.ts` - Server state hook
+- `src/tui/hooks/useTunnelState.ts` - Tunnel state hook
+- `src/tui/hooks/useTerminalState.ts` - Terminal state hook
+- `src/tui/utils/` - TUI-specific utilities
+- `src/tui/utils/formatting.ts` - Text formatting utilities
+- `src/tui/utils/navigation.ts` - Keyboard navigation helpers
 
-## Testing Strategy
+## Runtime Compatibility Strategy
 
-### 1. Unit Testing
-
-```typescript
-// Tests for each migrated component
-describe('ConfigManager', () => {
-  it('should load configuration from file');
-  it('should migrate VS Code settings');
-  it('should validate configuration schema');
-});
-
-describe('PTYManager', () => {
-  it('should create terminal sessions');
-  it('should handle session cleanup');
-  it('should manage multiple sessions');
-});
-```
-
-### 2. Integration Testing
-
-```typescript
-// Test TUI interactions
-describe('TUI Integration', () => {
-  it('should start application with default config');
-  it('should handle keyboard navigation');
-  it('should update display on state changes');
-});
-
-// Test server functionality without VS Code
-describe('Server Integration', () => {
-  it('should start HTTP server independently');
-  it('should handle WebSocket connections');
-  it('should manage tunnel lifecycle');
-});
-```
-
-### 3. Manual Testing
-
-- Cross-platform terminal compatibility
-- Keyboard shortcuts and navigation
-- Real-time status updates
-- Error handling and recovery
-- Configuration migration from VS Code
+- Replace top-level `import 'vscode'` with one of:
+  - lazy `require('vscode')` guarded by try/catch; or
+  - `import type * as vscode from 'vscode'` and ensure no runtime access.
+- Prefer Node EventEmitter for internal events. Keep VS Code emitters only in extension code-paths.
+- Default roots/paths to `process.cwd()` when workspace is not available.
 
 ## Implementation Phases
 
-### Phase 1: Core Infrastructure
-1. Set up CLI application structure
-2. Implement configuration management
-3. Create basic TUI framework
-4. Migrate server core without VS Code dependencies
+1) Core Infrastructure
+- Add CLI entrypoint + basic commands
+- Introduce CLI `ConfigManager`
+- Wire `HttpServer` + `WebSocketServer` without VS Code
 
-### Phase 2: TUI Components
-1. Implement main dashboard
-2. Create server management interface
-3. Build tunnel management interface
-4. Add configuration editor
+2) Terminal Integration
+- Implement `PTYManager` (vendor/node-pty → npm/node-pty → fallback `SessionEngine`)
+- Add session persistence + resize handling in TUI
 
-### Phase 3: Terminal Integration
-1. Integrate node-pty
-2. Implement terminal manager
-3. Add session persistence
-4. Create terminal UI components
+3) TUI Components
+- Ink app shell + dashboard
+- Server/tunnel/terminal panes
+- Log viewer and error toasts
 
-### Phase 4: Polish and Testing
-1. Add comprehensive error handling
-2. Implement logging and debugging
-3. Create installation and packaging
-4. Add VS Code configuration migration
-
-## File Structure Changes
-
-### Files to Remove
-- `src/extension.ts` - VS Code extension entry point
-- `src/webview/provider.ts` - VS Code webview provider
-- `src/webview/panel.html` - HTML webview content
-- `src/commands/buttonCommands.ts` - VS Code command handlers
-- `src/integration-test.ts` - VS Code-specific integration tests
-- `package.json` VS Code extension metadata
-
-### Files to Modify
-- `src/server/ServerManager.ts` → `src/server/ServerCore.ts`
-- `src/server/pseudo/KiroPseudoTerminal.ts` → `src/terminal/PTYManager.ts`
-- `src/server/ConfigurationManager.ts` → `src/config/ConfigManager.ts`
-
-### Files to Add
-```
-src/
-├── cli/
-│   ├── index.ts              # CLI entry point
-│   └── commands.ts           # CLI command definitions
-├── tui/
-│   ├── App.tsx              # Main TUI application
-│   ├── components/
-│   │   ├── Dashboard.tsx    # Main dashboard
-│   │   ├── ServerManager.tsx
-│   │   ├── TunnelManager.tsx
-│   │   ├── TerminalManager.tsx
-│   │   └── ConfigEditor.tsx
-│   └── hooks/
-│       ├── useServerState.ts
-│       └── useTunnelState.ts
-├── config/
-│   ├── ConfigManager.ts     # File-based configuration
-│   ├── schema.json          # Configuration schema
-│   └── migration.ts         # VS Code migration utilities
-├── terminal/
-│   ├── PTYManager.ts        # node-pty integration
-│   └── SessionManager.ts    # Terminal session management
-└── utils/
-    ├── logger.ts            # Logging utilities
-    └── notifications.ts     # TUI notifications
-```
+4) Polish & Distribution
+- Structured logging, error surfaces
+- Packaging as npm binary (add `bin` in package.json)
+- Cross-platform validation
 
 ## Dependencies
 
-### New Dependencies
-```json
-{
-  "dependencies": {
-    "ink": "^4.4.1",
-    "react": "^18.2.0",
-    "chalk": "^5.3.0",
-    "commander": "^11.1.0",
-    "node-pty": "^1.0.0",
-    "chokidar": "^3.5.3",
-    "ajv": "^8.12.0",
-    "conf": "^11.0.2"
-  }
-}
-```
+New runtime deps: `commander`, `chalk`, `ink`, `react`, `chokidar`, `ajv`.
 
-### Dependencies to Remove
-```json
-{
-  "devDependencies": {
-    "@types/vscode": "^1.74.0"
-  }
-}
-```
+Optional: `node-pty` (best-effort install). The app also supports vendor-supplied prebuilt binaries and will gracefully fall back to pseudo mode if PTY cannot load.
 
-## Security Considerations
+## Accessibility & UX
+- Full keyboard support in Ink
+- High-contrast themes and minimal color reliance
+- CLI-only mode for automation and headless environments
 
-1. **Configuration Security**: Encrypt sensitive tokens in configuration files
-2. **Terminal Security**: Validate and sanitize terminal input/output
-3. **Network Security**: Maintain existing CORS and security headers
-4. **File System Security**: Validate file paths and permissions
-5. **Process Security**: Properly manage child processes and cleanup
+## Transition Strategy
+- Keep extension files until CLI is feature-complete.
+- Land refactors that make server modules VS Code-agnostic.
+- Ship CLI first (binary via npm). Remove extension artifacts after final parity.
 
-## Performance Considerations
-
-1. **TUI Rendering**: Optimize React component updates for terminal rendering
-2. **Memory Management**: Implement proper cleanup for terminal sessions
-3. **Network Efficiency**: Maintain existing WebSocket optimization
-4. **Startup Time**: Lazy load components and services
-5. **Resource Usage**: Monitor and limit terminal session resources
-
-## Accessibility
-
-1. **Keyboard Navigation**: Full keyboard support for all TUI components
-2. **Screen Reader Support**: Proper ARIA labels and descriptions
-3. **Color Accessibility**: Support for high contrast and colorblind users
-4. **Text Scaling**: Respect terminal font size settings
-5. **Alternative Interfaces**: Provide CLI-only mode for automation

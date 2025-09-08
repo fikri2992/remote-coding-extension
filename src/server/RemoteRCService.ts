@@ -2,7 +2,6 @@
  * RemoteRCService - Manages .remoterc folder and prompt persistence
  */
 
-import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs/promises';
 import { PromptRecord, RemoteRCStructure } from './interfaces';
@@ -24,17 +23,14 @@ export class RemoteRCService {
      */
     private async initializeRemoteRCPath(): Promise<void> {
         try {
-            const workspaceFolders = vscode.workspace.workspaceFolders;
-            if (workspaceFolders && workspaceFolders.length > 0) {
-                const workspaceRoot = workspaceFolders[0]!.uri.fsPath;
-                this._remoteRCPath = path.join(workspaceRoot, '.remoterc');
-                
-                // Ensure .remoterc directory exists
-                await this.ensureRemoteRCDirectory();
-                
-                // Load or create configuration
-                await this.loadConfiguration();
-            }
+            const workspaceRoot = process.cwd();
+            this._remoteRCPath = path.join(workspaceRoot, '.remoterc');
+
+            // Ensure .remoterc directory exists
+            await this.ensureRemoteRCDirectory();
+
+            // Load or create configuration
+            await this.loadConfiguration();
         } catch (error) {
             console.error('Failed to initialize .remoterc path:', error);
         }

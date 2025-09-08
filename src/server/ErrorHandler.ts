@@ -2,7 +2,8 @@
  * ErrorHandler - Comprehensive error handling and recovery system
  */
 
-import * as vscode from 'vscode';
+// VS Code is optional for CLI; resolve lazily when present
+function getVSCode(): any | null { try { return require('vscode'); } catch { return null; } }
 
 /**
  * Error severity levels
@@ -334,21 +335,25 @@ export class ErrorHandler {
         const message = errorInfo.userMessage;
         const actions = errorInfo.suggestedActions?.slice(0, 2) || []; // Limit to 2 actions
 
-        switch (errorInfo.severity) {
-            case ErrorSeverity.CRITICAL:
-            case ErrorSeverity.HIGH:
-                vscode.window.showErrorMessage(message, ...actions);
-                break;
-            case ErrorSeverity.MEDIUM:
-                vscode.window.showWarningMessage(message, ...actions);
-                break;
-            case ErrorSeverity.LOW:
-                // Only show information for recoverable low-severity errors
-                if (errorInfo.recoverable) {
-                    vscode.window.showInformationMessage(message);
+        try {
+            const vs = getVSCode();
+            if (vs?.window) {
+                switch (errorInfo.severity) {
+                    case ErrorSeverity.CRITICAL:
+                    case ErrorSeverity.HIGH:
+                        vs.window.showErrorMessage(message, ...actions);
+                        return;
+                    case ErrorSeverity.MEDIUM:
+                        vs.window.showWarningMessage(message, ...actions);
+                        return;
+                    case ErrorSeverity.LOW:
+                        if (errorInfo.recoverable) vs.window.showInformationMessage(message);
+                        return;
                 }
-                break;
-        }
+            }
+        } catch {}
+        // Fallback: print to console for CLI/TUI; Ink toasts will consume logs
+        this.logError(errorInfo);
     }
 
     /**

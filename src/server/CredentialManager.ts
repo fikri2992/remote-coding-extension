@@ -1,4 +1,4 @@
-import * as vscode from 'vscode'
+function getVSCode(): any | null { try { return require('vscode'); } catch { return null; } }
 
 export class CredentialManager {
   private credentials: Map<string, string> = new Map()
@@ -9,7 +9,8 @@ export class CredentialManager {
 
   private loadCredentials(): void {
     try {
-      const config = vscode.workspace.getConfiguration('webAutomationTunnel')
+      const vs = getVSCode();
+      const config = vs?.workspace?.getConfiguration?.('webAutomationTunnel')
 
       const mappings: Record<string, string> = {
         ANTHROPIC_API_KEY: 'anthropic.apiKey',
@@ -20,7 +21,7 @@ export class CredentialManager {
       }
 
       for (const [envVar, configKey] of Object.entries(mappings)) {
-        const v = (config?.get<string>(configKey) || process.env[envVar] || '').trim()
+        const v = ((config?.get?.(configKey) as string | undefined) || process.env[envVar] || '').trim()
         if (v) this.credentials.set(envVar, v)
       }
     } catch {
@@ -54,4 +55,3 @@ export class CredentialManager {
     return providers
   }
 }
-

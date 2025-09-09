@@ -1,194 +1,187 @@
 {
-    "name": "vscode-extension-basic",
-    "displayName": "Basic VSCode Extension",
-    "description": "A basic VSCode extension with activity bar and button functionality",
-    "version": "0.0.1",
-    "publisher": "basic-extension-publisher",
-    "engines": {
-        "vscode": "^1.75.0"
-    },
-    "categories": [
-        "Other"
-    ],
-    "activationEvents": [
-        "onStartupFinished"
-    ],
-    "main": "./out/extension.js",
-    "contributes": {
-        "viewsContainers": {
-            "activitybar": [{
-                "id": "basicExtension",
-                "title": "Basic Extension",
-                "icon": "./src/assets/icon.svg"
-            }]
-        },
-        "views": {
-            "basicExtension": [{
-                "id": "basicExtensionView",
-                "name": "Web Automation Tunnel",
-                "type": "webview",
-                "icon": "./src/assets/icon.svg"
-            }]
-        },
-        "commands": [{
-                "command": "basicExtension.executeAction",
-                "title": "Execute Action",
-                "category": "Basic Extension"
-            },
-            {
-                "command": "basicExtension.focusAuxiliaryBar",
-                "title": "Focus Auxiliary Bar",
-                "category": "Basic Extension"
-            },
-            {
-                "command": "webAutomationTunnel.startServer",
-                "title": "Start Web Automation Server",
-                "category": "Web Automation Tunnel"
-            },
-            {
-                "command": "webAutomationTunnel.stopServer",
-                "title": "Stop Web Automation Server",
-                "category": "Web Automation Tunnel"
-            },
-            {
-                "command": "webAutomationTunnel.openConfiguration",
-                "title": "Open Configuration",
-                "category": "Web Automation Tunnel"
-            },
-            {
-                "command": "webAutomationTunnel.resetConfiguration",
-                "title": "Reset Configuration to Defaults",
-                "category": "Web Automation Tunnel"
-            },
-            {
-                "command": "webAutomationTunnel.toggleUI",
-                "title": "Toggle Enhanced/Basic UI",
-                "category": "Web Automation Tunnel"
-            },
-            {
-                "command": "webAutomationTunnel.runIntegrationTest",
-                "title": "Run Enhanced UI Integration Test",
-                "category": "Web Automation Tunnel"
-            },
-            {
-                "command": "webAutomationTunnel.startTunnel",
-                "title": "Start Cloudflare Tunnel",
-                "category": "Web Automation Tunnel"
-            },
-            {
-                "command": "webAutomationTunnel.stopTunnel",
-                "title": "Stop Cloudflare Tunnel",
-                "category": "Web Automation Tunnel"
-            },
-            {
-                "command": "webAutomationTunnel.installCloudflared",
-                "title": "Install Cloudflare Tunnel",
-                "category": "Web Automation Tunnel"
-            },
-            {
-                "command": "webAutomationTunnel.tunnelStatus",
-                "title": "Check Tunnel Status",
-                "category": "Web Automation Tunnel"
-            },
-            {
-                "command": "webAutomationTunnel.quickStart",
-                "title": "Quick Start: Start Server + Quick Tunnel",
-                "category": "Web Automation Tunnel"
-            },
-            {
-                "command": "webAutomationTunnel.statusBarAction",
-                "title": "Web Automation Status Actions",
-                "category": "Web Automation Tunnel"
-            }
-        ],
-        "configuration": {
-            "title": "Web Automation Tunnel",
-            "properties": {
-                "webAutomationTunnel.httpPort": {
-                    "type": "number",
-                    "default": 3900,
-                    "minimum": 1024,
-                    "maximum": 65535,
-                    "description": "Port number for the HTTP server"
-                },
-                "webAutomationTunnel.websocketPort": {
-                    "type": "number",
-                    "default": 3901,
-                    "minimum": 1024,
-                    "maximum": 65535,
-                    "description": "Port number for the WebSocket server (defaults to HTTP port + 1)",
-                    "deprecationMessage": "Deprecated: WebSocket server now attaches to the HTTP server automatically. This setting is ignored."
-                },
-                "webAutomationTunnel.tunnelName": {
-                    "type": "string",
-                    "description": "Optional Cloudflare named tunnel to use (leave empty to use a quick tunnel)",
-                    "deprecationMessage": "Deprecated: Configure tunnels via commands or the extension UI. This setting is ignored."
-                },
-                "webAutomationTunnel.cloudflareToken": {
-                    "type": "string",
-                    "description": "Optional Cloudflare API token for authenticated tunnels (recommended for named tunnels)",
-                    "deprecationMessage": "Deprecated: Provide tokens during tunnel start via UI/commands. This setting is ignored."
-                },
-                "webAutomationTunnel.autoStartTunnel": {
-                    "type": "boolean",
-                    "default": true,
-                    "description": "Automatically start Cloudflare tunnel when server starts",
-                    "deprecationMessage": "Deprecated: Tunnel start is controlled via the extension UI. This setting is ignored."
-                },
-                "webAutomationTunnel.tunnelStartTimeoutMs": {
-                    "type": "number",
-                    "default": 60000,
-                    "minimum": 5000,
-                    "maximum": 300000,
-                    "description": "Timeout in milliseconds to wait for Cloudflare tunnel to report its public URL before failing"
-                },
-                "webAutomationTunnel.useEnhancedUI": {
-                    "type": "boolean",
-                    "default": true,
-                    "description": "Use the enhanced UI for the Webview panel (toggle via the 'Toggle Enhanced/Basic UI' command)"
-                }
-            }
+  "name": "vscode-extension-basic",
+  "displayName": "Basic VSCode Extension",
+  "description": "A basic VSCode extension with activity bar and button functionality",
+  "version": "0.0.1",
+  "publisher": "basic-extension-publisher",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "bin": {
+    "kiro-remote": "./out/cli/index.js"
+  },
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "basicExtension",
+          "title": "Basic Extension",
+          "icon": "./src/assets/icon.svg"
         }
+      ]
     },
-    "scripts": {
-        "vscode:prepublish": "npm run build",
-        "compile": "tsc -p ./",
-        "compile:watch": "tsc -watch -p ./",
-        "copy-assets": "xcopy /Y \"src\\webview\\panel.html\" \"out\\webview\\\" && xcopy /Y \"src\\webview\\styles.css\" \"out\\webview\\\" && xcopy /Y \"src\\webview\\script.js\" \"out\\webview\\\"",
-        "copy-react-dist": "xcopy /E /I /Y \"src\\webview\\react-frontend\\dist\" \"out\\webview\\react-frontend\\dist\\\"",
-        "build:vue": "cd src/webview/react-frontend && npm run build",
-        "build:vue:dev": "cd src/webview/react-frontend && npm run build",
-        "build:vue:prod": "cd src/webview/react-frontend && npm run build",
-        "dev:vue": "cd src/webview/vue-frontend && npm run dev",
-        "start:vue": "cd src/webview/vue-frontend && npm run dev",
-        "pretest": "npm run build",
-        "lint": "eslint src --ext ts",
-        "lint:vue": "cd src/webview/vue-frontend && npm run lint",
-        "clean": "rimraf out",
-        "clean:vue": "cd src/webview/vue-frontend && npm run clean",
-        "build": "npm run clean && npm run compile && npm run copy-assets && npm run build:vue:prod && npm run copy-react-dist",
-        "dev": "npm run compile && npm run copy-assets && npm run build:vue:dev && npm run copy-react-dist",
-        "package": "npm run build && vsce package"
+    "views": {
+      "basicExtension": [
+        {
+          "id": "basicExtensionView",
+          "name": "Web Automation Tunnel",
+          "type": "webview",
+          "icon": "./src/assets/icon.svg"
+        }
+      ]
     },
-    "devDependencies": {
-        "@types/node": "16.x",
-        "@types/vscode": "^1.74.0",
-        "@typescript-eslint/eslint-plugin": "^5.45.0",
-        "@typescript-eslint/parser": "^5.45.0",
-        "autoprefixer": "^10.4.21",
-        "eslint": "^8.28.0",
-        "postcss": "^8.5.6",
-        "rimraf": "^3.0.2",
-        "tailwindcss": "^4.1.12",
-        "typescript": "^5.0.0"
-    },
-    "dependencies": {
-        "@types/uuid": "^10.0.0",
-        "@types/ws": "^8.18.1",
-        "uuid": "^11.1.0",
-        "ws": "^8.18.3"
-    },
-    "optionalDependencies": {
-        "node-pty": "^1.0.0"
+    "commands": [
+      { "command": "kiroAgent.focusPasteEnter", "title": "Kiro Agent: Focus, Paste, Enter", "category": "Kiro Agent" },
+      { "command": "basicExtension.executeAction", "title": "Execute Action", "category": "Basic Extension" },
+      { "command": "basicExtension.focusAuxiliaryBar", "title": "Focus Auxiliary Bar", "category": "Basic Extension" },
+      { "command": "webAutomationTunnel.startServer", "title": "Start Web Automation Server", "category": "Web Automation Tunnel" },
+      { "command": "webAutomationTunnel.stopServer", "title": "Stop Web Automation Server", "category": "Web Automation Tunnel" },
+      { "command": "webAutomationTunnel.openConfiguration", "title": "Open Configuration", "category": "Web Automation Tunnel" },
+      { "command": "webAutomationTunnel.resetConfiguration", "title": "Reset Configuration to Defaults", "category": "Web Automation Tunnel" },
+      { "command": "webAutomationTunnel.toggleUI", "title": "Toggle Enhanced/Basic UI", "category": "Web Automation Tunnel" },
+      { "command": "webAutomationTunnel.runIntegrationTest", "title": "Run Enhanced UI Integration Test", "category": "Web Automation Tunnel" },
+      { "command": "webAutomationTunnel.startTunnel", "title": "Start Cloudflare Tunnel", "category": "Web Automation Tunnel" },
+      { "command": "webAutomationTunnel.stopTunnel", "title": "Stop Cloudflare Tunnel", "category": "Web Automation Tunnel" },
+      { "command": "webAutomationTunnel.installCloudflared", "title": "Install Cloudflare Tunnel", "category": "Web Automation Tunnel" },
+      { "command": "webAutomationTunnel.tunnelStatus", "title": "Check Tunnel Status", "category": "Web Automation Tunnel" },
+      { "command": "webAutomationTunnel.quickStart", "title": "Quick Start: Start Server + Quick Tunnel", "category": "Web Automation Tunnel" },
+      { "command": "webAutomationTunnel.statusBarAction", "title": "Web Automation Status Actions", "category": "Web Automation Tunnel" },
+      { "command": "webAutomationTunnel.diagnosePTY", "title": "Diagnose Terminal PTY", "category": "Web Automation Tunnel" },
+      { "command": "webAutomationTunnel.openPseudoTerminal", "title": "Open Pseudo Terminal (No native PTY)", "category": "Web Automation Tunnel" }
+    ],
+    "configuration": {
+      "title": "Web Automation Tunnel",
+      "properties": {
+        "webAutomationTunnel.httpPort": {
+          "type": "number",
+          "default": 3900,
+          "minimum": 1024,
+          "maximum": 65535,
+          "description": "Port number for the HTTP server"
+        },
+        "webAutomationTunnel.websocketPort": {
+          "type": "number",
+          "default": 3901,
+          "minimum": 1024,
+          "maximum": 65535,
+          "description": "Port number for the WebSocket server (defaults to HTTP port + 1)",
+          "deprecationMessage": "Deprecated: WebSocket server now attaches to the HTTP server automatically. This setting is ignored."
+        },
+        "webAutomationTunnel.tunnelName": {
+          "type": "string",
+          "description": "Optional Cloudflare named tunnel to use (leave empty to use a quick tunnel)",
+          "deprecationMessage": "Deprecated: Configure tunnels via commands or the extension UI. This setting is ignored."
+        },
+        "webAutomationTunnel.cloudflareToken": {
+          "type": "string",
+          "description": "Optional Cloudflare API token for authenticated tunnels (recommended for named tunnels)",
+          "deprecationMessage": "Deprecated: Provide tokens during tunnel start via UI/commands. This setting is ignored."
+        },
+        "webAutomationTunnel.autoStartTunnel": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically start Cloudflare tunnel when server starts",
+          "deprecationMessage": "Deprecated: Tunnel start is controlled via the extension UI. This setting is ignored."
+        },
+        "webAutomationTunnel.tunnelStartTimeoutMs": {
+          "type": "number",
+          "default": 60000,
+          "minimum": 5000,
+          "maximum": 300000,
+          "description": "Timeout in milliseconds to wait for Cloudflare tunnel to report its public URL before failing"
+        },
+        "webAutomationTunnel.useEnhancedUI": {
+          "type": "boolean",
+          "default": true,
+          "description": "Use the enhanced UI for the Webview panel (toggle via the 'Toggle Enhanced/Basic UI' command)"
+        },
+        "webAutomationTunnel.terminal.injectAICredentials": {
+          "type": "boolean",
+          "default": false,
+          "description": "Inject AI credentials into terminal environment (OPENAI_API_KEY, ANTHROPIC_API_KEY, etc.). Keep OFF for device-code/OAuth flows."
+        },
+        "webAutomationTunnel.terminal.debug": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable verbose terminal server logs (ops, sizes). Also toggled by env KIRO_DEBUG_TERMINAL=1."
+        },
+        "webAutomationTunnel.terminal.engineMode": {
+          "type": "string",
+          "enum": ["auto", "line", "pipe"],
+          "default": "line",
+          "description": "Select terminal engine. 'auto' uses node-pty when available; 'line' forces pseudo line-mode; 'pipe' uses long-lived pipe shell (no native PTY)."
+        },
+        "webAutomationTunnel.terminal.autoOpenPseudoTerminal": {
+          "type": "boolean",
+          "default": false,
+          "description": "When starting the server from VS Code, also open a Pseudo Terminal (line/pipe based on engineMode)."
+        },
+        "webAutomationTunnel.terminal.prompt.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable custom prompt rendering in pseudo terminal (line mode)"
+        },
+        "webAutomationTunnel.terminal.prompt.template": {
+          "type": "string",
+          "default": "\u001b[36m${cwd}\u001b[0m$ ",
+          "description": "Prompt template (supports ${cwd})"
+        },
+        "webAutomationTunnel.terminal.hiddenEcho.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Echo typed command locally in line mode (disable to rely on shell echo)"
+        }
+      }
     }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run build",
+    "compile": "tsc -p ./",
+    "compile:watch": "tsc -watch -p ./",
+    "copy-assets": "xcopy /Y \"src\\webview\\panel.html\" \"out\\webview\\\" && xcopy /Y \"src\\webview\\styles.css\" \"out\\webview\\\" && xcopy /Y \"src\\webview\\script.js\" \"out\\webview\\\"",
+    "copy-react-dist": "xcopy /E /I /Y \"src\\webview\\react-frontend\\dist\" \"out\\webview\\react-frontend\\dist\\\"",
+    "build:vue": "cd src/webview/react-frontend && npm run build",
+    "build:vue:dev": "cd src/webview/react-frontend && npm run build",
+    "build:vue:prod": "cd src/webview/react-frontend && npm run build",
+    "dev:vue": "cd src/webview/vue-frontend && npm run dev",
+    "start:vue": "cd src/webview/vue-frontend && npm run dev",
+    "pretest": "npm run build",
+    "lint": "eslint src --ext ts",
+    "lint:vue": "cd src/webview/vue-frontend && npm run lint",
+    "clean": "rimraf out",
+    "clean:vue": "cd src/webview/vue-frontend && npm run clean",
+    "build": "npm run clean && npm run compile && npm run copy-assets && npm run build:vue:prod && npm run copy-react-dist",
+    "build:cli": "tsc -p ./",
+    "start:cli": "node ./out/cli/index.js start",
+    "dev": "npm run compile && npm run copy-assets && npm run build:vue:dev && npm run copy-react-dist",
+    "package": "npm run build && vsce package"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^3.6.1",
+    "@types/node": "16.x",
+    "@types/vscode": "^1.74.0",
+    "@typescript-eslint/eslint-plugin": "^5.45.0",
+    "@typescript-eslint/parser": "^5.45.0",
+    "autoprefixer": "^10.4.21",
+    "eslint": "^8.28.0",
+    "postcss": "^8.5.6",
+    "rimraf": "^3.0.2",
+    "tailwindcss": "^4.1.12",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "chalk": "^5.3.0",
+    "commander": "^11.1.0",
+    "@types/uuid": "^10.0.0",
+    "@types/ws": "^8.18.1",
+    "uuid": "^11.1.0",
+    "ws": "^8.18.3"
+  }
 }

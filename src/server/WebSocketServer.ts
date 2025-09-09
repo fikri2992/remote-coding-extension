@@ -5,6 +5,13 @@ import { FileSystemService } from './FileSystemService';
 import { GitService } from './GitService';
 import { TerminalService } from './TerminalService';
 
+type ICommandHandler = {
+  addAllowedCommand: (cmd: string) => void;
+  executeCommand: (cmd: string, args: any[]) => Promise<{ success: boolean; data?: any; error?: string }>;
+  dispose: () => void;
+  setStateChangeCallback?: (cb: any) => void;
+} | null;
+
 export interface WebSocketConnection {
   ws: WebSocket;
   id: string;
@@ -21,6 +28,8 @@ export class WebSocketServer {
   private _fsService: FileSystemService;
   private _gitService: GitService | null = null;
   private _terminalService: TerminalService;
+  private _commandHandler: ICommandHandler = null;
+  private debug: boolean = true; // Hardcoded debug mode for WebSocket frame tracking
 
   constructor(config: any, attachedHttpServer?: HttpServer, upgradePath: string = '/ws') {
     // Handle both number and config object
@@ -31,9 +40,26 @@ export class WebSocketServer {
     }
     this._attachedHttpServer = attachedHttpServer || null;
     this._upgradePath = upgradePath;
+    
+    if (this.debug) {
+      console.log('🔧 WebSocketServer: Debug mode ENABLED (hardcoded)');
+    }
+    
     // Initialize services that need to send responses
     this._fsService = new FileSystemService((clientId, payload) => this.sendToClient(clientId, payload));
     this._terminalService = new TerminalService((clientId, payload) => this.sendToClient(clientId, payload));
+    try {
+      const mod = require('./CommandHandler');
+      this._commandHandler = new mod.CommandHandler();
+      const ch = this._commandHandler as any;
+      ch.addAllowedCommand('kiroAgent.focusContinueInputWithoutClear');
+      ch.addAllowedCommand('type');
+      ch.addAllowedCommand('editor.action.clipboardPasteAction');
+      ch.addAllowedCommand('kiroAgent.focusPasteEnter');
+    } catch {
+      this._commandHandler = null;
+      if (this.debug) console.log('WebSocketServer: CommandHandler unavailable (CLI mode)');
+    }
   }
 
   public async start(): Promise<void> {
@@ -226,7 +252,27 @@ export class WebSocketServer {
   public sendToClient(clientId: string, message: any): boolean {
     const connection = this.connections.get(clientId);
     if (connection && connection.ws.readyState === WebSocket.OPEN) {
-      connection.ws.send(JSON.stringify(message));
+      const messageStr = JSON.stringify(message);
+      
+      // Debug logging for outgoing messages
+      if (this.debug) {
+        console.log(`🔼 WebSocket Send [${clientId.substring(0, 8)}...]:`, {
+          type: message.type,
+          payloadSize: messageStr.length,
+          messageId: message.id
+        });
+        
+        // Special tracking for terminal frames
+        if (message.type === 'terminal') {
+          console.log(`📟 Terminal Frame Out [${clientId.substring(0, 8)}...]:`, {
+            op: message.data?.op,
+            sessionId: message.data?.sessionId,
+            payloadSize: messageStr.length
+          });
+        }
+      }
+      
+      connection.ws.send(messageStr);
       return true;
     }
     return false;
@@ -292,7 +338,26 @@ export class WebSocketServer {
   }
 
   private handleMessage(connectionId: string, message: any): void {
-    console.log(`Message from ${connectionId}:`, message);
+    // Enhanced debug logging for all WebSocket messages
+    if (this.debug) {
+      const payloadSize = JSON.stringify(message).length;
+      console.log(`🔽 WebSocket Frame [${connectionId.substring(0, 8)}...]:`, {
+        type: message.type,
+        payloadSize,
+        messageId: message.id
+      });
+      
+      // Special tracking for terminal frames
+      if (message.type === 'terminal') {
+        console.log(`📟 Terminal Frame In [${connectionId.substring(0, 8)}...]:`, {
+          op: message.data?.op,
+          sessionId: message.data?.sessionId,
+          payloadSize
+        });
+      }
+    } else {
+      console.log(`Message from ${connectionId}:`, message);
+    }
 
     // Handle ping messages
     if (message.type === 'ping') {
@@ -374,11 +439,63 @@ export class WebSocketServer {
       }
     }
 
+    // VS Code command execution protocol
+    if (message.type === 'command') {
+      const id = message.id;
+      const cmd: string | undefined = message.command || message?.data?.command;
+      const args: any[] = (message.args || message?.data?.args || []) as any[];
+      if (!cmd) {
+        this.sendToClient(connectionId, { type: 'command', id, data: { ok: false, error: 'Missing command id' } });
+        return;
+      }
+      try {
+        if (!this._commandHandler) {
+          this.sendToClient(connectionId, { type: 'command', id, data: { ok: false, error: 'Command subsystem not available in CLI mode' } });
+          return;
+        }
+        if (this.debug) {
+          try { console.log('[WS] Command request', { connection: connectionId.substring(0,8)+'...', cmd, argsLen: Array.isArray(args) ? args.length : 0 }); } catch {}
+        }
+        this._commandHandler.executeCommand(cmd, args)
+          .then((result) => {
+            if (this.debug) {
+              try { console.log('[WS] Command result', { cmd, ok: result.success, hasData: !!result.data, error: result.error }); } catch {}
+            }
+            this.sendToClient(connectionId, { type: 'command', id, data: { ok: result.success, result: result.data, error: result.error } });
+          })
+          .catch((err) => {
+            const errMsg = err instanceof Error ? err.message : String(err);
+            if (this.debug) {
+              try { console.log('[WS] Command error', { cmd, error: errMsg }); } catch {}
+            }
+            this.sendToClient(connectionId, { type: 'command', id, data: { ok: false, error: errMsg } });
+          });
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        this.sendToClient(connectionId, { type: 'command', id, data: { ok: false, error: errMsg } });
+      }
+    }
+
     // Terminal protocol (Stage 1: exec)
     if (message.type === 'terminal') {
+      if (this.debug) {
+        console.log(`🔄 Processing Terminal Frame [${connectionId.substring(0, 8)}...]:`, {
+          op: message.data?.op,
+          sessionId: message.data?.sessionId
+        });
+      }
+      
       this._terminalService.handle(connectionId, message).catch(err => {
         const id = message.id;
         const errMsg = err instanceof Error ? err.message : String(err);
+        
+        if (this.debug) {
+          console.log(`❌ Terminal Error [${connectionId.substring(0, 8)}...]:`, {
+            error: errMsg,
+            messageId: id
+          });
+        }
+        
         this.sendToClient(connectionId, { type: 'terminal', id, data: { ok: false, error: errMsg } });
       });
     }

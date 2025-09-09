@@ -125,6 +125,16 @@ export class CommandHandler {
             'workbench.view.scm',
             'workbench.view.debug',
             'workbench.view.extensions',
+
+            // Text typing (used to simulate Enter key)
+            'type',
+
+            // Custom Kiro command(s)
+            'kiroAgent.focusContinueInputWithoutClear',
+            'kiroAgent.focusPasteEnter',
+
+            // Clipboard actions
+            'editor.action.clipboardPasteAction',
             
             // Terminal operations
             'workbench.action.terminal.new',

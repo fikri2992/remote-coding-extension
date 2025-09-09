@@ -108,7 +108,7 @@ export class CliServer {
 
       this.webServer = new WebServer(webServerConfig);
       await this.webServer.start();
-      
+
       // Start WebSocket server attached to the HTTP server
       this.webSocketServer = new WebSocketServer(
         { httpPort: port },
@@ -116,7 +116,7 @@ export class CliServer {
         '/ws'
       );
       await this.webSocketServer.start();
-      
+
       // Initialize terminal service
       this.terminalService = new TerminalService((clientId: string, message: any) => {
         // Send terminal messages through WebSocket
@@ -125,7 +125,7 @@ export class CliServer {
         }
         return false;
       });
-      
+
       // Initialize git service
       const workspaceRoot = process.cwd();
       console.log(`🔧 Git Service workspace root: ${workspaceRoot}`);
@@ -133,7 +133,7 @@ export class CliServer {
         workspaceRoot: workspaceRoot,
         enableDebug: process.env.KIRO_GIT_DEBUG === '1'
       });
-      
+
       // Initialize filesystem service
       console.log(`📁 FileSystem Service workspace root: ${workspaceRoot}`);
       this.filesystemService = new CLIFileSystemService((clientId: string, message: any) => {
@@ -143,7 +143,10 @@ export class CliServer {
         }
         return false;
       });
-      
+
+      // Log filesystem service configuration for debugging
+      console.log(`📁 FileSystem Service config:`, this.filesystemService.getConfig());
+
       // Register terminal service with WebSocket server
       if (this.webSocketServer) {
         (this.webSocketServer as any).registerService('terminal', {
@@ -159,7 +162,7 @@ export class CliServer {
             }
           }
         });
-        
+
         // Register git service with WebSocket server
         (this.webSocketServer as any).registerService('git', {
           handle: async (clientId: string, message: any) => {
@@ -171,65 +174,65 @@ export class CliServer {
               // Extract operation and options from the correct nested structure
               const operation = message.data?.gitData?.operation;
               const options = message.data?.gitData?.options || {};
-              
+
               if (this.config?.server && process.env.KIRO_GIT_DEBUG === '1') {
                 console.log(`[Git Debug] Received message:`, JSON.stringify(message, null, 2));
                 console.log(`[Git Debug] Extracted operation: ${operation}`);
                 console.log(`[Git Debug] Extracted options:`, options);
               }
-              
+
               if (!operation) {
                 return { error: 'Missing operation in git message' };
               }
-              
+
               switch (operation) {
                 case 'status':
                   const status = await this.gitService.getStatus(options.workspacePath);
                   return { success: true, data: status };
-                  
+
                 case 'log':
                   const commits = await this.gitService.getRecentCommits(options.count || 10, options.workspacePath);
                   return { success: true, data: commits };
-                  
+
                 case 'diff':
                   const diffs = await this.gitService.getCurrentDiff(options.workspacePath);
                   return { success: true, data: diffs };
-                  
+
                 case 'add':
                   await this.gitService.add(options.files, options.workspacePath);
                   return { success: true };
-                  
+
                 case 'commit':
                   await this.gitService.commit(options.message, options.files, options.workspacePath);
                   return { success: true };
-                  
+
                 case 'push':
                   await this.gitService.push(options.remote, options.branch, options.workspacePath);
                   return { success: true };
-                  
+
                 case 'pull':
                   await this.gitService.pull(options.remote, options.branch, options.workspacePath);
                   return { success: true };
-                  
+
                 case 'state':
                   const state = await this.gitService.getRepositoryState(options.workspacePath);
                   return { success: true, data: state };
-                  
+
                 case 'find-repos':
                   const repos = await this.gitService.findRepositories(options.rootPath);
                   return { success: true, data: repos };
-                  
+
                 case 'show':
                   if (!options.commitHash) {
                     return { error: 'Missing commitHash for show operation' };
                   }
                   const showResult = await this.gitService.getCommitDiff(options.commitHash, options.workspacePath);
                   return { success: true, data: showResult };
-                  
+
                 case 'config':
                   const config = this.gitService.getConfig();
                   return { success: true, data: config };
-                  
+
                 case 'branch':
                   if (options.create) {
                     await this.gitService.executeSafeOperation('create-branch', {
@@ -248,14 +251,14 @@ export class CliServer {
                     return { success: true, data: { currentBranch } };
                   }
                   return { success: true };
-                  
+
                 default:
                   return { error: `Unknown git operation: ${operation}` };
               }
             } catch (error) {
-              return { 
-                success: false, 
-                error: error instanceof Error ? error.message : 'Unknown error' 
+              return {
+                success: false,
+                error: error instanceof Error ? error.message : 'Unknown error'
               };
             }
           },
@@ -263,7 +266,7 @@ export class CliServer {
             // Git service doesn't need special disconnect handling
           }
         });
-        
+
         // Register filesystem service with WebSocket server
         (this.webSocketServer as any).registerService('fileSystem', {
           handle: async (clientId: string, message: any) => {
@@ -272,67 +275,19 @@ export class CliServer {
             }
 
             try {
-              // Extract operation and data from the correct nested structure
-              const operation = message.data?.fileSystemData?.operation;
-              const data = message.data?.fileSystemData || {};
-              
-              if (process.env.KIRO_FS_DEBUG === '1') {
-                console.log(`[FS Debug] Received message:`, JSON.stringify(message, null, 2));
-                console.log(`[FS Debug] Extracted operation: ${operation}`);
-                console.log(`[FS Debug] Extracted data:`, data);
-              }
-              
-              if (!operation) {
-                return { error: 'Missing operation in filesystem message' };
-              }
-              
-              switch (operation) {
-                case 'tree':
-                  const treeResult = await this.filesystemService.getTree(data.path, data.maxDepth);
-                  return { success: true, data: treeResult };
-                  
-                case 'open':
-                  const fileResult = await this.filesystemService.openFile(data.path, {
-                    encoding: data.encoding,
-                    maxLength: data.maxLength
-                  });
-                  return { success: true, data: fileResult };
-                  
-                case 'create':
-                  await this.filesystemService.createFile(data.path, data.content, data.options);
-                  return { success: true };
-                  
-                case 'delete':
-                  await this.filesystemService.deleteFile(data.path, data.options);
-                  return { success: true };
-                  
-                case 'rename':
-                  await this.filesystemService.renameFile(data.path, data.options?.newPath || data.newPath);
-                  return { success: true };
-                  
-                case 'watch':
-                  const watchResult = await this.filesystemService.addWatcher(clientId, data.path);
-                  return { success: true, data: watchResult };
-                  
-                case 'unwatch':
-                  const unwatchResult = this.filesystemService.removeWatcher(clientId, data.path);
-                  return { success: true, data: unwatchResult };
-                  
-                case 'stats':
-                  const statsResult = await this.filesystemService.getFileStats(data.path);
-                  return { success: true, data: statsResult };
-                  
-                case 'config':
-                  const fsConfig = this.filesystemService.getConfig();
-                  return { success: true, data: fsConfig };
-                  
-                default:
-                  return { error: `Unknown filesystem operation: ${operation}` };
-              }
+              // Debug logging enabled by default for troubleshooting
+              console.log(`[FS Debug] Received message:`, JSON.stringify(message, null, 2));
+
+              // Use the filesystem service's own handle method which expects the full message
+              // The service will handle the message parsing and send responses directly
+              await this.filesystemService.handle(clientId, message);
+
+              // Return a success indicator since the service handles responses internally
+              return { success: true };
             } catch (error) {
-              return { 
-                success: false, 
-                error: error instanceof Error ? error.message : 'Unknown error' 
+              return {
+                success: false,
+                error: error instanceof Error ? error.message : 'Unknown error'
               };
             }
           },
@@ -343,17 +298,17 @@ export class CliServer {
           }
         });
       }
-      
+
       this.isRunning = true;
       this.startTime = new Date();
-      
+
       console.log('');
       console.log('✅ Server started successfully!');
       console.log(`📱 Web interface: http://localhost:${port}`);
       console.log('🔧 WebSocket: Connected');
       console.log('');
       console.log('Press Ctrl+C to stop the server');
-      
+
     } catch (error) {
       console.error('❌ Failed to start server:', error);
       throw error;
@@ -368,35 +323,35 @@ export class CliServer {
 
     try {
       console.log('🛑 Stopping server...');
-      
+
       if (this.webServer) {
         await this.webServer.stop();
         this.webServer = undefined;
       }
-      
+
       if (this.webSocketServer) {
         await this.webSocketServer.stop();
         this.webSocketServer = undefined;
       }
-      
+
       if (this.terminalService) {
         this.terminalService.dispose();
         this.terminalService = undefined;
       }
-      
+
       if (this.gitService) {
         this.gitService.clearCache();
         this.gitService = undefined;
       }
-      
+
       if (this.filesystemService) {
         this.filesystemService.cleanup();
         this.filesystemService = undefined;
       }
-      
+
       this.isRunning = false;
       console.log('✅ Server stopped successfully');
-      
+
     } catch (error) {
       console.error('❌ Failed to stop server:', error);
       throw error;
@@ -412,22 +367,22 @@ export class CliServer {
       uptime: this.isRunning && this.startTime ? Date.now() - this.startTime.getTime() : undefined,
       startTime: this.startTime,
       webServerStatus: this.webServer ? (this.webServer as any).status : undefined,
-  terminalStats: this.terminalService ? this.terminalService.getStats() : undefined,
-  gitStats: this.gitService ? {
-    repositoryCache: this.gitService['repositoryCache'].size,
-    config: this.gitService.getConfig()
-  } : undefined,
-  filesystemStats: this.filesystemService ? {
-    cacheSize: (this.filesystemService as any).cache.size,
-    config: this.filesystemService.getConfig(),
-    watcherStats: this.filesystemService.getWatcherStats()
-  } : undefined
+      terminalStats: this.terminalService ? this.terminalService.getStats() : undefined,
+      gitStats: this.gitService ? {
+        repositoryCache: this.gitService['repositoryCache'].size,
+        config: this.gitService.getConfig()
+      } : undefined,
+      filesystemStats: this.filesystemService ? {
+        cacheSize: (this.filesystemService as any).cache.size,
+        config: this.filesystemService.getConfig(),
+        watcherStats: this.filesystemService.getWatcherStats()
+      } : undefined
     };
   }
 
   printStatus() {
     const status = this.getStatus();
-    
+
     if (!status.isRunning) {
       console.log('❌ Server is not running');
       return;
@@ -438,40 +393,40 @@ export class CliServer {
     console.log(`📁 Config: ${status.configPath}`);
     console.log(`🌐 Port: ${status.port || 'unknown'}`);
     console.log(`⏱️  Uptime: ${status.uptime ? this.formatUptime(status.uptime) : 'unknown'}`);
-    
+
     if (status.startTime) {
       console.log(`🕒 Started: ${status.startTime.toLocaleString()}`);
     }
-    
+
     if (status.webServerStatus) {
       console.log(`🌐 Web Server: ${status.webServerStatus.isRunning ? 'Running' : 'Stopped'}`);
       console.log(`🔗 Local URL: ${status.webServerStatus.localUrl || 'unknown'}`);
-      
+
       if (status.webServerStatus.lastError) {
         console.log(`⚠️  Last Error: ${status.webServerStatus.lastError}`);
       }
     }
-    
+
     if (status.terminalStats) {
       console.log(`🖥️  Terminal Sessions: ${status.terminalStats.totalSessions} total`);
       console.log(`   Active: ${status.terminalStats.activeSessions}`);
       console.log(`   Idle: ${status.terminalStats.idleSessions}`);
       console.log(`   Persistent: ${status.terminalStats.persistentSessions}`);
     }
-    
+
     if (status.gitStats) {
       console.log(`🔀 Git Service: ${status.gitStats.repositoryCache} cached repositories`);
       console.log(`   Default Branch: ${status.gitStats.config.defaultBranch}`);
       console.log(`   Debug: ${status.gitStats.config.enableDebug}`);
     }
-    
+
     if (status.filesystemStats) {
       console.log(`📁 File System Service: ${status.filesystemStats.cacheSize} cached items`);
       console.log(`   Max Text File Size: ${formatBytes(status.filesystemStats.config.maxTextFileSize)}`);
       console.log(`   File Watching: ${status.filesystemStats.config.enableFileWatching}`);
       console.log(`   Watchers: ${status.filesystemStats.watcherStats.totalClients} clients, ${status.filesystemStats.watcherStats.totalWatchers} total watchers`);
     }
-    
+
     console.log('================================');
   }
 
@@ -479,7 +434,7 @@ export class CliServer {
     const seconds = Math.floor(ms / 1000);
     const minutes = Math.floor(seconds / 60);
     const hours = Math.floor(minutes / 60);
-    
+
     if (hours > 0) {
       return `${hours}h ${minutes % 60}m ${seconds % 60}s`;
     } else if (minutes > 0) {

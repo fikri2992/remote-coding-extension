@@ -157,18 +157,19 @@ const FileViewerPage: React.FC = () => {
 
   return (
     <div className="bg-card rounded-lg shadow-sm border border-border neo:rounded-none neo:border-[3px] neo:shadow-[8px_8px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[8px_8px_0_0_rgba(255,255,255,0.9)] overflow-hidden">
-      {/* Header */}
-      <div className="p-4 border-b border-border bg-muted/20 neo:border-b-[2px]">
+      {/* Header - Mobile Responsive */}
+      <div className="p-3 sm:p-4 border-b border-border bg-muted/20 neo:border-b-[2px]">
+        {/* Top row: Breadcrumbs and Back button */}
         <div className="flex items-center justify-between mb-3">
           <div className="min-w-0 flex-1">
-            <div className="text-base font-medium text-foreground truncate">
+            <div className="text-sm sm:text-base font-medium text-foreground truncate">
               <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
                 {breadcrumbs.length === 0 && (meta.path || filePath || 'File')}
                 {breadcrumbs.map((b, idx) => (
                   <React.Fragment key={b.full}>
                     {idx > 0 && <span className="text-muted-foreground/60">/</span>}
                     <button
-                      className="text-foreground/90 hover:underline truncate"
+                      className="text-foreground/90 hover:underline truncate whitespace-nowrap"
                       onClick={() => navigate({ to: '/files', search: { path: b.full } as any })}
                       title={b.full}
                     >
@@ -178,19 +179,45 @@ const FileViewerPage: React.FC = () => {
                 ))}
               </div>
             </div>
+            
+            {/* Mobile file info */}
+            <div className="md:hidden flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+              {meta.size && <span>{formatFileSize(meta.size)}</span>}
+              <span>{content.split('\n').length} lines</span>
+              <span className="font-mono">{filePath.split('.').pop()?.toUpperCase()}</span>
+              {meta.truncated && <span className="text-amber-600 font-medium">(truncated)</span>}
+            </div>
+            
+            {/* Desktop file info */}
             <div className="hidden md:flex items-center gap-3 mt-1 text-xs text-muted-foreground">
               {meta.size && <span>{formatFileSize(meta.size)}</span>}
               {meta.truncated && <span className="text-amber-600 font-medium">(truncated)</span>}
               <span>{content.split('\n').length} lines</span>
-              <span className="font-mono hidden md:inline">{filePath.split('.').pop()?.toUpperCase()}</span>
+              <span className="font-mono">{filePath.split('.').pop()?.toUpperCase()}</span>
             </div>
           </div>
-          <div className="hidden md:flex items-center gap-2">
-            <button onClick={copyToClipboard} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted transition-colors neo:rounded-none neo:border-[2px]">Copy</button>
-            <button onClick={copySelection} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted transition-colors neo:rounded-none neo:border-[2px]">Copy Selection</button>
-            <button onClick={downloadFile} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted transition-colors neo:rounded-none neo:border-[2px]">Download</button>
-            <button onClick={() => navigate({ to: '/files' })} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted transition-colors neo:rounded-none neo:border-[2px]">Back</button>
-          </div>
+          
+          {/* Back button - always visible */}
+          <button 
+            onClick={() => navigate({ to: '/files' })} 
+            className="ml-2 rounded-md border border-border px-3 py-2 text-sm hover:bg-muted transition-colors neo:rounded-none neo:border-[2px] shrink-0"
+          >
+            Back
+          </button>
+        </div>
+
+        {/* Mobile action buttons */}
+        <div className="md:hidden flex items-center gap-2 mb-3 overflow-x-auto">
+          <button onClick={copyToClipboard} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted transition-colors neo:rounded-none neo:border-[2px] whitespace-nowrap">Copy</button>
+          <button onClick={copySelection} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted transition-colors neo:rounded-none neo:border-[2px] whitespace-nowrap">Copy Selection</button>
+          <button onClick={downloadFile} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted transition-colors neo:rounded-none neo:border-[2px] whitespace-nowrap">Download</button>
+        </div>
+
+        {/* Desktop action buttons */}
+        <div className="hidden md:flex items-center gap-2 mb-3">
+          <button onClick={copyToClipboard} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted transition-colors neo:rounded-none neo:border-[2px]">Copy</button>
+          <button onClick={copySelection} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted transition-colors neo:rounded-none neo:border-[2px]">Copy Selection</button>
+          <button onClick={downloadFile} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted transition-colors neo:rounded-none neo:border-[2px]">Download</button>
         </div>
 
         {/* Desktop controls */}

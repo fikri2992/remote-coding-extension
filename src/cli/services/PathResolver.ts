@@ -22,8 +22,11 @@ export class PathResolver {
       const workspaceRoot = options.workspaceRoot || this.config.workspaceRoot;
       const resolvedWorkspace = path.resolve(workspaceRoot);
       
+      console.log(`[PathResolver] Resolving path: "${inputPath}" with workspace: "${resolvedWorkspace}"`);
+      
       // Handle empty, null, or undefined paths
       if (!inputPath || inputPath.trim() === '') {
+        console.log(`[PathResolver] Empty path, returning workspace root`);
         return {
           resolvedPath: resolvedWorkspace,
           normalizedPath: '/',
@@ -42,9 +45,17 @@ export class PathResolver {
 
       let resolvedPath: string;
       
-      // Handle absolute paths
-      if (path.isAbsolute(inputPath)) {
+      // Handle leading slash as workspace-relative (common in web frontends)
+      if (inputPath.startsWith('/') || inputPath.startsWith('\\')) {
+        // Always treat leading slash as workspace-relative, not absolute
+        resolvedPath = path.join(resolvedWorkspace, inputPath.slice(1));
+        console.log(`[PathResolver] Leading slash path: "${inputPath}" → "${resolvedPath}"`);
+      }
+      // Handle absolute paths (like C:\path\to\file)
+      else if (path.isAbsolute(inputPath)) {
+        console.log(`[PathResolver] Absolute path detected: "${inputPath}"`);
         if (!options.allowAbsolute && options.allowAbsolute !== undefined) {
+          console.log(`[PathResolver] Absolute paths not allowed`);
           return {
             resolvedPath: inputPath,
             normalizedPath: inputPath,
@@ -53,10 +64,13 @@ export class PathResolver {
           };
         }
         resolvedPath = path.resolve(inputPath);
+        console.log(`[PathResolver] Resolved absolute path: "${resolvedPath}"`);
       } 
       // Handle relative paths
       else {
+        console.log(`[PathResolver] Relative path detected: "${inputPath}"`);
         if (!options.allowRelative && options.allowRelative !== undefined) {
+          console.log(`[PathResolver] Relative paths not allowed`);
           return {
             resolvedPath: inputPath,
             normalizedPath: inputPath,
@@ -65,12 +79,8 @@ export class PathResolver {
           };
         }
         
-        // Handle leading slash as workspace-relative
-        if (inputPath.startsWith('/') || inputPath.startsWith('\\')) {
-          resolvedPath = path.join(resolvedWorkspace, inputPath.slice(1));
-        } else {
-          resolvedPath = path.join(resolvedWorkspace, inputPath);
-        }
+        resolvedPath = path.join(resolvedWorkspace, inputPath);
+        console.log(`[PathResolver] Resolved relative path: "${resolvedPath}"`);
       }
 
       // Normalize the path
@@ -80,7 +90,13 @@ export class PathResolver {
       const requireContainment = options.requireWorkspaceContainment ?? 
         this.config.requireWorkspaceContainment;
       
+      console.log(`[PathResolver] Checking containment: requireContainment=${requireContainment}`);
+      console.log(`[PathResolver] Normalized path: "${normalizedPath}"`);
+      console.log(`[PathResolver] Workspace root: "${resolvedWorkspace}"`);
+      console.log(`[PathResolver] Path starts with workspace: ${normalizedPath.startsWith(resolvedWorkspace)}`);
+      
       if (requireContainment && !normalizedPath.startsWith(resolvedWorkspace)) {
+        console.log(`[PathResolver] Path outside workspace detected!`);
         return {
           resolvedPath: normalizedPath,
           normalizedPath,

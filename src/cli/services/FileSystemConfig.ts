@@ -35,7 +35,7 @@ export class FileSystemConfigManager {
       enableCaching: true,
       cacheTimeoutMs: 5000,
       enableParallelOperations: true,
-      enableDebug: envVars.KIRO_FS_DEBUG === '1',
+      enableDebug: envVars.KIRO_FS_DEBUG === '1' || true, // Default to true for debugging
       logLevel: 'info'
     };
 

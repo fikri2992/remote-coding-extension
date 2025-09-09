@@ -68,15 +68,8 @@ export class WebSocketServer {
     const terminalConfig = new TerminalConfigManager();
     this._terminalService = new TerminalService((clientId, payload) => this.sendToClient(clientId, payload));
     
-    // Register services for WebSocket handling
-    this.registerService('fileSystem', {
-      handle: (clientId: string, message: any) => {
-        return this._fsService.handle(clientId, message);
-      },
-      onClientDisconnect: (clientId: string) => {
-        this._fsService.onClientDisconnect(clientId);
-      }
-    });
+    // FileSystem service registration is now handled by CLI server
+    // This built-in registration is disabled to avoid conflicts
     
     // Git service registration is now handled by CLI server
     // This built-in registration is disabled to avoid conflicts
@@ -435,14 +428,35 @@ export class WebSocketServer {
       console.log(`Broadcasted chat message from ${connectionId}: ${message.text}`);
     }
 
-    // File system protocol
+    // FileSystem protocol - Route to registered filesystem service
     if (message.type === 'fileSystem') {
-      this._fsService.handle(connectionId, message).catch(err => {
-        const id = message.id;
-        const op = message?.data?.fileSystemData?.operation || 'unknown';
-        const errMsg = err instanceof Error ? err.message : String(err);
-        this.sendToClient(connectionId, { type: 'fileSystem', id, data: { operation: op, ok: false, error: errMsg } });
-      });
+      const fsService = this.services.get('fileSystem');
+      
+      if (fsService) {
+        // The filesystem service handles responses internally, so we just call it
+        fsService.handle(connectionId, message).catch(error => {
+          const errMsg = error instanceof Error ? error.message : String(error);
+          this.sendToClient(connectionId, { 
+            type: 'fileSystem', 
+            id: message.id, 
+            data: { 
+              operation: message.data?.fileSystemData?.operation || 'unknown',
+              ok: false, 
+              error: errMsg 
+            } 
+          });
+        });
+      } else {
+        this.sendToClient(connectionId, { 
+          type: 'fileSystem', 
+          id: message.id, 
+          data: { 
+            operation: message.data?.fileSystemData?.operation || 'unknown',
+            ok: false, 
+            error: 'Filesystem service not available' 
+          } 
+        });
+      }
     }
 
     // Git protocol - Route to registered git service

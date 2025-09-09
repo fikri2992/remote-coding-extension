@@ -57,13 +57,18 @@ export class CLIFileSystemService {
     const data = message.data?.fileSystemData || (message.data as any);
     const op = data?.operation as string;
 
+    console.log(`[FS Service] Handling operation: ${op}, path: ${data?.path}, clientId: ${clientId}`);
+    console.log(`[FS Service] Workspace root: ${this.config.workspaceRoot}`);
+
     try {
       let result;
       
       switch (op) {
         case 'tree': {
           const target = data?.path || '.';
+          console.log(`[FS Service] Tree operation - target: ${target}`);
           result = await this.getTree(target);
+          console.log(`[FS Service] Tree result:`, result ? 'success' : 'failed');
           this.reply(clientId, id, op, { ok: true, result });
           break;
         }
@@ -169,8 +174,18 @@ export class CLIFileSystemService {
   // --- Public API Methods ---
 
   async getTree(targetPath: string, maxDepth?: number): Promise<TreeResult> {
+    console.log(`[FS Service] getTree called with targetPath: "${targetPath}" (type: ${typeof targetPath})`);
     const resolved = await this.pathResolver.resolvePath(targetPath);
+    console.log(`[FS Service] Path resolution result:`, {
+      inputPath: targetPath,
+      isValid: resolved.isValid,
+      resolvedPath: resolved.resolvedPath,
+      normalizedPath: resolved.normalizedPath,
+      error: resolved.error
+    });
+    
     if (!resolved.isValid) {
+      console.log(`[FS Service] Path resolution failed for "${targetPath}": ${resolved.error}`);
       throw new Error(`Invalid path: ${resolved.error}`);
     }
 

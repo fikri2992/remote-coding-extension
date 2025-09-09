@@ -245,7 +245,7 @@ export const DiffLine: React.FC<DiffLineProps> = ({
 
   return (
     <div className={cn(
-      'grid grid-cols-[3rem_3rem_1fr] items-start gap-x-2 px-2 py-1 transition-colors',
+      'grid grid-cols-[3rem_3rem_1fr] items-start gap-x-2 px-2 py-1 transition-colors min-w-full',
       typeClasses[type],
       fontSize === 'sm' ? 'min-h-[20px]' : fontSize === 'base' ? 'min-h-[24px]' : 'min-h-[28px]'
     )}>
@@ -262,7 +262,7 @@ export const DiffLine: React.FC<DiffLineProps> = ({
         {newNo ?? ''}
       </div>
       <div className={cn(
-        'font-mono leading-relaxed flex items-start',
+        'font-mono leading-relaxed flex items-start min-w-0',
         fontSizeClass
       )}>
         {(type === 'add' || type === 'del') && (
@@ -274,7 +274,7 @@ export const DiffLine: React.FC<DiffLineProps> = ({
           </span>
         )}
         <span
-          className="flex-1"
+          className="flex-1 min-w-0 whitespace-pre"
           dangerouslySetInnerHTML={{ __html: highlightedContent || '&nbsp;' }}
         />
       </div>

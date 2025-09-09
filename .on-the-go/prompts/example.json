@@ -1,0 +1,10 @@
+{
+  "name": "example-prompt",
+  "description": "Example prompt template",
+  "template": "Hello {{name}}! Welcome to {{app}}.",
+  "variables": [
+    "name",
+    "app"
+  ],
+  "created": "2025-09-08T18:41:41.045Z"
+}

@@ -1,9 +1,12 @@
 import WebSocket from 'ws';
 import { IncomingMessage, Server as HttpServer } from 'http';
 import { Socket } from 'net';
-import { FileSystemService } from './FileSystemService';
-import { GitService } from './GitService';
-import { TerminalService } from './TerminalService';
+import { CLIFileSystemService } from '../cli/services/FileSystemService';
+import { CLIGitService } from '../cli/services/GitService';
+import { TerminalService } from '../cli/services/TerminalService';
+import { FileSystemConfigManager } from '../cli/services/FileSystemConfig';
+import { GitConfigManager } from '../cli/services/GitService';
+import { TerminalConfigManager } from '../cli/services/TerminalConfig';
 
 type ICommandHandler = {
   addAllowedCommand: (cmd: string) => void;
@@ -11,6 +14,12 @@ type ICommandHandler = {
   dispose: () => void;
   setStateChangeCallback?: (cb: any) => void;
 } | null;
+
+// Service interface for WebSocket registration
+interface ServiceRegistration {
+  handle: (clientId: string, message: any) => Promise<any>;
+  onClientDisconnect: (clientId: string) => void;
+}
 
 export interface WebSocketConnection {
   ws: WebSocket;
@@ -25,10 +34,11 @@ export class WebSocketServer {
   private _clientCount: number = 0;
   private _attachedHttpServer: HttpServer | null = null;
   private _upgradePath: string = '/ws';
-  private _fsService: FileSystemService;
-  private _gitService: GitService | null = null;
+  private _fsService: CLIFileSystemService;
+  private _gitService: CLIGitService | null = null;
   private _terminalService: TerminalService;
   private _commandHandler: ICommandHandler = null;
+  private services: Map<string, ServiceRegistration> = new Map();
   private debug: boolean = true; // Hardcoded debug mode for WebSocket frame tracking
 
   constructor(config: any, attachedHttpServer?: HttpServer, upgradePath: string = '/ws') {
@@ -45,9 +55,35 @@ export class WebSocketServer {
       console.log('🔧 WebSocketServer: Debug mode ENABLED (hardcoded)');
     }
     
-    // Initialize services that need to send responses
-    this._fsService = new FileSystemService((clientId, payload) => this.sendToClient(clientId, payload));
+    // Initialize CLI services with proper configuration
+    const fsConfig = new FileSystemConfigManager();
+    this._fsService = new CLIFileSystemService((clientId, payload) => this.sendToClient(clientId, payload), fsConfig.config);
+    
+    const gitConfig = new GitConfigManager();
+    this._gitService = new CLIGitService({
+      workspaceRoot: process.cwd(),
+      enableDebug: process.env.KIRO_GIT_DEBUG === '1'
+    });
+    
+    const terminalConfig = new TerminalConfigManager();
     this._terminalService = new TerminalService((clientId, payload) => this.sendToClient(clientId, payload));
+    
+    // FileSystem service registration is now handled by CLI server
+    // This built-in registration is disabled to avoid conflicts
+    
+    // Git service registration is now handled by CLI server
+    // This built-in registration is disabled to avoid conflicts
+    
+    this.registerService('terminal', {
+      handle: (clientId: string, message: any) => {
+        return this._terminalService.handle(clientId, message);
+      },
+      onClientDisconnect: (clientId: string) => {
+        this._terminalService.onClientDisconnect(clientId);
+      }
+    });
+    
+    // Try to initialize command handler for VS Code compatibility
     try {
       const mod = require('./CommandHandler');
       this._commandHandler = new mod.CommandHandler();
@@ -151,8 +187,13 @@ export class WebSocketServer {
           ws.on('close', () => {
             console.log(`WebSocket connection closed: ${connectionId}`);
             // Cleanup any per-client watchers/listeners
-            try { this._fsService.onClientDisconnect(connectionId); } catch {}
-            try { this._terminalService.onClientDisconnect(connectionId); } catch {}
+            this.services.forEach((service, serviceName) => {
+              try {
+                service.onClientDisconnect(connectionId);
+              } catch (error) {
+                console.error(`Error in ${serviceName} service disconnect:`, error);
+              }
+            });
             this.connections.delete(connectionId);
             this._clientCount = this.connections.size;
           });
@@ -387,55 +428,84 @@ export class WebSocketServer {
       console.log(`Broadcasted chat message from ${connectionId}: ${message.text}`);
     }
 
-    // File system protocol
+    // FileSystem protocol - Route to registered filesystem service
     if (message.type === 'fileSystem') {
-      this._fsService.handle(connectionId, message).catch(err => {
-        const id = message.id;
-        const op = message?.data?.fileSystemData?.operation || 'unknown';
-        const errMsg = err instanceof Error ? err.message : String(err);
-        this.sendToClient(connectionId, { type: 'fileSystem', id, data: { operation: op, ok: false, error: errMsg } });
-      });
+      const fsService = this.services.get('fileSystem');
+      
+      if (fsService) {
+        // The filesystem service handles responses internally, so we just call it
+        fsService.handle(connectionId, message).catch(error => {
+          const errMsg = error instanceof Error ? error.message : String(error);
+          this.sendToClient(connectionId, { 
+            type: 'fileSystem', 
+            id: message.id, 
+            data: { 
+              operation: message.data?.fileSystemData?.operation || 'unknown',
+              ok: false, 
+              error: errMsg 
+            } 
+          });
+        });
+      } else {
+        this.sendToClient(connectionId, { 
+          type: 'fileSystem', 
+          id: message.id, 
+          data: { 
+            operation: message.data?.fileSystemData?.operation || 'unknown',
+            ok: false, 
+            error: 'Filesystem service not available' 
+          } 
+        });
+      }
     }
 
-    // Git protocol
+    // Git protocol - Route to registered git service
     if (message.type === 'git') {
       const id = message.id;
-      const op = message?.data?.gitData?.operation as string | undefined;
-      const options = message?.data?.gitData?.options || {};
-      if (!op) {
-        this.sendToClient(connectionId, { type: 'git', id, data: { gitData: { operation: 'unknown' }, ok: false, error: 'Missing git operation' } });
-        return;
-      }
-      try {
-        if (!this._gitService) {
-          console.log('WebSocketServer: Initializing GitService...');
-          this._gitService = new GitService();
-        }
-        
-        console.log(`WebSocketServer: Executing git operation: ${op}`);
-        
-        // Add timeout to prevent hanging
-        const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error(`Git operation '${op}' timed out after 45 seconds`)), 45000);
-        });
-        
-        Promise.race([
-          this._gitService.executeGitCommand(op, options),
-          timeoutPromise
-        ])
-          .then((result) => {
-            console.log(`WebSocketServer: Git operation '${op}' completed successfully`);
-            this.sendToClient(connectionId, { type: 'git', id, data: { gitData: { operation: op, result }, ok: true } });
+      const gitService = this.services.get('git');
+      
+      if (gitService) {
+        gitService.handle(connectionId, message)
+          .then(result => {
+            this.sendToClient(connectionId, { 
+              type: 'git', 
+              id, 
+              data: { 
+                gitData: { 
+                  operation: message.data?.gitData?.operation || 'unknown',
+                  result: result.data 
+                }, 
+                ok: result.success !== false, 
+                error: result.error 
+              } 
+            });
           })
-          .catch((err) => {
-            const errMsg = err instanceof Error ? err.message : String(err);
-            console.error(`WebSocketServer: Git operation '${op}' failed:`, errMsg);
-            this.sendToClient(connectionId, { type: 'git', id, data: { gitData: { operation: op }, ok: false, error: errMsg } });
+          .catch(error => {
+            const errMsg = error instanceof Error ? error.message : String(error);
+            this.sendToClient(connectionId, { 
+              type: 'git', 
+              id, 
+              data: { 
+                gitData: { 
+                  operation: message.data?.gitData?.operation || 'unknown' 
+                }, 
+                ok: false, 
+                error: errMsg 
+              } 
+            });
           });
-      } catch (err) {
-        const errMsg = err instanceof Error ? err.message : String(err);
-        console.error(`WebSocketServer: Git operation '${op}' error:`, errMsg);
-        this.sendToClient(connectionId, { type: 'git', id, data: { gitData: { operation: op }, ok: false, error: errMsg } });
+      } else {
+        this.sendToClient(connectionId, { 
+          type: 'git', 
+          id, 
+          data: { 
+            gitData: { 
+              operation: message.data?.gitData?.operation || 'unknown' 
+            }, 
+            ok: false, 
+            error: 'Git service not available' 
+          } 
+        });
       }
     }
 
@@ -503,5 +573,26 @@ export class WebSocketServer {
 
   private generateConnectionId(): string {
     return `conn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  }
+
+  // Register a service for WebSocket message handling
+  public registerService(serviceName: string, registration: ServiceRegistration): void {
+    this.services.set(serviceName, registration);
+    if (this.debug) {
+      console.log(`WebSocketServer: Registered service '${serviceName}'`);
+    }
+  }
+
+  // Unregister a service
+  public unregisterService(serviceName: string): void {
+    this.services.delete(serviceName);
+    if (this.debug) {
+      console.log(`WebSocketServer: Unregistered service '${serviceName}'`);
+    }
+  }
+
+  // Get registered services
+  public getRegisteredServices(): string[] {
+    return Array.from(this.services.keys());
   }
 }

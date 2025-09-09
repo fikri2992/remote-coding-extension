@@ -9,7 +9,7 @@ const TerminalPage: React.FC = () => {
   const [output, setOutput] = useState('');
   const [fallbackExec, setFallbackExec] = useState(false);
   const [engineBadge, setEngineBadge] = useState<null | { kind: 'pseudo-line' | 'pseudo-pipe' | 'fallback' | 'pty', label: string }>(null);
-  const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected'>('disconnected');
+
   const [sessions, setSessions] = useState<Map<string, SessionInfo>>(new Map());
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const activeSessionRef = useRef<string | null>(null);
@@ -40,8 +40,8 @@ const TerminalPage: React.FC = () => {
         const note = String(data.note || '');
         const eng = String(data.engine || '').toLowerCase();
         if (note === 'pseudo-terminal') {
-          if (eng === 'pipe') setEngineBadge({ kind: 'pseudo-pipe', label: 'Pseudo (pipe)' });
-          else setEngineBadge({ kind: 'pseudo-line', label: 'Pseudo (line)' });
+          if (eng === 'pipe') setEngineBadge({ kind: 'pseudo-pipe', label: 'Interactive Shell' });
+          else setEngineBadge({ kind: 'pseudo-line', label: 'Command Mode' });
         } else if (note === 'pty-fallback') {
           setEngineBadge({ kind: 'fallback', label: 'PTY Fallback' });
         } else {
@@ -120,7 +120,7 @@ const TerminalPage: React.FC = () => {
   const ensureSession = () => {
     if (!activeSessionRef.current) {
       const id = `pty_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
-      sendJson({ type: 'terminal', id, data: { op: 'create', sessionId: id, cols: 80, rows: 24, persistent: true , engine: 'line' } });
+      sendJson({ type: 'terminal', id, data: { op: 'create', sessionId: id, cols: 80, rows: 24, persistent: true , engine: 'pipe' } });
       activeSessionRef.current = id;
       setCurrentSessionId(id);
     }
@@ -136,9 +136,8 @@ const TerminalPage: React.FC = () => {
     return () => { if (keepaliveRef.current) clearInterval(keepaliveRef.current) };
   }, []);
 
-  // Reflect connection state for UI; try to refresh sessions when connected
+  // Refresh sessions when connected
   useEffect(() => {
-    setConnectionStatus(isConnected ? 'connected' : 'disconnected');
     if (isConnected) {
       refreshSessions();
     }
@@ -205,9 +204,6 @@ const TerminalPage: React.FC = () => {
       {/* Top compact header */}
       <div className="flex items-center justify-between mb-2">
         <h3 className="text-base font-semibold">Terminal</h3>
-        <span className={`px-2 py-1 text-xs rounded-md border ${connectionStatus === 'connected' ? 'bg-green-50 border-green-300 text-green-700' : 'bg-red-50 border-red-300 text-red-700'}`}>
-          {connectionStatus}
-        </span>
       </div>
 
       {/* Terminal area */}
@@ -255,7 +251,7 @@ const TerminalPage: React.FC = () => {
             onClick={() => {
               const id = `pty_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
               const size = termRef.current?.getSize() || { cols: 80, rows: 24 };
-              sendJson({ type: 'terminal', id, data: { op: 'create', sessionId: id, cols: size.cols, rows: size.rows, persistent: true , engine: 'line' } });
+              sendJson({ type: 'terminal', id, data: { op: 'create', sessionId: id, cols: size.cols, rows: size.rows, persistent: true , engine: 'pipe' } });
               activeSessionRef.current = id;
               setCurrentSessionId(id);
               setTimeout(() => { try { termRef.current?.focus(); } catch {} }, 0);

@@ -2,6 +2,8 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from '@tanstack/react-router'
 import { useWebSocket } from '../components/WebSocketProvider'
+import { useFileCache } from '../contexts/FileCacheContext'
+import { useViewState } from '../contexts/ViewStateContext'
 import { SyntaxHighlighter } from '../components/code/SyntaxHighlighter'
 import CodeViewer, { type CodeViewerHandle } from '../components/code/CodeViewer'
 import { CodeToolbar, type CodeTheme, type FontSize } from '../components/code/CodeToolbar'
@@ -13,16 +15,32 @@ import { usePersistentState } from '../lib/hooks/usePersistentState'
 import { useMediaQuery } from '../lib/hooks/useMediaQuery'
 import MarkdownRenderer from '../components/code/MarkdownRenderer'
 import { cn } from '../lib/utils'
+import { TopProgressBar } from '../components/feedback/TopProgressBar'
+import { usePendingNav } from '../contexts/PendingNavContext'
+import { useDelayedFlag } from '../lib/hooks/useDelayedFlag'
+import { useLiveRegion } from '../contexts/LiveRegionContext'
+import { useToast } from '../components/ui/toast'
+import PendingSpinner from '../components/feedback/PendingSpinner'
+import { useRipple } from '../lib/hooks/useRipple'
 
 const FileViewerPage: React.FC = () => {
   const navigate = useNavigate()
   const location = useLocation()
   const { sendJson, addMessageListener, isConnected } = useWebSocket()
+  const { setFile, peekFile } = useFileCache()
+  const { getFileState, setFileState } = useViewState()
+  const pendingNav = usePendingNav()
+  const live = useLiveRegion()
+  const { show } = useToast()
+  const backRipple = useRipple()
+  const viewerRefreshRipple = useRipple()
 
   const [content, setContent] = useState<string>('')
   const [meta, setMeta] = useState<{ path?: string; truncated?: boolean; size?: number }>({})
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState<boolean>(false)
+  const [refreshing, setRefreshing] = useState<boolean>(false)
+  const refreshSpinnerDelayed = useDelayedFlag(refreshing, 150)
 
   const [fontSize, setFontSize] = usePersistentState<FontSize>('fontSize', 'base')
   const [showLineNumbers, setShowLineNumbers] = usePersistentState<boolean>('lineNumbers', true)
@@ -45,6 +63,7 @@ const FileViewerPage: React.FC = () => {
   const pendingIdRef = useRef<string | null>(null)
 
   const filePath = (location.search as any)?.path || ''
+  const fromDir = (location.search as any)?.from as string | undefined
   const breadcrumbs = React.useMemo(() => {
     const path = (meta.path || filePath || '').replace(/\\/g, '/').replace(/^\/+/, '')
     if (!path) return [] as { name: string; full: string }[]
@@ -57,29 +76,90 @@ const FileViewerPage: React.FC = () => {
     return acc
   }, [meta.path, filePath])
 
-  useEffect(() => {
-    if (!filePath || !isConnected) return
+  const loadFile = async (path: string, background: boolean = false) => {
+    if (!path || !isConnected) return
+
     const id = `fs_${Date.now()}_${Math.random().toString(36).slice(2,8)}`
     pendingIdRef.current = id
-    setLoading(true)
-    sendJson({ type: 'fileSystem', id, data: { fileSystemData: { operation: 'open', path: filePath } } })
+    if (!background) {
+      setLoading(true)
+    } else {
+      setRefreshing(true)
+    }
+    
+    sendJson({ type: 'fileSystem', id, data: { fileSystemData: { operation: 'open', path } } })
+    
     const unsub = addMessageListener((msg) => {
       if (msg?.type !== 'fileSystem') return
       if (msg.data?.operation !== 'open') return
       if (!pendingIdRef.current || msg.id !== pendingIdRef.current) return
+      
       if (msg.data?.ok && msg.data?.result) {
         const r = msg.data.result
-        setContent(r.content || '')
-        setMeta({ path: r.path, truncated: r.truncated, size: r.size })
+        const fileContent = {
+          path: r.path,
+          content: r.content || '',
+          size: r.size || 0,
+          truncated: r.truncated || false,
+          mimeType: r.mimeType,
+          encoding: r.encoding,
+        }
+        
+        // Cache the result
+        setFile(path, fileContent).catch(console.warn)
+        
+        setContent(fileContent.content)
+        setMeta({ path: fileContent.path, truncated: fileContent.truncated, size: fileContent.size })
         setError(null)
+        pendingNav.finish(path)
+        live.announce('Loaded')
       } else {
-        setError(msg.data?.error || 'Failed to open file')
+        const errText = msg.data?.error || 'Failed to open file'
+        setError(errText)
+        pendingNav.fail(msg.data?.error)
+        live.announce('Failed to open file')
+        show({ title: 'Failed to open', description: errText, variant: 'destructive' })
       }
+      
       pendingIdRef.current = null
       setLoading(false)
+      setRefreshing(false)
+      unsub()
     })
-    return unsub
+  }
+
+  useEffect(() => {
+    if (!filePath) return
+    // Try view-state first for instant paint
+    const vs = getFileState(filePath)
+    if (vs && typeof vs.content === 'string' && vs.content.length > 0) {
+      setContent(vs.content)
+      if (vs.meta) setMeta(vs.meta)
+      setLoading(false)
+      setRefreshing(true)
+      loadFile(filePath, true)
+      return
+    }
+    // Try memory cache (allow stale)
+    const cached = peekFile(filePath, { allowStale: true })
+    if (cached) {
+      setContent(cached.content)
+      setMeta({ path: cached.path, truncated: cached.truncated, size: cached.size })
+      setLoading(false)
+      setRefreshing(true)
+      loadFile(filePath, true)
+      return
+    }
+    // Otherwise, do regular fetch
+    setRefreshing(false)
+    loadFile(filePath, false)
   }, [filePath, isConnected])
+
+  // Persist view-state whenever content/meta updates
+  useEffect(() => {
+    if (!filePath) return
+    setFileState(filePath, { content, meta })
+  }, [filePath, content, meta, setFileState])
 
   const formatFileSize = (bytes: number): string => {
     if (bytes === 0) return '0 B'
@@ -155,10 +235,13 @@ const FileViewerPage: React.FC = () => {
     return lines.slice(chunkStart - 1, chunkEnd).join('\n')
   }, [content, isChunked, chunkStart, chunkEnd])
 
+  const showTopBar = useDelayedFlag(pendingNav.isActive, 200)
+
   return (
     <div className="bg-card rounded-lg shadow-sm border border-border neo:rounded-none neo:border-[3px] neo:shadow-[8px_8px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[8px_8px_0_0_rgba(255,255,255,0.9)] overflow-hidden">
       {/* Header - Mobile Responsive */}
-      <div className="p-3 sm:p-4 border-b border-border bg-muted/20 neo:border-b-[2px]">
+      <div className="p-3 sm:p-4 border-b border-border bg-muted/20 neo:border-b-[2px]" aria-busy={loading || refreshing || undefined}>
+        <TopProgressBar active={showTopBar} />
         {/* Top row: Breadcrumbs and Back button */}
         <div className="flex items-center justify-between mb-3">
           <div className="min-w-0 flex-1">
@@ -197,13 +280,45 @@ const FileViewerPage: React.FC = () => {
             </div>
           </div>
           
-          {/* Back button - always visible */}
-          <button 
-            onClick={() => navigate({ to: '/files' })} 
-            className="ml-2 rounded-md border border-border px-3 py-2 text-sm hover:bg-muted transition-colors neo:rounded-none neo:border-[2px] shrink-0"
-          >
-            Back
-          </button>
+          {/* Back + Refresh */}
+          <div className="flex items-center gap-2 ml-2 shrink-0">
+            {refreshing && (
+              <div className="hidden sm:flex items-center gap-1 text-blue-600 text-xs mr-1">
+                <div className="w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                <span>Refreshing…</span>
+              </div>
+            )}
+            <button 
+              onClick={() => {
+                // Prefer returning to the directory we came from if provided
+                const dest = fromDir || (breadcrumbs.length > 1 ? breadcrumbs[breadcrumbs.length - 2].full : '/')
+                pendingNav.start({ type: 'directory', path: dest, label: 'Back' })
+                live.announce('Opening parent')
+                navigate({ to: '/files', search: { path: dest } as any })
+              }} 
+              className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted transition-colors neo:rounded-none neo:border-[2px]"
+              onPointerDown={(e) => backRipple.onPointerDown(e as any)}
+            >
+              {pendingNav.isActive ? (
+                <span className="inline-flex items-center gap-2">
+                  <PendingSpinner size="xs" />
+                  Back
+                </span>
+              ) : 'Back'}
+              {backRipple.Ripple}
+            </button>
+            <button
+              onClick={() => { if (filePath) { setRefreshing(true); loadFile(filePath, true) } }}
+              className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted transition-colors neo:rounded-none neo:border-[2px]"
+              onPointerDown={(e) => viewerRefreshRipple.onPointerDown(e as any)}
+            >
+              <span className="inline-flex items-center gap-2">
+                <span>Refresh</span>
+                {refreshSpinnerDelayed && (<PendingSpinner size="xs" />)}
+              </span>
+              {viewerRefreshRipple.Ripple}
+            </button>
+          </div>
         </div>
 
         {/* Mobile action buttons */}
@@ -267,7 +382,15 @@ const FileViewerPage: React.FC = () => {
       {/* Error state */}
       {error && (
         <div className="mx-4 mt-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800 neo:rounded-none neo:border-[2px]">
-          {error}
+          <div className="flex items-center justify-between gap-3">
+            <span>{error}</span>
+            <button
+              onClick={() => { setError(null); loadFile(filePath, false) }}
+              className="ml-3 rounded-md border border-red-600 bg-white px-2 py-1 text-red-600 hover:bg-red-50 neo:rounded-none neo:border-[2px] neo:shadow-[2px_2px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[2px_2px_0_0_rgba(255,255,255,0.9)]"
+            >
+              Retry
+            </button>
+          </div>
         </div>
       )}
 
@@ -275,7 +398,7 @@ const FileViewerPage: React.FC = () => {
       {loading && (
         <div className="p-8 text-center">
           <div className="inline-flex items-center gap-2 text-muted-foreground">
-            <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+            <PendingSpinner size="sm" />
             Loading file...
           </div>
         </div>

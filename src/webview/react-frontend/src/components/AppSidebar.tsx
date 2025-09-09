@@ -23,6 +23,7 @@ const menuItems = [
   { id: 'files', label: 'Files', icon: Folder, path: '/files' },
   { id: 'git', label: 'Git', icon: GitBranch, path: '/git' },
   { id: 'terminal', label: 'Terminal', icon: Terminal, path: '/terminal' },
+  { id: 'chat-terminal', label: 'Chat Terminal 🚀', icon: MessageCircle, path: '/chat-terminal' },
   { id: 'chat', label: 'Chat', icon: MessageCircle, path: '/chat' },
   { id: 'settings', label: 'Settings', icon: Settings, path: '/settings' },
 ];

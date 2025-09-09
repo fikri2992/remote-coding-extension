@@ -6,10 +6,12 @@ import { AppSidebar } from '../components/AppSidebar';
 import { AppFooter } from '../components/AppFooter';
 import { useWebSocket } from '../components/WebSocketProvider';
 import { useTheme } from '../components/theme/ThemeProvider';
+import { useFileCacheWithWatcher } from '../lib/hooks/useFileCacheWithWatcher';
 import { cn } from '../lib/utils';
 
 const LayoutContent: React.FC = () => {
-  const { isConnected, connectionCount, lastActivity } = useWebSocket();
+  const { isConnected, connectionCount, lastActivity, addMessageListener } = useWebSocket();
+  const { handleGitOperation } = useFileCacheWithWatcher();
   const { theme, toggle, neo, toggleNeo } = useTheme();
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -22,6 +24,24 @@ const LayoutContent: React.FC = () => {
   };
 
   const activeItem = getActiveItemFromPath(location.pathname);
+
+  // Listen for git operations and revalidate cache on pull/checkout/merge/rebase
+  React.useEffect(() => {
+    const unsub = addMessageListener((msg) => {
+      try {
+        if (msg?.type !== 'git') return;
+        const op = msg?.data?.gitData?.operation;
+        const ok = msg?.data?.ok !== false;
+        if (!ok) return;
+        if (op === 'pull' || op === 'checkout' || op === 'merge' || op === 'rebase') {
+          handleGitOperation(op).catch(console.warn);
+        }
+      } catch (e) {
+        console.warn('Git cache revalidation listener error:', e);
+      }
+    });
+    return unsub;
+  }, [addMessageListener, handleGitOperation]);
 
   return (
     <div className="min-h-screen bg-background">

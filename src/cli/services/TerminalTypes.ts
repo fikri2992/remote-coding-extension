@@ -36,6 +36,9 @@ export interface TerminalOperationResult {
   signal?: NodeJS.Signals | null;
   done?: boolean;
   sessions?: TerminalSessionInfo[];
+  note?: string;
+  engine?: string;
+  persistent?: boolean;
 }
 
 export interface TerminalMessage {

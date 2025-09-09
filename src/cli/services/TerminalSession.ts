@@ -47,6 +47,18 @@ export class TerminalSession {
             const text = this.redactSensitiveData(chunk);
             this.outputBuffer.push({ chunk: text, timestamp: Date.now() });
 
+            // Send output to client via WebSocket
+            this.sendToClient('', {
+                type: 'terminal',
+                data: {
+                    op: 'data',
+                    sessionId: this.sessionId,
+                    chunk: text,
+                    note: 'pseudo-terminal',
+                    engine: this.engineMode
+                }
+            });
+
             // Limit buffer size
             if (this.outputBuffer.length > 1000) {
                 this.outputBuffer = this.outputBuffer.slice(-800);

@@ -7,6 +7,7 @@ import FilesPage from './pages/FilesPage.tsx';
 import FileViewerPage from './pages/FileViewerPage.tsx';
 import GitPage from './pages/GitPage.tsx';
 import TerminalPage from './pages/TerminalPage.tsx';
+import ChatTerminalPage from './pages/ChatTerminalPage.tsx';
 import ChatPage from './pages/ChatPage.tsx';
 import SettingsPage from './pages/SettingsPage.tsx';
 import { TunnelManagerPage } from './pages/TunnelManagerPage.tsx';
@@ -50,6 +51,12 @@ const terminalRoute = createRoute({
   component: TerminalPage,
 });
 
+const chatTerminalRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/chat-terminal',
+  component: ChatTerminalPage,
+});
+
 const chatRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/chat',
@@ -86,6 +93,7 @@ const routeTree = rootRoute.addChildren([
   fileViewRoute,
   gitRoute,
   terminalRoute,
+  chatTerminalRoute,
   chatRoute,
   settingsRoute,
 ]);

@@ -2,6 +2,8 @@ import React from 'react'
 import { cn } from '../../lib/utils'
 import { File } from 'lucide-react'
 import { getFileIcon } from './getFileIcon'
+import PendingSpinner from '../feedback/PendingSpinner'
+import { useRipple } from '../../lib/hooks/useRipple'
 
 export interface FileNodeLike {
   name: string
@@ -43,10 +45,12 @@ export const FileNodeItem: React.FC<{
   onOpen: (node: FileNodeLike) => void
   onLongPress?: (node: FileNodeLike) => void
   viewMode?: 'compact' | 'detailed'
+  pending?: boolean
 }>
-  = React.memo(({ node, onOpen, onLongPress, viewMode = 'detailed' }) => {
+  = React.memo(({ node, onOpen, onLongPress, viewMode = 'detailed', pending = false }) => {
   const icon = React.useMemo(() => getFileIcon(node.name, node.type), [node.name, node.type])
   const isCompact = viewMode === 'compact'
+  const ripple = useRipple()
   
   // Memoize formatted values for performance
   const formattedSize = React.useMemo(() => 
@@ -73,14 +77,17 @@ export const FileNodeItem: React.FC<{
         'hover:bg-muted/60 active:bg-muted/80 active:scale-[0.99]',
         'neo:rounded-none neo:hover:bg-accent/10 neo:duration-100',
         'focus:outline-none focus:ring-2 focus:ring-primary/20 focus:bg-muted/40',
+        'relative overflow-hidden',
         // Responsive spacing and sizing
         isCompact 
           ? 'gap-2 px-3 py-2 min-h-[40px] sm:min-h-[36px]'
           : 'gap-3 px-4 py-3 min-h-[48px] sm:min-h-[44px]'
       )}
+      aria-busy={pending || undefined}
       style={{ paddingLeft: (node.depth ? node.depth * (isCompact ? 12 : 16) : 0) + (isCompact ? 12 : 16) }}
       onClick={() => onOpen(node)}
-      onPointerDown={(_e) => {
+      onPointerDown={(e) => {
+        ripple.onPointerDown(e)
         if (!onLongPress) return
         let timer: any
         const clear = () => timer && clearTimeout(timer)
@@ -165,11 +172,18 @@ export const FileNodeItem: React.FC<{
       {/* Directory indicator */}
       {node.type === 'directory' && (
         <div className="flex-shrink-0 text-muted-foreground/50">
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
+          {pending ? (
+            <div className="ml-1">
+              <PendingSpinner size="xs" />
+            </div>
+          ) : (
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          )}
         </div>
       )}
+      {ripple.Ripple}
     </button>
   )
 })

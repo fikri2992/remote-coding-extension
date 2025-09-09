@@ -1,7 +1,8 @@
 ---
 inclusion: always
 ---
-
+# IMPORTANT
+YOU MUST NOT RUNNING DEV or START command unless i ask you to
 # Kiro Remote Project Guide
 
 ## Project Overview

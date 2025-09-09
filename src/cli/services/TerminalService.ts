@@ -327,13 +327,17 @@ export class TerminalService {
             switch (op) {
                 case 'create':
                     const createResult = await this.sessionManager.createSession(data, clientId);
+                    const createdSession = this.sessionManager.getSession(createResult.sessionId);
                     result = {
                         ok: true,
                         sessionId: createResult.sessionId,
                         cwd: createResult.cwd,
                         cols: data.cols || 80,
                         rows: data.rows || 24,
-                        event: 'ready'
+                        event: 'ready',
+                        note: 'pseudo-terminal',
+                        engine: createdSession?.engineMode || data.engineMode || this.configManager.config.engineMode,
+                        persistent: data.persistent || false
                     };
                     break;
 
@@ -370,9 +374,9 @@ export class TerminalService {
                     break;
 
                 case 'keepalive':
-                    const session = this.sessionManager.getSession(data.sessionId);
-                    if (session) {
-                        session.updateActivity();
+                    const keepaliveSession = this.sessionManager.getSession(data.sessionId);
+                    if (keepaliveSession) {
+                        keepaliveSession.updateActivity();
                         result = { ok: true, op: 'keepalive' };
                     } else {
                         result = { ok: false, op: 'keepalive', error: 'Session not found' };

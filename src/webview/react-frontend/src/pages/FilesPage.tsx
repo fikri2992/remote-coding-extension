@@ -6,6 +6,15 @@ import { FileNodeLike } from '../components/files/FileNodeItem';
 import { BottomSheet, BottomSheetHeader, BottomSheetTitle, BottomSheetFooter } from '../components/ui/bottom-sheet';
 import { useWebSocket } from '../components/WebSocketProvider';
 import { useNavigate, useLocation } from '@tanstack/react-router';
+import { useFileCache } from '../contexts/FileCacheContext';
+import { useViewState } from '../contexts/ViewStateContext';
+import { CacheStatusIndicator } from '../components/cache/CacheStatusIndicator';
+import { TopProgressBar } from '../components/feedback/TopProgressBar';
+import { usePendingNav } from '../contexts/PendingNavContext';
+import { useDelayedFlag } from '../lib/hooks/useDelayedFlag';
+import { useLiveRegion } from '../contexts/LiveRegionContext';
+import { useToast } from '../components/ui/toast';
+import { useRipple } from '../lib/hooks/useRipple';
 
 function mapServerNodes(children: any[], depth = 0): FileNodeLike[] {
   return (children || []).map((n: any) => ({
@@ -20,6 +29,11 @@ const FilesPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { sendJson, addMessageListener, isConnected } = useWebSocket();
+  const { setDirectory, peekDirectory } = useFileCache();
+  const { getFilesState, setFilesState } = useViewState();
+  const pendingNav = usePendingNav();
+  const live = useLiveRegion();
+  const { show } = useToast();
   const [crumbs, setCrumbs] = React.useState<Crumb[]>([]);
   const [nodes, setNodes] = React.useState<FileNodeLike[]>([]);
   const [activeNode, setActiveNode] = React.useState<FileNodeLike | null>(null);
@@ -28,6 +42,10 @@ const FilesPage: React.FC = () => {
   const [error, setError] = React.useState<string | null>(null);
   const [viewMode, setViewMode] = React.useState<'compact' | 'detailed'>('detailed');
   const [loading, setLoading] = React.useState<boolean>(false);
+  const [refreshing, setRefreshing] = React.useState<boolean>(false);
+  const refreshSpinnerDelayed = useDelayedFlag(refreshing, 150);
+  const backRipple = useRipple();
+  const refreshRipple = useRipple();
 
   const buildCrumbs = (path: string): Crumb[] => {
     const clean = (path || '/').replace(/\\/g, '/').replace(/^\/+/, '');
@@ -43,75 +61,244 @@ const FilesPage: React.FC = () => {
 
   const openNode = (node: FileNodeLike) => {
     if (node.type === 'directory') {
-      setCrumbs(buildCrumbs(node.path));
-      requestTree(node.path);
+      // Update route so browser back works and effect loads directory
+      pendingNav.start({ type: 'directory', path: node.path, label: node.name });
+      live.announce(`Opening ${node.name}`);
+      navigate({ to: '/files', search: { path: node.path } as any });
     } else {
       // Navigate to file viewer route with search param
-      navigate({ to: '/files/view', search: { path: node.path } });
+      // Include the current directory as `from` so the FileViewer can reliably go back
+      const currentDir = crumbs.length > 0 ? crumbs[crumbs.length - 1].path : '/';
+      pendingNav.start({ type: 'file', path: node.path, label: node.name });
+      live.announce(`Opening ${node.name}`);
+      navigate({ to: '/files/view', search: { path: node.path, from: currentDir } as any });
     }
   };
 
-  const requestTree = (path: string) => {
-    if (!isConnected) return;
+  const requestTree = async (path: string, retryCount = 0, background: boolean = false) => {
+    // Check if WebSocket is connected
+    if (!isConnected) {
+      if (retryCount === 0) {
+        setError('Waiting for connection...');
+        // Retry when connection is established
+        setTimeout(() => {
+          if (isConnected) {
+            requestTree(path, retryCount + 1);
+          }
+        }, 1000);
+        return;
+      } else {
+        setError('Connection lost. Please refresh the page.');
+        return;
+      }
+    }
+
     const id = `fs_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
     pendingIdRef.current = id;
     setCurrentPath(path);
-    setLoading(true);
-    sendJson({ type: 'fileSystem', id, data: { fileSystemData: { operation: 'tree', path } } });
+    if (!background) {
+      setLoading(true);
+    } else {
+      setRefreshing(true);
+    }
+    setError(null); // Clear any previous errors
+    
+    const sent = sendJson({ type: 'fileSystem', id, data: { fileSystemData: { operation: 'tree', path } } });
+    
+    if (!sent) {
+      if (!background) setLoading(false);
+      setError('Failed to send request. Please try again.');
+      pendingNav.fail('send failed');
+      show({ title: 'Failed', description: 'Could not send request', variant: 'destructive' });
+      return;
+    }
+    
+    // Add timeout mechanism
+    setTimeout(() => {
+      if (pendingIdRef.current === id) {
+        pendingIdRef.current = null;
+        setLoading(false);
+        
+        // Retry once on timeout if this is the first attempt
+        if (retryCount === 0) {
+          console.log(`FilesPage: Request timeout for path ${path}, retrying...`);
+          setTimeout(() => requestTree(path, retryCount + 1), 1000);
+        } else {
+          setError(`Request timeout loading directory. Please try again.`);
+          setRefreshing(false);
+          pendingNav.fail('timeout');
+          show({ title: 'Timeout', description: 'Loading directory timed out', variant: 'destructive' });
+        }
+      }
+    }, 10000); // 10 second timeout
+  };
+
+  const loadDirectory = (path: string) => {
+    // Attempt instant render from memory cache (allow stale for SWR)
+    const cached = peekDirectory(path, { allowStale: true });
+    if (cached && Array.isArray(cached.children)) {
+      setNodes(mapServerNodes(cached.children, 0));
+      setCrumbs(buildCrumbs(path));
+      setLoading(false);
+      setRefreshing(true);
+      // We have data immediately; mark pending nav complete to stop top bar
+      try { pendingNav.finish(path); } catch {}
+      // background revalidation
+      requestTree(path, 0, true);
+    } else {
+      // No cache - proceed with normal loading
+      setRefreshing(false);
+      requestTree(path, 0, false);
+    }
   };
 
   useEffect(() => {
     if (!isConnected) return;
     // initial load respects ?path= in URL
     const initialPath = ((location.search as any)?.path as string) || '/';
-    setCrumbs(buildCrumbs(initialPath));
-    requestTree(initialPath);
+    // First try view-state snapshot, otherwise peek cache, then fetch
+    const vs = getFilesState(initialPath);
+    if (vs && Array.isArray(vs.nodes) && vs.nodes.length > 0) {
+      setNodes(vs.nodes);
+      setCrumbs(vs.crumbs || buildCrumbs(initialPath));
+      setLoading(false);
+      setRefreshing(true);
+      // View-state yields instant content; end pending
+      try { pendingNav.finish(initialPath); } catch {}
+      requestTree(initialPath, 0, true);
+    } else {
+      loadDirectory(initialPath);
+    }
+    
     const unsub = addMessageListener((msg) => {
       if (msg?.type !== 'fileSystem') return;
-      if (msg.data?.operation === 'tree') {
+        if (msg.data?.operation === 'tree') {
         if (!pendingIdRef.current || msg.id !== pendingIdRef.current) return;
+        
         if (msg.data?.ok && msg.data?.result?.children) {
-          setNodes(mapServerNodes(msg.data.result.children, 0));
-          setError(null);
+          const directoryContent = {
+            path: _currentPath,
+            children: msg.data.result.children.map((n: any) => ({
+              name: n.name,
+              path: n.path,
+              type: n.type,
+              size: n.size,
+              lastModified: n.lastModified,
+            })),
+            totalCount: msg.data.result.children.length,
+            hasMore: false,
+          };
+          
+          // Cache the result
+          setDirectory(_currentPath, directoryContent).catch(console.warn);
+          
+          const list = mapServerNodes(msg.data.result.children, 0);
+          setNodes(list);
+          // Persist view-state for instant back
+          setFilesState(_currentPath, { nodes: list, crumbs: buildCrumbs(_currentPath) });
+          setError(null); // Clear any previous errors
+          pendingNav.finish(_currentPath);
+          live.announce('Loaded');
         } else if (msg.data?.ok === false) {
-          setError(msg.data?.error || 'Failed to load directory');
+          const errText = msg.data?.error || 'Failed to load directory';
+          setError(errText);
+          pendingNav.fail(errText);
+          live.announce('Failed to load directory');
+          show({ title: 'Failed to load', description: errText, variant: 'destructive' });
         }
+        
         pendingIdRef.current = null;
         setLoading(false);
+        setRefreshing(false);
       }
       // watch events can be handled here later
     });
     return unsub;
   }, [location.search, isConnected]);
 
+  const showTopBar = useDelayedFlag(pendingNav.isActive, 200);
+
   return (
     <div className="bg-card rounded-lg shadow-sm border border-border neo:rounded-none neo:border-[3px] neo:shadow-[8px_8px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[8px_8px_0_0_rgba(255,255,255,0.9)] overflow-hidden">
       {/* Enhanced header with view controls */}
-      <div className="p-4 border-b border-border bg-muted/20 neo:border-b-[2px]">
+      <div className="p-4 border-b border-border bg-muted/20 neo:border-b-[2px]" aria-busy={loading || refreshing || undefined}>
+        <TopProgressBar active={showTopBar} />
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2 min-w-0 flex-1">
-            {/* Mobile back button */}
-            <button
-              className="md:hidden inline-flex items-center justify-center w-8 h-8 rounded-md border border-border neo:rounded-none neo:border-[2px]"
-              aria-label="Back"
-              onClick={() => {
-                const parent = crumbs.length > 1 ? crumbs[crumbs.length - 2].path : '/'
-                setCrumbs(buildCrumbs(parent));
-                requestTree(parent);
-              }}
-            >
-              <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor"><path d="M11.78 15.22a.75.75 0 01-1.06 0l-5-5a.75.75 0 010-1.06l5-5a.75.75 0 111.06 1.06L7.56 9H16a.75.75 0 010 1.5H7.56l4.22 4.22a.75.75 0 010 1.06z"/></svg>
-            </button>
+            {/* Mobile back button (hidden at root) */}
+            {crumbs.length > 0 && (
+              <button
+                className="md:hidden inline-flex items-center justify-center w-8 h-8 rounded-md border border-border neo:rounded-none neo:border-[2px]"
+                aria-label="Back"
+                onClick={() => {
+                  // Go back one level
+                  const parent = crumbs.length > 1 ? crumbs[crumbs.length - 2].path : '/';
+                  pendingNav.start({ type: 'directory', path: parent, label: 'Back' });
+                  live.announce('Opening parent');
+                  navigate({ to: '/files', search: { path: parent } as any });
+                }}
+              >
+                <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor"><path d="M11.78 15.22a.75.75 0 01-1.06 0l-5-5a.75.75 0 010-1.06l5-5a.75.75 0 111.06 1.06L7.56 9H16a.75.75 0 010 1.5H7.56l4.22 4.22a.75.75 0 010 1.06z"/></svg>
+              </button>
+            )}
             <div className="min-w-0 flex-1">
               <Breadcrumbs
                 items={crumbs}
-                onNavigate={(path) => { setCrumbs(buildCrumbs(path)); requestTree(path); }}
+                onNavigate={(path) => {
+                  const currentPath = crumbs.length > 0 ? crumbs[crumbs.length - 1].path : '/';
+                  if (path === currentPath) {
+                    // No-op navigation: stop any pending bar
+                    pendingNav.finish(path);
+                    return;
+                  }
+                  pendingNav.start({ type: 'directory', path, label: path.split('/').pop() || '/' });
+                  live.announce(`Opening ${path.split('/').pop() || '/'}`);
+                  navigate({ to: '/files', search: { path } as any });
+                }}
               />
             </div>
           </div>
-          <button className="shrink-0 ml-2 rounded-md border border-border px-4 py-2 text-sm font-medium hover:bg-muted transition-colors neo:rounded-none neo:border-[3px] neo:shadow-[5px_5px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[5px_5px_0_0_rgba(255,255,255,0.9)]">
-            + New
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Desktop-visible Back button (hidden at root) */}
+            {crumbs.length > 0 && (
+            <button
+              className="hidden md:inline-flex items-center gap-1 rounded-md border border-border px-3 py-2 text-sm hover:bg-muted transition-colors neo:rounded-none neo:border-[3px] neo:shadow-[5px_5px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[5px_5px_0_0_rgba(255,255,255,0.9)]"
+              onClick={() => {
+                const parent = crumbs.length > 1 ? crumbs[crumbs.length - 2].path : '/';
+                pendingNav.start({ type: 'directory', path: parent, label: 'Back' });
+                live.announce('Opening parent');
+                navigate({ to: '/files', search: { path: parent } as any });
+              }}
+              onPointerDown={(e) => backRipple.onPointerDown(e as any)}
+              aria-label="Back to parent"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor"><path d="M11.78 15.22a.75.75 0 01-1.06 0l-5-5a.75.75 0 010-1.06l5-5a.75.75 0 111.06 1.06L7.56 9H16a.75.75 0 010 1.5H7.56l4.22 4.22a.75.75 0 010 1.06z"/></svg>
+              Back
+              {backRipple.Ripple}
+            </button>
+            )}
+            <button
+              className="shrink-0 rounded-md border border-border px-3 py-2 text-sm hover:bg-muted transition-colors neo:rounded-none neo:border-[3px] neo:shadow-[5px_5px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[5px_5px_0_0_rgba(255,255,255,0.9)]"
+              onClick={() => {
+                const currentPath = _currentPath || (crumbs.length > 0 ? crumbs[crumbs.length - 1].path : '/');
+                // Manual refresh: keep UI, revalidate in background
+                setRefreshing(true);
+                requestTree(currentPath, 0, true);
+              }}
+              onPointerDown={(e) => refreshRipple.onPointerDown(e as any)}
+            >
+              <span className="inline-flex items-center gap-2">
+                <span>Refresh</span>
+                {refreshSpinnerDelayed && (
+                  <div className="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                )}
+              </span>
+              {refreshRipple.Ripple}
+            </button>
+            <button className="shrink-0 rounded-md border border-border px-4 py-2 text-sm font-medium hover:bg-muted transition-colors neo:rounded-none neo:border-[3px] neo:shadow-[5px_5px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[5px_5px_0_0_rgba(255,255,255,0.9)]">
+              + New
+            </button>
+          </div>
         </div>
         
         {/* View mode controls */}
@@ -146,8 +333,16 @@ const FilesPage: React.FC = () => {
             </div>
           </div>
           
-          {/* File count and loading indicator */}
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          {/* File count, cache status, and loading indicator */}
+          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+            <CacheStatusIndicator />
+            {refreshing && (
+              <div className="flex items-center gap-1 text-blue-600">
+                <div className="w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                <span>Refreshing…</span>
+              </div>
+            )}
+            
             {loading ? (
               <div className="flex items-center gap-1">
                 <div className="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
@@ -163,13 +358,33 @@ const FilesPage: React.FC = () => {
       {/* Error state */}
       {error && (
         <div className="mx-4 mt-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800 neo:rounded-none neo:border-[2px]">
-          {error}
+          <div className="flex items-center justify-between">
+            <span>{error}</span>
+            <button
+              onClick={() => {
+                setError(null);
+                if (isConnected) {
+                  const currentPath = crumbs.length > 0 ? crumbs[crumbs.length - 1].path : '/';
+                  requestTree(currentPath);
+                }
+              }}
+              className="ml-3 rounded-md border border-red-600 bg-white px-2 py-1 text-red-600 hover:bg-red-50 neo:rounded-none neo:border-[2px] neo:shadow-[2px_2px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[2px_2px_0_0_rgba(255,255,255,0.9)]"
+            >
+              Retry
+            </button>
+          </div>
         </div>
       )}
       
       {/* File tree with improved container */}
       <div className={cn("p-2", viewMode === 'compact' ? 'py-1' : 'py-2')}>
-        {nodes.length === 0 && !loading ? (
+        {loading && nodes.length === 0 ? (
+          <div className="flex flex-col gap-1">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="h-9 sm:h-10 rounded-md bg-muted/40 animate-pulse neo:rounded-none neo:border-[2px] neo:border-border/40" />
+            ))}
+          </div>
+        ) : nodes.length === 0 && !loading ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <div className="w-16 h-16 mb-4 text-muted-foreground/30">
               <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -180,7 +395,12 @@ const FilesPage: React.FC = () => {
             <div className="text-xs text-muted-foreground/70">No files or folders found</div>
           </div>
         ) : (
-          <FileTree nodes={nodes} onOpen={openNode} onLongPress={setActiveNode} viewMode={viewMode} />
+          <FileTree nodes={nodes} pendingPath={pendingNav.target?.path} onOpen={(node) => {
+            // Save current view-state before navigating
+            const currentPath = crumbs.length > 0 ? crumbs[crumbs.length - 1].path : '/';
+            setFilesState(currentPath, { nodes, crumbs });
+            openNode(node);
+          }} onLongPress={setActiveNode} viewMode={viewMode} />
         )}
       </div>
 
@@ -189,7 +409,7 @@ const FilesPage: React.FC = () => {
           <BottomSheetTitle>{activeNode?.name}</BottomSheetTitle>
         </BottomSheetHeader>
         <div className="flex flex-col gap-2">
-          <button className="w-full text-left px-3 py-2 rounded hover:bg-muted neo:rounded-none neo:border-[4px] neo:border-border neo:hover:bg-accent/10" onClick={() => { if (activeNode) { const p = activeNode.path; setActiveNode(null); navigate({ to: '/files/view', search: { path: p } }); } }}>Open</button>
+          <button className="w-full text-left px-3 py-2 rounded hover:bg-muted neo:rounded-none neo:border-[4px] neo:border-border neo:hover:bg-accent/10" onClick={() => { if (activeNode) { const p = activeNode.path; const currentDir = crumbs.length > 0 ? crumbs[crumbs.length - 1].path : '/'; setActiveNode(null); navigate({ to: '/files/view', search: { path: p, from: currentDir } as any }); } }}>Open</button>
           <button className="w-full text-left px-3 py-2 rounded hover:bg-muted neo:rounded-none neo:border-[4px] neo:border-border neo:hover:bg-accent/10">Rename</button>
           <button className="w-full text-left px-3 py-2 rounded hover:bg-muted neo:rounded-none neo:border-[4px] neo:border-border neo:hover:bg-accent/10">Delete</button>
           <button className="w-full text-left px-3 py-2 rounded hover:bg-muted neo:rounded-none neo:border-[4px] neo:border-border neo:hover:bg-accent/10">Share</button>

@@ -16,7 +16,7 @@ interface GitRepositoryState {
 }
 
 const GitPage: React.FC = () => {
-const { sendJson, addMessageListener, isConnected } = useWebSocket();
+  const { sendJson, addMessageListener, isConnected } = useWebSocket();
   const [repo, setRepo] = useState<GitRepositoryState | null>(null);
   const [diffFiles, setDiffFiles] = useState<Array<{ file: string; type: 'added' | 'modified' | 'deleted' | 'renamed'; additions: number; deletions: number; content: string }>>([]);
   const [commits, setCommits] = useState<Array<{ hash: string; message: string; author: string; date: string | Date }>>([]);
@@ -26,15 +26,15 @@ const { sendJson, addMessageListener, isConnected } = useWebSocket();
   const [loading, setLoading] = useState<boolean>(false);
   const [historyLoading, setHistoryLoading] = useState<boolean>(false);
   const [commitDiffLoading, setCommitDiffLoading] = useState<boolean>(false);
-  const pendingMap = useRef<Record<string, string | { operation: string; timeoutId: NodeJS.Timeout }>>({}); 
+  const pendingMap = useRef<Record<string, string | { operation: string; timeoutId: NodeJS.Timeout }>>({});
   const [activeTab, setActiveTab] = useState<'status' | 'history'>('status');
   const [logCount, setLogCount] = useState<number>(20);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const composerAnchorRef = useRef<HTMLDivElement | null>(null);
 
-  const request = (operation: string, options: any = {}) => {
-    const id = `git_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
-    
+  const request = (operation: string, options: any = {}, retryCount = 0) => {
+    const id = `git_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
     // Set appropriate loading states
     if (operation === 'log') {
       setHistoryLoading(true);
@@ -43,16 +43,43 @@ const { sendJson, addMessageListener, isConnected } = useWebSocket();
     } else {
       setLoading(true);
     }
-    
+
+    // Check if WebSocket is connected
+    if (!isConnected) {
+      // Clear loading states immediately
+      if (operation === 'log') {
+        setHistoryLoading(false);
+      } else if (operation === 'show') {
+        setCommitDiffLoading(false);
+      } else {
+        setLoading(false);
+      }
+
+      // If this is not a retry, queue the request for when connection is ready
+      if (retryCount === 0) {
+        setError('Waiting for connection...');
+        // Retry when connection is established
+        setTimeout(() => {
+          if (isConnected) {
+            request(operation, options, retryCount + 1);
+          }
+        }, 1000);
+        return;
+      } else {
+        setError('Connection lost. Please refresh the page.');
+        return;
+      }
+    }
+
     // Check if send was successful
     const sent = sendJson({ type: 'git', id, data: { gitData: { operation, options } } });
-    
+
     if (sent) {
       // Add timeout mechanism
       const timeoutId = setTimeout(() => {
         if (pendingMap.current[id]) {
           delete pendingMap.current[id];
-          
+
           // Clear appropriate loading states
           if (operation === 'log') {
             setHistoryLoading(false);
@@ -61,11 +88,17 @@ const { sendJson, addMessageListener, isConnected } = useWebSocket();
           } else {
             setLoading(false);
           }
-          
-          setError(`Request timeout: ${operation}`);
+
+          // Retry once on timeout if this is the first attempt
+          if (retryCount === 0) {
+            console.log(`GitPage: Request timeout for ${operation}, retrying...`);
+            setTimeout(() => request(operation, options, retryCount + 1), 1000);
+          } else {
+            setError(`Request timeout: ${operation}. Please try again.`);
+          }
         }
       }, 10000); // 10 second timeout
-      
+
       // Store timeout ID for cleanup
       pendingMap.current[id] = { operation, timeoutId };
     } else {
@@ -77,7 +110,7 @@ const { sendJson, addMessageListener, isConnected } = useWebSocket();
       } else {
         setLoading(false);
       }
-      setError('Connection not ready. Please wait...');
+      setError('Failed to send request. Please try again.');
     }
   };
 
@@ -86,17 +119,17 @@ const { sendJson, addMessageListener, isConnected } = useWebSocket();
       if (msg?.type !== 'git') return;
       const pendingData = pendingMap.current[msg.id];
       if (!pendingData) return; // not ours
-      
+
       // Extract operation from pending data
       const op = typeof pendingData === 'object' ? pendingData.operation : pendingData;
-      
+
       // Clear timeout if exists
       if (pendingData && typeof pendingData === 'object' && pendingData.timeoutId) {
         clearTimeout(pendingData.timeoutId);
       }
-      
+
       delete pendingMap.current[msg.id];
-      
+
       // Clear appropriate loading states
       if (op === 'log') {
         setHistoryLoading(false);
@@ -105,7 +138,10 @@ const { sendJson, addMessageListener, isConnected } = useWebSocket();
       } else {
         setLoading(false);
       }
-      
+
+      // Clear any error state on successful response
+      setError(null);
+
       if (msg.data?.ok === false) {
         setError(msg.data?.error || `Git ${op} failed`);
         return;
@@ -137,15 +173,15 @@ const { sendJson, addMessageListener, isConnected } = useWebSocket();
               setSelectedCommitFiles(result as any);
             } else if (result.length > 0 && typeof result[0]?.file === 'string' && typeof result[0]?.type === 'string') {
               // File list (no patches yet) - immediately fetch all file contents
-              const files = (result as any[]).map((f) => ({ 
-                file: f.file, 
-                type: f.type, 
-                additions: f.additions || 0, 
-                deletions: f.deletions || 0, 
-                content: '' 
+              const files = (result as any[]).map((f) => ({
+                file: f.file,
+                type: f.type,
+                additions: f.additions || 0,
+                deletions: f.deletions || 0,
+                content: ''
               }));
               setSelectedCommitFiles(files as any);
-              
+
               // Prefetch all file contents for better UX
               if (selectedCommit) {
                 files.forEach((f) => {
@@ -180,16 +216,19 @@ const { sendJson, addMessageListener, isConnected } = useWebSocket();
           break;
       }
     });
-    
-    // initial load - wait for connection
+
+    return unsub;
+  }, []);
+
+  // Separate effect for initial load that depends on connection state
+  useEffect(() => {
     if (isConnected) {
+      console.log('GitPage: Connection established, loading initial data...');
       request('status');
       request('diff');
       request('log', { count: logCount });
     }
-    
-    return unsub;
-  }, [isConnected]);
+  }, [isConnected, logCount]);
 
   // Cleanup on component unmount
   useEffect(() => {
@@ -198,7 +237,7 @@ const { sendJson, addMessageListener, isConnected } = useWebSocket();
       setLoading(false);
       setHistoryLoading(false);
       setCommitDiffLoading(false);
-      
+
       // Clear all pending requests and timeouts
       Object.keys(pendingMap.current).forEach(id => {
         const pendingData = pendingMap.current[id];
@@ -245,7 +284,7 @@ const { sendJson, addMessageListener, isConnected } = useWebSocket();
       {/* Header */}
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold text-foreground">Git</h3>
-        
+
         {/* Enhanced Status Indicator */}
         <div className="flex items-center gap-3">
           {(loading || historyLoading || commitDiffLoading) && (
@@ -259,14 +298,8 @@ const { sendJson, addMessageListener, isConnected } = useWebSocket();
               </span>
             </div>
           )}
-          
-          {/* Repository status indicator */}
-          {repo && !loading && !historyLoading && (
-            <div className="flex items-center gap-2 px-2 py-1 rounded-full bg-green-50 border border-green-200 dark:bg-green-950 dark:border-green-800 neo:rounded-none neo:border-[2px]">
-              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-              <span className="text-xs text-green-700 dark:text-green-300">Connected</span>
-            </div>
-          )}
+
+
         </div>
       </div>
 
@@ -283,7 +316,26 @@ const { sendJson, addMessageListener, isConnected } = useWebSocket();
       </div>
 
       {error && (
-        <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800 neo:rounded-none neo:border-[3px] neo:shadow-[4px_4px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[4px_4px_0_0_rgba(255,255,255,0.9)]">{error}</div>
+        <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800 neo:rounded-none neo:border-[3px] neo:shadow-[4px_4px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[4px_4px_0_0_rgba(255,255,255,0.9)]">
+          <div className="flex items-center justify-between">
+            <span>{error}</span>
+            <button
+              onClick={() => {
+                setError(null);
+                if (isConnected) {
+                  request('status');
+                  request('diff');
+                  if (activeTab === 'history') {
+                    request('log', { count: logCount });
+                  }
+                }
+              }}
+              className="ml-3 rounded-md border border-red-600 bg-white px-2 py-1 text-red-600 hover:bg-red-50 neo:rounded-none neo:border-[2px] neo:shadow-[2px_2px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[2px_2px_0_0_rgba(255,255,255,0.9)]"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
       )}
 
       {/* Content area */}

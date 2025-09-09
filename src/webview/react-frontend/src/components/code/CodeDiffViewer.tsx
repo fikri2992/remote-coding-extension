@@ -174,7 +174,7 @@ export const CodeDiffViewer = React.forwardRef<CodeDiffViewerHandle, CodeDiffVie
       )
     })
     if (pendingDel.length || pendingAdd.length) flush()
-    return <div className="min-w-full">{result}</div>
+    return <div className="w-full" style={{ minWidth: 'max-content' }}>{result}</div>
   }, [fontSize, file, _ignoreWhitespace, computeWordDiffHtml])
 
   const renderSxS = React.useCallback((subset: DiffRow[]) => {
@@ -266,7 +266,7 @@ export const CodeDiffViewer = React.forwardRef<CodeDiffViewerHandle, CodeDiffVie
 
   const body = (
     <div className={wrap ? 'overflow-hidden' : 'overflow-auto'}>
-      <div className="min-w-full">
+      <div className="w-full" style={{ minWidth: 'max-content' }}>
         {/* Global header for SxS */}
         {_mode === 'side-by-side' && (
           <div className="sticky top-0 z-10 grid grid-cols-[3rem_1fr_3rem_1fr] gap-x-2 px-2 py-1 text-xs text-muted-foreground bg-muted/40 border-b border-border">

@@ -1,0 +1,21 @@
+{
+  "version": "1.0.0",
+  "server": {
+    "port": 3900,
+    "host": "localhost"
+  },
+  "terminal": {
+    "shell": "powershell.exe",
+    "cwd": "C:\\Users\\cryli\\project\\kiro\\final\\kiro-remote\\feature\\migration-to-tui"
+  },
+  "prompts": {
+    "directory": "./.on-the-go/prompts",
+    "autoSave": true
+  },
+  "results": {
+    "directory": "./.on-the-go/results",
+    "format": "json"
+  },
+  "created": "2025-09-08T18:41:41.044Z",
+  "lastModified": "2025-09-08T18:41:41.044Z"
+}

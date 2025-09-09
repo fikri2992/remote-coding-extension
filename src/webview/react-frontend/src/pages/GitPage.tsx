@@ -16,7 +16,7 @@ interface GitRepositoryState {
 }
 
 const GitPage: React.FC = () => {
-  const { sendJson, addMessageListener } = useWebSocket();
+const { sendJson, addMessageListener, isConnected } = useWebSocket();
   const [repo, setRepo] = useState<GitRepositoryState | null>(null);
   const [diffFiles, setDiffFiles] = useState<Array<{ file: string; type: 'added' | 'modified' | 'deleted' | 'renamed'; additions: number; deletions: number; content: string }>>([]);
   const [commits, setCommits] = useState<Array<{ hash: string; message: string; author: string; date: string | Date }>>([]);
@@ -26,7 +26,7 @@ const GitPage: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(false);
   const [historyLoading, setHistoryLoading] = useState<boolean>(false);
   const [commitDiffLoading, setCommitDiffLoading] = useState<boolean>(false);
-  const pendingMap = useRef<Record<string, string>>({}); 
+  const pendingMap = useRef<Record<string, string | { operation: string; timeoutId: NodeJS.Timeout }>>({}); 
   const [activeTab, setActiveTab] = useState<'status' | 'history'>('status');
   const [logCount, setLogCount] = useState<number>(20);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -34,7 +34,6 @@ const GitPage: React.FC = () => {
 
   const request = (operation: string, options: any = {}) => {
     const id = `git_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
-    pendingMap.current[id] = operation;
     
     // Set appropriate loading states
     if (operation === 'log') {
@@ -45,14 +44,57 @@ const GitPage: React.FC = () => {
       setLoading(true);
     }
     
-    sendJson({ type: 'git', id, data: { gitData: { operation, options } } });
+    // Check if send was successful
+    const sent = sendJson({ type: 'git', id, data: { gitData: { operation, options } } });
+    
+    if (sent) {
+      // Add timeout mechanism
+      const timeoutId = setTimeout(() => {
+        if (pendingMap.current[id]) {
+          delete pendingMap.current[id];
+          
+          // Clear appropriate loading states
+          if (operation === 'log') {
+            setHistoryLoading(false);
+          } else if (operation === 'show') {
+            setCommitDiffLoading(false);
+          } else {
+            setLoading(false);
+          }
+          
+          setError(`Request timeout: ${operation}`);
+        }
+      }, 10000); // 10 second timeout
+      
+      // Store timeout ID for cleanup
+      pendingMap.current[id] = { operation, timeoutId };
+    } else {
+      // Clear loading states if send failed
+      if (operation === 'log') {
+        setHistoryLoading(false);
+      } else if (operation === 'show') {
+        setCommitDiffLoading(false);
+      } else {
+        setLoading(false);
+      }
+      setError('Connection not ready. Please wait...');
+    }
   };
 
   useEffect(() => {
     const unsub = addMessageListener((msg) => {
       if (msg?.type !== 'git') return;
-      const op = pendingMap.current[msg.id];
-      if (!op) return; // not ours
+      const pendingData = pendingMap.current[msg.id];
+      if (!pendingData) return; // not ours
+      
+      // Extract operation from pending data
+      const op = typeof pendingData === 'object' ? pendingData.operation : pendingData;
+      
+      // Clear timeout if exists
+      if (pendingData && typeof pendingData === 'object' && pendingData.timeoutId) {
+        clearTimeout(pendingData.timeoutId);
+      }
+      
       delete pendingMap.current[msg.id];
       
       // Clear appropriate loading states
@@ -138,12 +180,34 @@ const GitPage: React.FC = () => {
           break;
       }
     });
-    // initial load
-    request('status');
-    // initial diff and log
-    request('diff');
-    request('log', { count: logCount });
+    
+    // initial load - wait for connection
+    if (isConnected) {
+      request('status');
+      request('diff');
+      request('log', { count: logCount });
+    }
+    
     return unsub;
+  }, [isConnected]);
+
+  // Cleanup on component unmount
+  useEffect(() => {
+    return () => {
+      // Clear all loading states on unmount
+      setLoading(false);
+      setHistoryLoading(false);
+      setCommitDiffLoading(false);
+      
+      // Clear all pending requests and timeouts
+      Object.keys(pendingMap.current).forEach(id => {
+        const pendingData = pendingMap.current[id];
+        if (pendingData && typeof pendingData === 'object' && pendingData.timeoutId) {
+          clearTimeout(pendingData.timeoutId);
+        }
+        delete pendingMap.current[id];
+      });
+    };
   }, []);
 
   // When switching to History and we have no commits, fetch them
@@ -305,7 +369,7 @@ const GitPage: React.FC = () => {
             )}
           </>
         ) : (
-          <div className="bg-card rounded-lg border border-border neo:rounded-none neo:border-[3px] neo:shadow-[4px_4px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[4px_4px_0_0_rgba(255,255,255,0.9)]">
+          <>
             {selectedCommit ? (
               <CommitDiff
                 commit={selectedCommit}
@@ -341,7 +405,7 @@ const GitPage: React.FC = () => {
                 }}
               />
             )}
-          </div>
+          </>
         )}
       </div>
 
@@ -371,8 +435,3 @@ const GitPage: React.FC = () => {
 };
 
 export default GitPage;
-
-
-
-
-

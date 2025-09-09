@@ -152,6 +152,12 @@ export class CLIGitRepository {
         return this.parseGitDiff(output);
     }
 
+    async getCommitDiff(commitHash: string): Promise<GitDiff[]> {
+        const args = ['show', '--no-color', '--format=', commitHash];
+        const output = await this.runGit(args);
+        return this.parseGitDiff(output);
+    }
+
     async commit(message: string, files?: string[]): Promise<void> {
         if (!this.configManager.validateCommitMessage(message)) {
             throw new Error('Invalid commit message');
@@ -511,6 +517,11 @@ export class CLIGitService {
     async getCurrentDiff(workspacePath?: string): Promise<GitDiff[]> {
         const repo = await this.getRepository(workspacePath);
         return repo ? repo.getDiff() : [];
+    }
+
+    async getCommitDiff(commitHash: string, workspacePath?: string): Promise<GitDiff[]> {
+        const repo = await this.getRepository(workspacePath);
+        return repo ? repo.getCommitDiff(commitHash) : [];
     }
 
     async commit(message: string, files?: string[], workspacePath?: string): Promise<void> {

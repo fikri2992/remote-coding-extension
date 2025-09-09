@@ -324,3 +324,33 @@ If issues persist:
 - ✅ `docs/fix-implementation-summary.md` - This comprehensive documentation
 
 The fixes address the root cause of both issues and should resolve the infinite loading states you're experiencing.
+## Add
+itional Fix: Commit Diff Support
+
+**Issue Found:** When clicking on commit details in the git history, it showed "No changes in this commit" because the CLI server was missing the `show` operation handler.
+
+**Fix Applied:**
+- Added `show` case to CLI server git service registration
+- Implemented `getCommitDiff()` method in CLIGitRepository class
+- Added corresponding method in CLIGitService class
+- Uses `git show --no-color --format= <commitHash>` to get commit diffs
+
+### New Test Script
+```bash
+# Test commit diff functionality specifically
+node test-commit-diff.js
+```
+
+### Expected Results
+✅ **Commit Details:**
+- Clicking on a commit in history shows actual file changes
+- Displays added/modified/deleted files with diff content
+- Shows proper +/- line counts for changes
+- No more "No changes in this commit" for commits that have changes
+
+### Files Modified for Commit Diff Fix
+- ✅ `src/cli/server.ts` - Added `show` operation handler
+- ✅ `src/cli/services/GitService.ts` - Added `getCommitDiff()` methods
+- ✅ `test-commit-diff.js` - Created test for commit diff functionality
+
+This completes the git functionality fixes - both history loading and commit details should now work properly.

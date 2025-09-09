@@ -219,6 +219,13 @@ export class CliServer {
                   const repos = await this.gitService.findRepositories(options.rootPath);
                   return { success: true, data: repos };
                   
+                case 'show':
+                  if (!options.commitHash) {
+                    return { error: 'Missing commitHash for show operation' };
+                  }
+                  const showResult = await this.gitService.getCommitDiff(options.commitHash, options.workspacePath);
+                  return { success: true, data: showResult };
+                  
                 case 'config':
                   const config = this.gitService.getConfig();
                   return { success: true, data: config };

@@ -19,7 +19,7 @@ function mapServerNodes(children: any[], depth = 0): FileNodeLike[] {
 const FilesPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { sendJson, addMessageListener } = useWebSocket();
+  const { sendJson, addMessageListener, isConnected } = useWebSocket();
   const [crumbs, setCrumbs] = React.useState<Crumb[]>([]);
   const [nodes, setNodes] = React.useState<FileNodeLike[]>([]);
   const [activeNode, setActiveNode] = React.useState<FileNodeLike | null>(null);
@@ -52,6 +52,7 @@ const FilesPage: React.FC = () => {
   };
 
   const requestTree = (path: string) => {
+    if (!isConnected) return;
     const id = `fs_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
     pendingIdRef.current = id;
     setCurrentPath(path);
@@ -60,6 +61,7 @@ const FilesPage: React.FC = () => {
   };
 
   useEffect(() => {
+    if (!isConnected) return;
     // initial load respects ?path= in URL
     const initialPath = ((location.search as any)?.path as string) || '/';
     setCrumbs(buildCrumbs(initialPath));
@@ -80,7 +82,7 @@ const FilesPage: React.FC = () => {
       // watch events can be handled here later
     });
     return unsub;
-  }, [location.search]);
+  }, [location.search, isConnected]);
 
   return (
     <div className="bg-card rounded-lg shadow-sm border border-border neo:rounded-none neo:border-[3px] neo:shadow-[8px_8px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[8px_8px_0_0_rgba(255,255,255,0.9)] overflow-hidden">

@@ -17,7 +17,7 @@ import { cn } from '../lib/utils'
 const FileViewerPage: React.FC = () => {
   const navigate = useNavigate()
   const location = useLocation()
-  const { sendJson, addMessageListener } = useWebSocket()
+  const { sendJson, addMessageListener, isConnected } = useWebSocket()
 
   const [content, setContent] = useState<string>('')
   const [meta, setMeta] = useState<{ path?: string; truncated?: boolean; size?: number }>({})
@@ -58,7 +58,7 @@ const FileViewerPage: React.FC = () => {
   }, [meta.path, filePath])
 
   useEffect(() => {
-    if (!filePath) return
+    if (!filePath || !isConnected) return
     const id = `fs_${Date.now()}_${Math.random().toString(36).slice(2,8)}`
     pendingIdRef.current = id
     setLoading(true)
@@ -79,7 +79,7 @@ const FileViewerPage: React.FC = () => {
       setLoading(false)
     })
     return unsub
-  }, [filePath])
+  }, [filePath, isConnected])
 
   const formatFileSize = (bytes: number): string => {
     if (bytes === 0) return '0 B'

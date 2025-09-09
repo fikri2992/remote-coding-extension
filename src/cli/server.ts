@@ -187,8 +187,8 @@ export class CliServer {
 
               switch (operation) {
                 case 'status':
-                  const status = await this.gitService.getStatus(options.workspacePath);
-                  return { success: true, data: status };
+                  const repositoryState = await this.gitService.getRepositoryState(options.workspacePath);
+                  return { success: true, data: repositoryState };
 
                 case 'log':
                   const commits = await this.gitService.getRecentCommits(options.count || 10, options.workspacePath);

@@ -127,12 +127,15 @@ export class CliServer {
       });
       
       // Initialize git service
+      const workspaceRoot = process.cwd();
+      console.log(`🔧 Git Service workspace root: ${workspaceRoot}`);
       this.gitService = new CLIGitService({
-        workspaceRoot: process.cwd(),
+        workspaceRoot: workspaceRoot,
         enableDebug: process.env.KIRO_GIT_DEBUG === '1'
       });
       
       // Initialize filesystem service
+      console.log(`📁 FileSystem Service workspace root: ${workspaceRoot}`);
       this.filesystemService = new CLIFileSystemService((clientId: string, message: any) => {
         // Send filesystem messages through WebSocket
         if (this.webSocketServer) {
@@ -165,43 +168,55 @@ export class CliServer {
             }
 
             try {
-              const { operation, params } = message;
+              // Extract operation and options from the correct nested structure
+              const operation = message.data?.gitData?.operation;
+              const options = message.data?.gitData?.options || {};
+              
+              if (this.config?.server && process.env.KIRO_GIT_DEBUG === '1') {
+                console.log(`[Git Debug] Received message:`, JSON.stringify(message, null, 2));
+                console.log(`[Git Debug] Extracted operation: ${operation}`);
+                console.log(`[Git Debug] Extracted options:`, options);
+              }
+              
+              if (!operation) {
+                return { error: 'Missing operation in git message' };
+              }
               
               switch (operation) {
                 case 'status':
-                  const status = await this.gitService.getStatus(params.workspacePath);
+                  const status = await this.gitService.getStatus(options.workspacePath);
                   return { success: true, data: status };
                   
                 case 'log':
-                  const commits = await this.gitService.getRecentCommits(params.count || 10, params.workspacePath);
+                  const commits = await this.gitService.getRecentCommits(options.count || 10, options.workspacePath);
                   return { success: true, data: commits };
                   
                 case 'diff':
-                  const diffs = await this.gitService.getCurrentDiff(params.workspacePath);
+                  const diffs = await this.gitService.getCurrentDiff(options.workspacePath);
                   return { success: true, data: diffs };
                   
                 case 'add':
-                  await this.gitService.add(params.files, params.workspacePath);
+                  await this.gitService.add(options.files, options.workspacePath);
                   return { success: true };
                   
                 case 'commit':
-                  await this.gitService.commit(params.message, params.files, params.workspacePath);
+                  await this.gitService.commit(options.message, options.files, options.workspacePath);
                   return { success: true };
                   
                 case 'push':
-                  await this.gitService.push(params.remote, params.branch, params.workspacePath);
+                  await this.gitService.push(options.remote, options.branch, options.workspacePath);
                   return { success: true };
                   
                 case 'pull':
-                  await this.gitService.pull(params.remote, params.branch, params.workspacePath);
+                  await this.gitService.pull(options.remote, options.branch, options.workspacePath);
                   return { success: true };
                   
                 case 'state':
-                  const state = await this.gitService.getRepositoryState(params.workspacePath);
+                  const state = await this.gitService.getRepositoryState(options.workspacePath);
                   return { success: true, data: state };
                   
                 case 'find-repos':
-                  const repos = await this.gitService.findRepositories(params.rootPath);
+                  const repos = await this.gitService.findRepositories(options.rootPath);
                   return { success: true, data: repos };
                   
                 case 'config':
@@ -209,19 +224,19 @@ export class CliServer {
                   return { success: true, data: config };
                   
                 case 'branch':
-                  if (params.create) {
+                  if (options.create) {
                     await this.gitService.executeSafeOperation('create-branch', {
-                      name: params.create,
-                      from: params.from,
-                      workspacePath: params.workspacePath
+                      name: options.create,
+                      from: options.from,
+                      workspacePath: options.workspacePath
                     });
-                  } else if (params.switch) {
+                  } else if (options.switch) {
                     await this.gitService.executeSafeOperation('switch-branch', {
-                      name: params.switch,
-                      workspacePath: params.workspacePath
+                      name: options.switch,
+                      workspacePath: options.workspacePath
                     });
                   } else {
-                    const repo = await this.gitService.getRepository(params.workspacePath);
+                    const repo = await this.gitService.getRepository(options.workspacePath);
                     const currentBranch = repo ? await repo.getCurrentBranch() : null;
                     return { success: true, data: { currentBranch } };
                   }
@@ -250,42 +265,54 @@ export class CliServer {
             }
 
             try {
-              const { operation, params } = message;
+              // Extract operation and data from the correct nested structure
+              const operation = message.data?.fileSystemData?.operation;
+              const data = message.data?.fileSystemData || {};
+              
+              if (process.env.KIRO_FS_DEBUG === '1') {
+                console.log(`[FS Debug] Received message:`, JSON.stringify(message, null, 2));
+                console.log(`[FS Debug] Extracted operation: ${operation}`);
+                console.log(`[FS Debug] Extracted data:`, data);
+              }
+              
+              if (!operation) {
+                return { error: 'Missing operation in filesystem message' };
+              }
               
               switch (operation) {
                 case 'tree':
-                  const treeResult = await this.filesystemService.getTree(params.path, params.maxDepth);
+                  const treeResult = await this.filesystemService.getTree(data.path, data.maxDepth);
                   return { success: true, data: treeResult };
                   
                 case 'open':
-                  const fileResult = await this.filesystemService.openFile(params.path, {
-                    encoding: params.encoding,
-                    maxLength: params.maxLength
+                  const fileResult = await this.filesystemService.openFile(data.path, {
+                    encoding: data.encoding,
+                    maxLength: data.maxLength
                   });
                   return { success: true, data: fileResult };
                   
                 case 'create':
-                  await this.filesystemService.createFile(params.path, params.content, params.options);
+                  await this.filesystemService.createFile(data.path, data.content, data.options);
                   return { success: true };
                   
                 case 'delete':
-                  await this.filesystemService.deleteFile(params.path, params.options);
+                  await this.filesystemService.deleteFile(data.path, data.options);
                   return { success: true };
                   
                 case 'rename':
-                  await this.filesystemService.renameFile(params.path, params.options.newPath);
+                  await this.filesystemService.renameFile(data.path, data.options?.newPath || data.newPath);
                   return { success: true };
                   
                 case 'watch':
-                  const watchResult = await this.filesystemService.addWatcher(clientId, params.path);
+                  const watchResult = await this.filesystemService.addWatcher(clientId, data.path);
                   return { success: true, data: watchResult };
                   
                 case 'unwatch':
-                  const unwatchResult = this.filesystemService.removeWatcher(clientId, params.path);
+                  const unwatchResult = this.filesystemService.removeWatcher(clientId, data.path);
                   return { success: true, data: unwatchResult };
                   
                 case 'stats':
-                  const statsResult = await this.filesystemService.getFileStats(params.path);
+                  const statsResult = await this.filesystemService.getFileStats(data.path);
                   return { success: true, data: statsResult };
                   
                 case 'config':

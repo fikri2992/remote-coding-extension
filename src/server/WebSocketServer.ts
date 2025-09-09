@@ -78,85 +78,8 @@ export class WebSocketServer {
       }
     });
     
-    this.registerService('git', {
-      handle: async (clientId: string, message: any) => {
-        const { operation, params } = message;
-        
-        try {
-          switch (operation) {
-            case 'status':
-              const status = await this._gitService!.getStatus(params.workspacePath);
-              return { success: true, data: status };
-              
-            case 'log':
-              const commits = await this._gitService!.getRecentCommits(params.count || 10, params.workspacePath);
-              return { success: true, data: commits };
-              
-            case 'diff':
-              const diffs = await this._gitService!.getCurrentDiff(params.workspacePath);
-              return { success: true, data: diffs };
-              
-            case 'add':
-              await this._gitService!.add(params.files, params.workspacePath);
-              return { success: true };
-              
-            case 'commit':
-              await this._gitService!.commit(params.message, params.files, params.workspacePath);
-              return { success: true };
-              
-            case 'push':
-              await this._gitService!.push(params.remote, params.branch, params.workspacePath);
-              return { success: true };
-              
-            case 'pull':
-              await this._gitService!.pull(params.remote, params.branch, params.workspacePath);
-              return { success: true };
-              
-            case 'state':
-              const state = await this._gitService!.getRepositoryState(params.workspacePath);
-              return { success: true, data: state };
-              
-            case 'find-repos':
-              const repos = await this._gitService!.findRepositories(params.rootPath);
-              return { success: true, data: repos };
-              
-            case 'config':
-              const config = this._gitService!.getConfig();
-              return { success: true, data: config };
-              
-            case 'branch':
-              if (params.create) {
-                await this._gitService!.executeSafeOperation('create-branch', {
-                  name: params.create,
-                  from: params.from,
-                  workspacePath: params.workspacePath
-                });
-              } else if (params.switch) {
-                await this._gitService!.executeSafeOperation('switch-branch', {
-                  name: params.switch,
-                  workspacePath: params.workspacePath
-                });
-              } else {
-                const repo = await this._gitService!.getRepository(params.workspacePath);
-                const currentBranch = repo ? await repo.getCurrentBranch() : null;
-                return { success: true, data: { currentBranch } };
-              }
-              return { success: true };
-              
-            default:
-              return { error: `Unknown git operation: ${operation}` };
-          }
-        } catch (error) {
-          return { 
-            success: false, 
-            error: error instanceof Error ? error.message : 'Unknown error' 
-          };
-        }
-      },
-      onClientDisconnect: (clientId: string) => {
-        // Git service doesn't need special disconnect handling
-      }
-    });
+    // Git service registration is now handled by CLI server
+    // This built-in registration is disabled to avoid conflicts
     
     this.registerService('terminal', {
       handle: (clientId: string, message: any) => {
@@ -168,18 +91,6 @@ export class WebSocketServer {
     });
     
     // Try to initialize command handler for VS Code compatibility
-    try {
-      const mod = require('./CommandHandler');
-      this._commandHandler = new mod.CommandHandler();
-      const ch = this._commandHandler as any;
-      ch.addAllowedCommand('kiroAgent.focusContinueInputWithoutClear');
-      ch.addAllowedCommand('type');
-      ch.addAllowedCommand('editor.action.clipboardPasteAction');
-      ch.addAllowedCommand('kiroAgent.focusPasteEnter');
-    } catch {
-      this._commandHandler = null;
-      if (this.debug) console.log('WebSocketServer: CommandHandler unavailable (CLI mode)');
-    }
     try {
       const mod = require('./CommandHandler');
       this._commandHandler = new mod.CommandHandler();
@@ -534,29 +445,53 @@ export class WebSocketServer {
       });
     }
 
-    // Git protocol - This is now handled by the service registration above
-    // Keeping this for backward compatibility but it will be handled by the service
-    if (message.type === 'git' && !this.services.has('git')) {
+    // Git protocol - Route to registered git service
+    if (message.type === 'git') {
       const id = message.id;
-      const op = message?.data?.gitData?.operation as string | undefined;
-      if (!op) {
-        this.sendToClient(connectionId, { type: 'git', id, data: { gitData: { operation: 'unknown' }, ok: false, error: 'Missing git operation' } });
-        return;
-      }
-      
-      // Forward to the git service if it exists
       const gitService = this.services.get('git');
+      
       if (gitService) {
         gitService.handle(connectionId, message)
           .then(result => {
-            this.sendToClient(connectionId, { type: 'git', id, data: result });
+            this.sendToClient(connectionId, { 
+              type: 'git', 
+              id, 
+              data: { 
+                gitData: { 
+                  operation: message.data?.gitData?.operation || 'unknown',
+                  result: result.data 
+                }, 
+                ok: result.success !== false, 
+                error: result.error 
+              } 
+            });
           })
           .catch(error => {
             const errMsg = error instanceof Error ? error.message : String(error);
-            this.sendToClient(connectionId, { type: 'git', id, data: { ok: false, error: errMsg } });
+            this.sendToClient(connectionId, { 
+              type: 'git', 
+              id, 
+              data: { 
+                gitData: { 
+                  operation: message.data?.gitData?.operation || 'unknown' 
+                }, 
+                ok: false, 
+                error: errMsg 
+              } 
+            });
           });
       } else {
-        this.sendToClient(connectionId, { type: 'git', id, data: { ok: false, error: 'Git service not available' } });
+        this.sendToClient(connectionId, { 
+          type: 'git', 
+          id, 
+          data: { 
+            gitData: { 
+              operation: message.data?.gitData?.operation || 'unknown' 
+            }, 
+            ok: false, 
+            error: 'Git service not available' 
+          } 
+        });
       }
     }
 

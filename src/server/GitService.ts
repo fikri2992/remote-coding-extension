@@ -2,15 +2,15 @@
  * GitService - Handles git operations and repository monitoring
  */
 
-import * as vscode from 'vscode';
+function getVSCode(): any | null { try { return require('vscode'); } catch { return null; } }
 import * as path from 'path';
 import { execFile } from 'child_process';
 import { GitRepositoryState, GitCommit, GitDiff } from './interfaces';
 
 export class GitService {
-    private _gitExtension: vscode.Extension<any> | undefined;
+    private _gitExtension: any | undefined;
     private _repositories: Map<string, any> = new Map();
-    private _disposables: vscode.Disposable[] = [];
+    private _disposables: any[] = [];
 
     constructor() {
         this.initializeGitExtension();
@@ -22,9 +22,10 @@ export class GitService {
      */
     private async testGitAvailability(): Promise<void> {
         try {
-            const workspaceFolders = vscode.workspace.workspaceFolders;
+            const vs = getVSCode();
+            const workspaceFolders = vs?.workspace?.workspaceFolders;
             if (workspaceFolders && workspaceFolders.length > 0) {
-                const testPath = (workspaceFolders[0] as vscode.WorkspaceFolder).uri.fsPath;
+                const testPath = workspaceFolders[0].uri.fsPath;
 
                 console.log(`GitService: Testing git availability in ${testPath}`);
 
@@ -52,12 +53,13 @@ export class GitService {
     async debugGitCommand(operation: string, options: any = {}): Promise<any> {
         console.log(`GitService: DEBUG - Testing ${operation}`);
 
-        const workspaceFolders = vscode.workspace.workspaceFolders;
+        const vs = getVSCode();
+        const workspaceFolders = vs?.workspace?.workspaceFolders;
         if (!workspaceFolders || workspaceFolders.length === 0) {
             throw new Error('No workspace available for git debug');
         }
 
-        const testPath = (workspaceFolders[0] as vscode.WorkspaceFolder).uri.fsPath;
+        const testPath = workspaceFolders[0].uri.fsPath;
 
         switch (operation) {
             case 'simple-log':
@@ -81,19 +83,20 @@ export class GitService {
             console.log('GitService: Initializing Git extension integration...');
 
             // Check if workspace is available
-            const workspaceFolders = vscode.workspace.workspaceFolders;
+            const vs = getVSCode();
+            const workspaceFolders = vs?.workspace?.workspaceFolders;
             if (!workspaceFolders || workspaceFolders.length === 0) {
                 console.log('GitService: No workspace folders found, will work with CLI only');
                 return;
             }
 
-            this._gitExtension = vscode.extensions.getExtension('vscode.git');
+            this._gitExtension = vs?.extensions?.getExtension?.('vscode.git');
             if (!this._gitExtension) {
                 console.log('GitService: VS Code Git extension not found, using CLI only');
                 return;
             }
 
-            if (!this._gitExtension.isActive) {
+            if (this._gitExtension && !this._gitExtension.isActive) {
                 console.log('GitService: Activating VS Code Git extension...');
                 try {
                     await Promise.race([
@@ -819,7 +822,8 @@ export class GitService {
         console.log(`GitService: Getting repository for path: ${workspacePath || 'current workspace'}`);
 
         // Try to get workspace root first
-        const workspaceFolders = vscode.workspace.workspaceFolders;
+        const vs = getVSCode();
+        const workspaceFolders = vs?.workspace?.workspaceFolders;
         let targetPath = workspacePath;
 
         if (!targetPath && workspaceFolders && workspaceFolders.length > 0) {
@@ -910,7 +914,7 @@ export class GitService {
      * Dispose resources
      */
     dispose(): void {
-        this._disposables.forEach(d => d.dispose());
+        this._disposables.forEach(d => { try { d.dispose?.(); } catch {} });
         this._repositories.clear();
     }
 }

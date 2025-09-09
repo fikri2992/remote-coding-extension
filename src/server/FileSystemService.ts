@@ -1,8 +1,9 @@
 /**
- * FileSystemService - Workspace-scoped filesystem operations exposed over WebSocket
+ * FileSystemService - Workspace-scoped filesystem operations exposed over WebSocket (CLI-safe)
  */
 
-import * as vscode from 'vscode';
+import * as fs from 'fs';
+import * as fsp from 'fs/promises';
 import * as path from 'path';
 import { FileNode, EnhancedWebSocketMessage } from './interfaces';
 
@@ -15,7 +16,7 @@ interface TreeResult {
 
 export class FileSystemService {
   private sendToClient: SendFn;
-  private watchersByClient: Map<string, vscode.FileSystemWatcher[]> = new Map();
+  private watchersByClient: Map<string, fs.FSWatcher[]> = new Map();
   private maxTextBytes = 1024 * 1024; // 1 MB safety limit for inline text content
 
   constructor(sendFn: SendFn) {
@@ -46,12 +47,12 @@ export class FileSystemService {
           const target = await this.resolvePathWithinWorkspace(data?.path);
           const isDir = data?.options?.type === 'directory';
           if (isDir) {
-            await vscode.workspace.fs.createDirectory(vscode.Uri.file(target));
+            await fsp.mkdir(target, { recursive: true });
           } else {
             // Ensure parent directory exists for file creation
             try {
               const parent = path.dirname(target);
-              await vscode.workspace.fs.createDirectory(vscode.Uri.file(parent));
+              await fsp.mkdir(parent, { recursive: true });
             } catch {}
             const raw = data?.content;
             let bytes: Uint8Array;
@@ -65,7 +66,7 @@ export class FileSystemService {
             } else {
               bytes = new Uint8Array();
             }
-            await vscode.workspace.fs.writeFile(vscode.Uri.file(target), bytes);
+            await fsp.writeFile(target, Buffer.from(bytes));
           }
           this.reply(clientId, id, op, { ok: true });
           break;
@@ -73,14 +74,18 @@ export class FileSystemService {
         case 'delete': {
           const target = await this.resolvePathWithinWorkspace(data?.path);
           const recursive = data?.options?.recursive !== false;
-          await vscode.workspace.fs.delete(vscode.Uri.file(target), { recursive, useTrash: false });
+          if (recursive) {
+            await fsp.rm(target, { recursive: true, force: true });
+          } else {
+            await fsp.unlink(target);
+          }
           this.reply(clientId, id, op, { ok: true });
           break;
         }
         case 'rename': {
           const src = await this.resolvePathWithinWorkspace(data?.path);
           const dst = await this.resolvePathWithinWorkspace(data?.options?.newPath);
-          await vscode.workspace.fs.rename(vscode.Uri.file(src), vscode.Uri.file(dst), { overwrite: false });
+          await fsp.rename(src, dst);
           this.reply(clientId, id, op, { ok: true });
           break;
         }
@@ -104,7 +109,7 @@ export class FileSystemService {
   public onClientDisconnect(clientId: string) {
     const list = this.watchersByClient.get(clientId);
     if (list && list.length) {
-      list.forEach(d => d.dispose());
+      list.forEach(d => { try { d.close(); } catch {} });
     }
     this.watchersByClient.delete(clientId);
   }
@@ -123,11 +128,7 @@ export class FileSystemService {
     this.sendToClient(clientId, body);
   }
 
-  private getWorkspaceRoot(): string {
-    const wf = vscode.workspace.workspaceFolders;
-    if (!wf || wf.length === 0) throw new Error('No workspace open');
-    return wf[0]!.uri.fsPath;
-  }
+  private getWorkspaceRoot(): string { return process.cwd(); }
 
   private async resolvePathWithinWorkspace(relOrAbs?: string): Promise<string> {
     const root = this.getWorkspaceRoot();
@@ -156,17 +157,17 @@ export class FileSystemService {
 
   private async getTree(absPath: string): Promise<TreeResult> {
     const root = this.getWorkspaceRoot();
-    const uri = vscode.Uri.file(absPath);
-    const entries = await vscode.workspace.fs.readDirectory(uri);
+    const entries = await fsp.readdir(absPath, { withFileTypes: true });
     const children: FileNode[] = [];
-    for (const [name, fileType] of entries) {
+    for (const dirent of entries) {
+      const name = dirent.name;
       const childAbs = path.join(absPath, name);
-      const stat = await Promise.resolve(vscode.workspace.fs.stat(vscode.Uri.file(childAbs))).catch(() => null);
+      const stat = await Promise.resolve(fsp.stat(childAbs)).catch(() => null);
       const rel = childAbs.startsWith(root) ? childAbs.slice(root.length) || '/' : childAbs;
       const node: FileNode = {
         name,
         path: rel.replace(/\\/g, '/'),
-        type: fileType === vscode.FileType.Directory ? 'directory' : 'file',
+        type: dirent.isDirectory() ? 'directory' : 'file',
       };
       if (stat) {
         node.size = Number(stat.size);
@@ -180,11 +181,10 @@ export class FileSystemService {
 
   private async openFile(absPath: string): Promise<{ path: string; content: string; encoding: 'utf8'; truncated: boolean; size: number }> {
     const root = this.getWorkspaceRoot();
-    const uri = vscode.Uri.file(absPath);
-    const stat = await vscode.workspace.fs.stat(uri);
+    const stat = await fsp.stat(absPath);
     const size = Number(stat.size);
     const truncated = size > this.maxTextBytes;
-    const bytes = await vscode.workspace.fs.readFile(uri);
+    const bytes = await fsp.readFile(absPath);
     const slice = truncated ? bytes.slice(0, this.maxTextBytes) : bytes;
     // Best-effort UTF-8 decode
     const content = Buffer.from(slice).toString('utf8');
@@ -193,30 +193,17 @@ export class FileSystemService {
   }
 
   private addWatcher(clientId: string, absPath: string) {
-    // Create a RelativePattern covering the subtree
     const root = this.getWorkspaceRoot();
-    const rel = absPath.startsWith(root) ? absPath.slice(root.length + 1) : absPath;
-    const folder = vscode.workspace.workspaceFolders?.[0];
-    if (!folder) throw new Error('No workspace open');
-    const pattern = rel && rel.length > 0 ? new vscode.RelativePattern(folder, rel.replace(/\\/g, '/') + '/**/*') : new vscode.RelativePattern(folder, '**/*');
-    const watcher = vscode.workspace.createFileSystemWatcher(pattern);
-
-    const sendEvent = (kind: 'create' | 'change' | 'delete', uri: vscode.Uri) => {
-      const relPath = uri.fsPath.startsWith(root) ? uri.fsPath.slice(root.length) || '/' : uri.fsPath;
-      this.sendToClient(clientId, {
-        type: 'fileSystem',
-        data: {
-          event: 'watch',
-          kind,
-          path: relPath.replace(/\\/g, '/'),
-        }
-      });
+    const sendEvent = (kind: 'create' | 'change' | 'delete', filePath: string) => {
+      const relPath = filePath.startsWith(root) ? filePath.slice(root.length) || '/' : filePath;
+      this.sendToClient(clientId, { type: 'fileSystem', data: { event: 'watch', kind, path: relPath.replace(/\\/g, '/') } });
     };
-
-    watcher.onDidCreate((u) => sendEvent('create', u));
-    watcher.onDidChange((u) => sendEvent('change', u));
-    watcher.onDidDelete((u) => sendEvent('delete', u));
-
+    const watcher = fs.watch(absPath, { recursive: true }, (event, filename) => {
+      if (!filename) return;
+      const full = path.join(absPath, filename.toString());
+      const kind = event === 'rename' ? 'change' : 'change';
+      sendEvent(kind, full);
+    });
     const arr = this.watchersByClient.get(clientId) || [];
     arr.push(watcher);
     this.watchersByClient.set(clientId, arr);

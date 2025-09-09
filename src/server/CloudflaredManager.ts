@@ -1,4 +1,5 @@
-import * as vscode from 'vscode';
+// Type-only import to avoid runtime dependency in CLI
+import type * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -12,12 +13,14 @@ function ensureDirSync(dir: string) {
 // Read tunnel startup timeout from settings (default 60s)
 function getTunnelStartTimeoutMs(): number {
   try {
-    const cfg = vscode.workspace.getConfiguration('webAutomationTunnel');
-    const ms = cfg.get<number>('tunnelStartTimeoutMs', 60000);
-    return typeof ms === 'number' && ms > 0 ? ms : 60000;
-  } catch {
-    return 60000;
-  }
+    const vs: any = (() => { try { return require('vscode'); } catch { return null; } })();
+    if (vs?.workspace?.getConfiguration) {
+      const cfg = vs.workspace.getConfiguration('webAutomationTunnel');
+      const ms = cfg.get('tunnelStartTimeoutMs', 60000) as number;
+      return typeof ms === 'number' && ms > 0 ? ms : 60000;
+    }
+  } catch {}
+  return 60000;
 }
 
 // -------------------------
@@ -505,8 +508,8 @@ export async function ensureCloudflared(context?: vscode.ExtensionContext): Prom
   if (await isInPath()) return 'cloudflared';
 
   const baseDir = context
-    ? (context.globalStorageUri?.fsPath || context.globalStoragePath)
-    : path.join(os.homedir(), '.vscode-cloudflared');
+    ? (context.globalStorageUri?.fsPath || (context as any).globalStoragePath)
+    : path.join(os.homedir(), '.kiro-cloudflared');
 
   ensureDirSync(baseDir);
   const binName = process.platform === 'win32' ? 'cloudflared.exe' : 'cloudflared';

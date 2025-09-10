@@ -1,4 +1,4 @@
-ï»¿
+
 import React, { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from '@tanstack/react-router'
 import { useWebSocket } from '../components/WebSocketProvider'
@@ -285,7 +285,7 @@ const FileViewerPage: React.FC = () => {
             {refreshing && (
               <div className="hidden sm:flex items-center gap-1 text-blue-600 text-xs mr-1">
                 <div className="w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                <span>Refreshingâ€¦</span>
+                <span>Refreshing…</span>
               </div>
             )}
             <button 
@@ -373,7 +373,7 @@ const FileViewerPage: React.FC = () => {
             {meta.truncated ? <span className="text-amber-600">truncated</span> : null}
           </div>
           <div className="flex items-center gap-3">
-            {selInfo.chars > 0 ? <span>Selection: {selInfo.chars} chars â€¢ {selInfo.lines} lines</span> : <span>Selection: â€”</span>}
+            {selInfo.chars > 0 ? <span>Selection: {selInfo.chars} chars • {selInfo.lines} lines</span> : <span>Selection: —</span>}
             {wrap && wrapColumn ? <span>Wrap@{wrapColumn}</span> : null}
           </div>
         </div>
@@ -463,7 +463,7 @@ const FileViewerPage: React.FC = () => {
             {/* Chunk navigation for large files */}
             {isChunked && (
               <div className="px-3 py-2 flex items-center justify-between text-xs text-muted-foreground">
-                <div>Chunk {chunkIndex + 1} / {totalChunks} â€¢ Lines {chunkStart}â€“{chunkEnd}</div>
+                <div>Chunk {chunkIndex + 1} / {totalChunks} • Lines {chunkStart}–{chunkEnd}</div>
                 <div className="flex items-center gap-2">
                   <button
                     disabled={chunkIndex === 0}

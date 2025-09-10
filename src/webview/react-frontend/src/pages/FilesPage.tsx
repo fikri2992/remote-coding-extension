@@ -6,15 +6,13 @@ import { FileNodeLike } from '../components/files/FileNodeItem';
 import { BottomSheet, BottomSheetHeader, BottomSheetTitle, BottomSheetFooter } from '../components/ui/bottom-sheet';
 import { useWebSocket } from '../components/WebSocketProvider';
 import { useNavigate, useLocation } from '@tanstack/react-router';
-import { useFileCache } from '../contexts/FileCacheContext';
-import { useViewState } from '../contexts/ViewStateContext';
-import { CacheStatusIndicator } from '../components/cache/CacheStatusIndicator';
 import { TopProgressBar } from '../components/feedback/TopProgressBar';
 import { usePendingNav } from '../contexts/PendingNavContext';
 import { useDelayedFlag } from '../lib/hooks/useDelayedFlag';
 import { useLiveRegion } from '../contexts/LiveRegionContext';
 import { useToast } from '../components/ui/toast';
 import { useRipple } from '../lib/hooks/useRipple';
+import { usePersistentState } from '../lib/hooks/usePersistentState';
 
 function mapServerNodes(children: any[], depth = 0): FileNodeLike[] {
   return (children || []).map((n: any) => ({
@@ -29,16 +27,21 @@ const FilesPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { sendJson, addMessageListener, isConnected } = useWebSocket();
-  const { setDirectory, peekDirectory } = useFileCache();
-  const { getFilesState, setFilesState } = useViewState();
   const pendingNav = usePendingNav();
   const live = useLiveRegion();
   const { show } = useToast();
-  const [crumbs, setCrumbs] = React.useState<Crumb[]>([]);
+  const crumbs = React.useMemo<Crumb[]>(() => {
+    const p = ((location.search as any)?.path as string) || '/';
+    const clean = (p || '/').replace(/\\/g, '/').replace(/^\/+/, '');
+    if (clean === '') return [];
+    const parts = clean.split('/');
+    return parts.map((seg, i) => ({ name: seg, path: '/' + parts.slice(0, i + 1).join('/') }));
+  }, [location.search]);
   const [nodes, setNodes] = React.useState<FileNodeLike[]>([]);
   const [activeNode, setActiveNode] = React.useState<FileNodeLike | null>(null);
   const [_currentPath, setCurrentPath] = React.useState<string>('/');
   const pendingIdRef = useRef<string | null>(null);
+  const pendingPathRef = useRef<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [viewMode, setViewMode] = React.useState<'compact' | 'detailed'>('detailed');
   const [loading, setLoading] = React.useState<boolean>(false);
@@ -47,17 +50,11 @@ const FilesPage: React.FC = () => {
   const backRipple = useRipple();
   const refreshRipple = useRipple();
 
-  const buildCrumbs = (path: string): Crumb[] => {
-    const clean = (path || '/').replace(/\\/g, '/').replace(/^\/+/, '');
-    if (clean === '') return [];
-    const parts = clean.split('/');
-    const arr: Crumb[] = [];
-    parts.forEach((p, i) => {
-      const full = '/' + parts.slice(0, i + 1).join('/');
-      arr.push({ name: p, path: full });
-    });
-    return arr;
-  };
+  // Filters
+  const [showHidden, setShowHidden] = usePersistentState<boolean>('filesShowHidden', false);
+  const [showIgnored, setShowIgnored] = usePersistentState<boolean>('filesShowIgnored', false);
+
+  // buildCrumbs removed; crumbs derived inline above
 
   const openNode = (node: FileNodeLike) => {
     if (node.type === 'directory') {
@@ -75,7 +72,13 @@ const FilesPage: React.FC = () => {
     }
   };
 
-  const requestTree = async (path: string, retryCount = 0, background: boolean = false) => {
+
+  const requestTree = async (
+    path: string,
+    retryCount: number = 0,
+    background: boolean = false,
+    override?: { allowHiddenFiles?: boolean; useGitIgnore?: boolean }
+  ) => {
     // Check if WebSocket is connected
     if (!isConnected) {
       if (retryCount === 0) {
@@ -95,6 +98,7 @@ const FilesPage: React.FC = () => {
 
     const id = `fs_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
     pendingIdRef.current = id;
+    pendingPathRef.current = path;
     setCurrentPath(path);
     if (!background) {
       setLoading(true);
@@ -103,7 +107,12 @@ const FilesPage: React.FC = () => {
     }
     setError(null); // Clear any previous errors
     
-    const sent = sendJson({ type: 'fileSystem', id, data: { fileSystemData: { operation: 'tree', path } } });
+    const options = {
+      allowHiddenFiles: override?.allowHiddenFiles ?? showHidden,
+      useGitIgnore: override?.useGitIgnore ?? !showIgnored,
+      depth: 1, // UI only needs one level; avoid deep recursion/timeouts
+    } as const;
+    const sent = sendJson({ type: 'fileSystem', id, data: { fileSystemData: { operation: 'tree', path, options } } });
     
     if (!sent) {
       if (!background) setLoading(false);
@@ -134,41 +143,17 @@ const FilesPage: React.FC = () => {
   };
 
   const loadDirectory = (path: string) => {
-    // Attempt instant render from memory cache (allow stale for SWR)
-    const cached = peekDirectory(path, { allowStale: true });
-    if (cached && Array.isArray(cached.children)) {
-      setNodes(mapServerNodes(cached.children, 0));
-      setCrumbs(buildCrumbs(path));
-      setLoading(false);
-      setRefreshing(true);
-      // We have data immediately; mark pending nav complete to stop top bar
-      try { pendingNav.finish(path); } catch {}
-      // background revalidation
-      requestTree(path, 0, true);
-    } else {
-      // No cache - proceed with normal loading
-      setRefreshing(false);
-      requestTree(path, 0, false);
-    }
+    // Always fetch fresh data; do not use view-state or cache
+    setRefreshing(false);
+    requestTree(path, 0, false);
   };
 
   useEffect(() => {
     if (!isConnected) return;
     // initial load respects ?path= in URL
     const initialPath = ((location.search as any)?.path as string) || '/';
-    // First try view-state snapshot, otherwise peek cache, then fetch
-    const vs = getFilesState(initialPath);
-    if (vs && Array.isArray(vs.nodes) && vs.nodes.length > 0) {
-      setNodes(vs.nodes);
-      setCrumbs(vs.crumbs || buildCrumbs(initialPath));
-      setLoading(false);
-      setRefreshing(true);
-      // View-state yields instant content; end pending
-      try { pendingNav.finish(initialPath); } catch {}
-      requestTree(initialPath, 0, true);
-    } else {
-      loadDirectory(initialPath);
-    }
+    // Always fetch fresh data; do not use view-state or cache
+    loadDirectory(initialPath);
     
     const unsub = addMessageListener((msg) => {
       if (msg?.type !== 'fileSystem') return;
@@ -176,28 +161,12 @@ const FilesPage: React.FC = () => {
         if (!pendingIdRef.current || msg.id !== pendingIdRef.current) return;
         
         if (msg.data?.ok && msg.data?.result?.children) {
-          const directoryContent = {
-            path: _currentPath,
-            children: msg.data.result.children.map((n: any) => ({
-              name: n.name,
-              path: n.path,
-              type: n.type,
-              size: n.size,
-              lastModified: n.lastModified,
-            })),
-            totalCount: msg.data.result.children.length,
-            hasMore: false,
-          };
-          
-          // Cache the result
-          setDirectory(_currentPath, directoryContent).catch(console.warn);
-          
+          const activePath = pendingPathRef.current || _currentPath;
           const list = mapServerNodes(msg.data.result.children, 0);
           setNodes(list);
-          // Persist view-state for instant back
-          setFilesState(_currentPath, { nodes: list, crumbs: buildCrumbs(_currentPath) });
+          // No view-state persistence
           setError(null); // Clear any previous errors
-          pendingNav.finish(_currentPath);
+          pendingNav.finish(activePath);
           live.announce('Loaded');
         } else if (msg.data?.ok === false) {
           const errText = msg.data?.error || 'Failed to load directory';
@@ -208,13 +177,14 @@ const FilesPage: React.FC = () => {
         }
         
         pendingIdRef.current = null;
+        pendingPathRef.current = null;
         setLoading(false);
         setRefreshing(false);
       }
       // watch events can be handled here later
     });
     return unsub;
-  }, [location.search, isConnected]);
+  }, [location.search, isConnected, showHidden, showIgnored]);
 
   const showTopBar = useDelayedFlag(pendingNav.isActive, 200);
 
@@ -295,15 +265,12 @@ const FilesPage: React.FC = () => {
               </span>
               {refreshRipple.Ripple}
             </button>
-            <button className="shrink-0 rounded-md border border-border px-4 py-2 text-sm font-medium hover:bg-muted transition-colors neo:rounded-none neo:border-[3px] neo:shadow-[5px_5px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[5px_5px_0_0_rgba(255,255,255,0.9)]">
-              + New
-            </button>
           </div>
         </div>
-        
+
         {/* View mode controls */}
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-4 flex-wrap">
             <span className="text-xs text-muted-foreground">View:</span>
             <div className="inline-flex rounded-md border border-border neo:rounded-none neo:border-[2px]">
               <button
@@ -331,18 +298,37 @@ const FilesPage: React.FC = () => {
                 Compact
               </button>
             </div>
+
+            {/* Filters */}
+            <span className="text-xs text-muted-foreground">Filters:</span>
+            <div className="inline-flex rounded-md border border-border neo:rounded-none neo:border-[2px]">
+              <button
+                onClick={() => { const next = !showHidden; setShowHidden(next); const p = _currentPath || (crumbs.length ? crumbs[crumbs.length - 1].path : '/'); setRefreshing(true); requestTree(p, 0, true, { allowHiddenFiles: next, useGitIgnore: !showIgnored }); }}
+                className={cn(
+                  'px-3 py-1 text-xs font-medium transition-colors',
+                  'neo:rounded-none',
+                  showHidden ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
+                )}
+                title="Show hidden files (dotfiles)"
+              >
+                Show hidden
+              </button>
+              <button
+                onClick={() => { const next = !showIgnored; setShowIgnored(next); const p = _currentPath || (crumbs.length ? crumbs[crumbs.length - 1].path : '/'); setRefreshing(true); requestTree(p, 0, true, { allowHiddenFiles: showHidden, useGitIgnore: !next }); }}
+                className={cn(
+                  'px-3 py-1 text-xs font-medium transition-colors border-l border-border',
+                  'neo:rounded-none neo:border-l-[2px]',
+                  showIgnored ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
+                )}
+                title="Show files ignored by .gitignore"
+              >
+                Show ignored
+              </button>
+            </div>
           </div>
           
           {/* File count, cache status, and loading indicator */}
           <div className="flex items-center gap-3 text-xs text-muted-foreground">
-            <CacheStatusIndicator />
-            {refreshing && (
-              <div className="flex items-center gap-1 text-blue-600">
-                <div className="w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                <span>Refreshing…</span>
-              </div>
-            )}
-            
             {loading ? (
               <div className="flex items-center gap-1">
                 <div className="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
@@ -396,9 +382,6 @@ const FilesPage: React.FC = () => {
           </div>
         ) : (
           <FileTree nodes={nodes} pendingPath={pendingNav.target?.path} onOpen={(node) => {
-            // Save current view-state before navigating
-            const currentPath = crumbs.length > 0 ? crumbs[crumbs.length - 1].path : '/';
-            setFilesState(currentPath, { nodes, crumbs });
             openNode(node);
           }} onLongPress={setActiveNode} viewMode={viewMode} />
         )}

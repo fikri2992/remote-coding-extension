@@ -29,6 +29,11 @@ export interface FileSystemServiceConfig {
   enableCaching: boolean;
   cacheTimeoutMs: number;
   enableParallelOperations: boolean;
+
+  // Ignore settings
+  useGitIgnore?: boolean;             // default: true
+  gitIgnoreFile?: string;             // optional explicit .gitignore path
+  defaultIgnoreGlobs?: string[];      // additional defaults (e.g., vendor/)
   
   // Debug and logging
   enableDebug: boolean;

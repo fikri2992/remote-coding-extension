@@ -17,6 +17,7 @@ import { FileSystemConfigManager } from './FileSystemConfig';
 import { PathResolver } from './PathResolver';
 import { FileSystemSecurityManager } from './FileSystemSecurity';
 import { FileWatcherManager } from './FileWatcher';
+import { GitIgnoreFilter } from './GitIgnoreFilter';
 
 type SendFn = (clientId: string, message: any) => boolean;
 
@@ -27,6 +28,7 @@ export class CLIFileSystemService {
   private securityManager: FileSystemSecurityManager;
   private fileWatcher: FileWatcherManager;
   private cache: Map<string, { data: any; timestamp: number }> = new Map();
+  private ignoreFilter: GitIgnoreFilter | null = null;
 
   constructor(sendFn: SendFn, config?: FileSystemServiceConfig) {
     this.sendToClient = sendFn;
@@ -34,6 +36,15 @@ export class CLIFileSystemService {
     this.pathResolver = new PathResolver(this.config);
     this.securityManager = new FileSystemSecurityManager(this.config);
     this.fileWatcher = new FileWatcherManager(this.config);
+
+    // Initialize .gitignore filter if enabled
+    try {
+      if (this.config.useGitIgnore !== false) {
+        const wsRoot = this.config.workspaceRoot || process.cwd();
+        const extra = Array.isArray(this.config.defaultIgnoreGlobs) ? this.config.defaultIgnoreGlobs : [];
+        this.ignoreFilter = new GitIgnoreFilter(wsRoot, extra);
+      }
+    } catch {}
 
     // Set up file watcher event handling
     this.fileWatcher.on('fileEvent', ({ clientId, event }) => {
@@ -66,8 +77,13 @@ export class CLIFileSystemService {
       switch (op) {
         case 'tree': {
           const target = data?.path || '.';
+          const opts = (data?.options || {}) as { allowHiddenFiles?: boolean; useGitIgnore?: boolean; depth?: number };
+          const depth = typeof opts.depth === 'number' ? opts.depth : undefined;
+          const flags: { allowHiddenFiles?: boolean; useGitIgnore?: boolean } = {};
+          if (typeof opts.allowHiddenFiles === 'boolean') flags.allowHiddenFiles = opts.allowHiddenFiles;
+          if (typeof opts.useGitIgnore === 'boolean') flags.useGitIgnore = opts.useGitIgnore;
           console.log(`[FS Service] Tree operation - target: ${target}`);
-          result = await this.getTree(target);
+          result = await this.getTree(target, depth, flags);
           console.log(`[FS Service] Tree result:`, result ? 'success' : 'failed');
           this.reply(clientId, id, op, { ok: true, result });
           break;
@@ -173,7 +189,7 @@ export class CLIFileSystemService {
 
   // --- Public API Methods ---
 
-  async getTree(targetPath: string, maxDepth?: number): Promise<TreeResult> {
+  async getTree(targetPath: string, maxDepth?: number, flags?: { allowHiddenFiles?: boolean; useGitIgnore?: boolean }): Promise<TreeResult> {
     console.log(`[FS Service] getTree called with targetPath: "${targetPath}" (type: ${typeof targetPath})`);
     const resolved = await this.pathResolver.resolvePath(targetPath);
     console.log(`[FS Service] Path resolution result:`, {
@@ -195,7 +211,7 @@ export class CLIFileSystemService {
       if (cached) return cached;
     }
 
-    const result = await this.buildTree(resolved.resolvedPath, maxDepth || this.config.maxTreeDepth);
+    const result = await this.buildTree(resolved.resolvedPath, maxDepth || this.config.maxTreeDepth, 0, flags);
     
     if (this.config.enableCaching) {
       this.setCache(cacheKey, result);
@@ -385,7 +401,7 @@ export class CLIFileSystemService {
     this.sendToClient(clientId, body);
   }
 
-  private async buildTree(absPath: string, maxDepth: number, currentDepth: number = 0): Promise<TreeResult> {
+  private async buildTree(absPath: string, maxDepth: number, currentDepth: number = 0, flags?: { allowHiddenFiles?: boolean; useGitIgnore?: boolean }): Promise<TreeResult> {
     if (currentDepth >= maxDepth) {
       return { path: await this.pathResolver.resolveRelativePath(absPath), children: [] };
     }
@@ -396,6 +412,18 @@ export class CLIFileSystemService {
 
       for (const dirent of entries) {
         const childAbs = path.join(absPath, dirent.name);
+
+        const allowHidden = flags?.allowHiddenFiles ?? this.config.allowHiddenFiles;
+        const useGitIgnore = flags?.useGitIgnore ?? (this.config.useGitIgnore !== false);
+        // Skip hidden files if not allowed
+        if (!allowHidden && dirent.name.startsWith('.')) {
+          continue;
+        }
+
+        // Apply .gitignore filter when available
+        if (useGitIgnore && this.ignoreFilter && this.ignoreFilter.isIgnored(childAbs, dirent.isDirectory())) {
+          continue;
+        }
         const node: FileNode = {
           name: dirent.name,
           path: await this.pathResolver.resolveRelativePath(childAbs),
@@ -409,7 +437,7 @@ export class CLIFileSystemService {
             node.modified = new Date(Number(stats.mtime));
             
             if (currentDepth < maxDepth - 1) {
-              const subtree = await this.buildTree(childAbs, maxDepth, currentDepth + 1);
+              const subtree = await this.buildTree(childAbs, maxDepth, currentDepth + 1, flags);
               node.children = subtree.children;
             }
           } catch (error) {

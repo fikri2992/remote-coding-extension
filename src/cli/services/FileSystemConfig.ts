@@ -36,7 +36,11 @@ export class FileSystemConfigManager {
       cacheTimeoutMs: 5000,
       enableParallelOperations: true,
       enableDebug: envVars.KIRO_FS_DEBUG === '1' || true, // Default to true for debugging
-      logLevel: 'info'
+      logLevel: 'info',
+
+      // Ignore settings
+      useGitIgnore: true,
+      defaultIgnoreGlobs: [] as string[]
     };
 
     // Load from config file if provided

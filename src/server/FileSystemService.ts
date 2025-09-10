@@ -18,6 +18,8 @@ export class FileSystemService {
   private sendToClient: SendFn;
   private watchersByClient: Map<string, fs.FSWatcher[]> = new Map();
   private maxTextBytes = 1024 * 1024; // 1 MB safety limit for inline text content
+  private maxBinaryBytes = 15 * 1024 * 1024; // 15 MB safety limit for inline binary content
+  private imageExtensions = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'ico', 'svg']);
 
   constructor(sendFn: SendFn) {
     this.sendToClient = sendFn;
@@ -179,17 +181,61 @@ export class FileSystemService {
     return { path: relSelf.replace(/\\/g, '/'), children };
   }
 
-  private async openFile(absPath: string): Promise<{ path: string; content: string; encoding: 'utf8'; truncated: boolean; size: number }> {
+  private async openFile(absPath: string): Promise<{ path: string; content: string; encoding: 'utf8'; truncated: boolean; size: number } | { path: string; base64: string; encoding: 'base64'; contentType: string; size: number }> {
     const root = this.getWorkspaceRoot();
     const stat = await fsp.stat(absPath);
     const size = Number(stat.size);
+    const rel = absPath.startsWith(root) ? absPath.slice(root.length) || '/' : absPath;
+    const fileName = rel.split('/').pop() || '';
+    const fileExt = fileName.split('.').pop()?.toLowerCase() || '';
+
+    // Check if it's an image file
+    if (this.imageExtensions.has(fileExt)) {
+      // Handle SVG files as text
+      if (fileExt === 'svg') {
+        if (size > this.maxTextBytes) {
+          const bytes = await fsp.readFile(absPath);
+          const slice = bytes.slice(0, this.maxTextBytes);
+          const content = Buffer.from(slice).toString('utf8');
+          return { path: rel.replace(/\\/g, '/'), content, encoding: 'utf8', truncated: true, size };
+        } else {
+          const bytes = await fsp.readFile(absPath);
+          const content = Buffer.from(bytes).toString('utf8');
+          return { path: rel.replace(/\\/g, '/'), content, encoding: 'utf8', truncated: false, size };
+        }
+      }
+      
+      // Handle raster images as binary
+      if (size > this.maxBinaryBytes) {
+        throw new Error(`File too large for inline viewing (${size} bytes > ${this.maxBinaryBytes} bytes). Use download instead.`);
+      }
+      
+      const bytes = await fsp.readFile(absPath);
+      const base64 = Buffer.from(bytes).toString('base64');
+      const contentType = this.getImageContentType(fileExt);
+      return { path: rel.replace(/\\/g, '/'), base64, encoding: 'base64', contentType, size };
+    }
+
+    // Handle as text file (existing behavior)
     const truncated = size > this.maxTextBytes;
     const bytes = await fsp.readFile(absPath);
     const slice = truncated ? bytes.slice(0, this.maxTextBytes) : bytes;
     // Best-effort UTF-8 decode
     const content = Buffer.from(slice).toString('utf8');
-    const rel = absPath.startsWith(root) ? absPath.slice(root.length) || '/' : absPath;
     return { path: rel.replace(/\\/g, '/'), content, encoding: 'utf8', truncated, size };
+  }
+
+  private getImageContentType(extension: string): string {
+    const contentTypes: Record<string, string> = {
+      'png': 'image/png',
+      'jpg': 'image/jpeg',
+      'jpeg': 'image/jpeg',
+      'gif': 'image/gif',
+      'webp': 'image/webp',
+      'bmp': 'image/bmp',
+      'ico': 'image/x-icon'
+    };
+    return contentTypes[extension] || 'application/octet-stream';
   }
 
   private addWatcher(clientId: string, absPath: string) {

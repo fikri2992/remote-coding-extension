@@ -22,6 +22,10 @@ import { useLiveRegion } from '../contexts/LiveRegionContext'
 import { useToast } from '../components/ui/toast'
 import PendingSpinner from '../components/feedback/PendingSpinner'
 import { useRipple } from '../lib/hooks/useRipple'
+import ImagePreview from '../components/files/ImagePreview'
+import MediaTabs from '../components/files/MediaTabs'
+import BinaryCodeNotice from '../components/files/BinaryCodeNotice'
+import type { ImageFileData, ImagePreviewState } from '../types/image'
 
 const FileViewerPage: React.FC = () => {
   const navigate = useNavigate()
@@ -36,11 +40,19 @@ const FileViewerPage: React.FC = () => {
   const viewerRefreshRipple = useRipple()
 
   const [content, setContent] = useState<string>('')
-  const [meta, setMeta] = useState<{ path?: string; truncated?: boolean; size?: number }>({})
+  const [meta, setMeta] = useState<{ path?: string; truncated?: boolean; size?: number; encoding?: string; contentType?: string }>({})
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState<boolean>(false)
   const [refreshing, setRefreshing] = useState<boolean>(false)
   const refreshSpinnerDelayed = useDelayedFlag(refreshing, 150)
+  
+  // Image handling state
+  const [imageState, setImageState] = useState<ImagePreviewState>({
+    mediaView: 'preview',
+    isLoading: false,
+  })
+  const [imageData, setImageData] = useState<ImageFileData | null>(null)
+  const blobUrlRef = useRef<string | null>(null)
 
   const [fontSize, setFontSize] = usePersistentState<FontSize>('fontSize', 'base')
   const [showLineNumbers, setShowLineNumbers] = usePersistentState<boolean>('lineNumbers', true)
@@ -64,6 +76,19 @@ const FileViewerPage: React.FC = () => {
 
   const filePath = (location.search as any)?.path || ''
   const fromDir = (location.search as any)?.from as string | undefined
+  
+  // Image detection helpers
+  const imageExtensions = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'ico', 'svg'])
+  
+  const isImageFile = (path: string): boolean => {
+    const ext = path.split('.').pop()?.toLowerCase()
+    return ext ? imageExtensions.has(ext) : false
+  }
+  
+  const isSvgFile = (path: string): boolean => {
+    return path.toLowerCase().endsWith('.svg')
+  }
+  
   const breadcrumbs = React.useMemo(() => {
     const path = (meta.path || filePath || '').replace(/\\/g, '/').replace(/^\/+/, '')
     if (!path) return [] as { name: string; full: string }[]
@@ -96,20 +121,90 @@ const FileViewerPage: React.FC = () => {
       
       if (msg.data?.ok && msg.data?.result) {
         const r = msg.data.result
-        const fileContent = {
-          path: r.path,
-          content: r.content || '',
-          size: r.size || 0,
-          truncated: r.truncated || false,
-          mimeType: r.mimeType,
-          encoding: r.encoding,
+        
+        // Handle image files
+        if (isImageFile(path)) {
+          const imageFileData: ImageFileData = {
+            path: r.path,
+            size: r.size || 0,
+            contentType: r.contentType || 'application/octet-stream',
+            encoding: r.encoding || 'utf8',
+            truncated: r.truncated || false,
+          }
+          
+          if (r.encoding === 'base64' && r.base64) {
+            // Raster image
+            imageFileData.base64 = r.base64
+          } else if (r.content) {
+            // SVG or text-based image
+            imageFileData.content = r.content
+          }
+          
+          setImageData(imageFileData)
+          setContent(r.content || '')
+          setMeta({ 
+            path: r.path, 
+            truncated: r.truncated || false, 
+            size: r.size || 0,
+            encoding: r.encoding,
+            contentType: r.contentType
+          })
+          
+          // Create blob URL for raster images
+          if (r.encoding === 'base64' && r.base64) {
+            // Clean up previous blob URL
+            if (blobUrlRef.current) {
+              URL.revokeObjectURL(blobUrlRef.current)
+              blobUrlRef.current = null
+            }
+            
+            // Create new blob URL
+            const byteCharacters = atob(r.base64)
+            const byteNumbers = new Array(byteCharacters.length)
+            for (let i = 0; i < byteCharacters.length; i++) {
+              byteNumbers[i] = byteCharacters.charCodeAt(i)
+            }
+            const byteArray = new Uint8Array(byteNumbers)
+            const blob = new Blob([byteArray], { type: imageFileData.contentType })
+            blobUrlRef.current = URL.createObjectURL(blob)
+            setImageState(prev => ({ ...prev, blobUrl: blobUrlRef.current || undefined }))
+          } else if (isSvgFile(path) && r.content) {
+            // Create blob URL for SVG
+            if (blobUrlRef.current) {
+              URL.revokeObjectURL(blobUrlRef.current)
+              blobUrlRef.current = null
+            }
+            
+            const blob = new Blob([r.content], { type: 'image/svg+xml' })
+            blobUrlRef.current = URL.createObjectURL(blob)
+            setImageState(prev => ({ ...prev, blobUrl: blobUrlRef.current || undefined }))
+          }
+        } else {
+          // Handle regular files
+          const fileContent = {
+            path: r.path,
+            content: r.content || '',
+            size: r.size || 0,
+            truncated: r.truncated || false,
+            mimeType: r.mimeType,
+            encoding: r.encoding,
+          }
+          
+          // Cache the result
+          setFile(path, fileContent).catch(console.warn)
+          
+          setContent(fileContent.content)
+          setMeta({ path: fileContent.path, truncated: fileContent.truncated, size: fileContent.size })
+          
+          // Clear image data when not an image
+          setImageData(null)
+          if (blobUrlRef.current) {
+            URL.revokeObjectURL(blobUrlRef.current)
+            blobUrlRef.current = null
+          }
+          setImageState(prev => ({ ...prev, blobUrl: undefined }))
         }
         
-        // Cache the result
-        setFile(path, fileContent).catch(console.warn)
-        
-        setContent(fileContent.content)
-        setMeta({ path: fileContent.path, truncated: fileContent.truncated, size: fileContent.size })
         setError(null)
         pendingNav.finish(path)
         live.announce('Loaded')
@@ -181,8 +276,27 @@ const FileViewerPage: React.FC = () => {
   }
   const downloadFile = () => {
     try {
-      const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
-      const url = URL.createObjectURL(blob)
+      let blob: Blob
+      let url: string
+      
+      if (imageData && imageData.base64) {
+        // Handle binary image files
+        const byteCharacters = atob(imageData.base64)
+        const byteNumbers = new Array(byteCharacters.length)
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i)
+        }
+        const byteArray = new Uint8Array(byteNumbers)
+        blob = new Blob([byteArray], { type: imageData.contentType })
+      } else if (imageData && imageData.content) {
+        // Handle SVG files
+        blob = new Blob([imageData.content], { type: 'image/svg+xml' })
+      } else {
+        // Handle text files
+        blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
+      }
+      
+      url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
       const name = (meta.path || filePath || 'file.txt').split('/').pop() || 'file.txt'
@@ -215,7 +329,7 @@ const FileViewerPage: React.FC = () => {
     return () => el.removeEventListener('scroll', onScroll)
   }, [searchOpen])
 
-  const shouldFallback = stats.length > 1_000_000 || stats.lines > 20000 || meta.truncated
+  const shouldFallback = stats.length > 1_000_000 || stats.lines > 20000 || !!meta.truncated
   const languageOptions = ['javascript', 'typescript', 'json', 'html', 'css', 'markdown', 'xml']
   const isMarkdown = (filePath || '').toLowerCase().endsWith('.md')
   const selectionActive = selInfo.chars > 0
@@ -285,7 +399,7 @@ const FileViewerPage: React.FC = () => {
             {refreshing && (
               <div className="hidden sm:flex items-center gap-1 text-blue-600 text-xs mr-1">
                 <div className="w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                <span>Refreshing…</span>
+                <span>Refreshingâ€¦</span>
               </div>
             )}
             <button 
@@ -337,6 +451,14 @@ const FileViewerPage: React.FC = () => {
 
         {/* Desktop controls */}
         <div className="hidden md:block">
+          {isImageFile(filePath) && (
+            <div className="mb-3">
+              <MediaTabs
+                activeTab={imageState.mediaView}
+                onTabChange={(tab) => setImageState(prev => ({ ...prev, mediaView: tab }))}
+              />
+            </div>
+          )}
           <CodeToolbar
             wrap={wrap}
             lineNumbers={showLineNumbers}
@@ -345,7 +467,7 @@ const FileViewerPage: React.FC = () => {
             wrapColumn={wrapColumn ?? 0}
             fontSize={fontSize}
             theme={theme}
-            language={languageOverride}
+            language={languageOverride || undefined}
             languageOptions={languageOptions}
             onToggleWrap={setWrap}
             onToggleLineNumbers={setShowLineNumbers}
@@ -373,7 +495,7 @@ const FileViewerPage: React.FC = () => {
             {meta.truncated ? <span className="text-amber-600">truncated</span> : null}
           </div>
           <div className="flex items-center gap-3">
-            {selInfo.chars > 0 ? <span>Selection: {selInfo.chars} chars • {selInfo.lines} lines</span> : <span>Selection: —</span>}
+            {selInfo.chars > 0 ? <span>Selection: {selInfo.chars} chars â€¢ {selInfo.lines} lines</span> : <span>Selection: â€”</span>}
             {wrap && wrapColumn ? <span>Wrap@{wrapColumn}</span> : null}
           </div>
         </div>
@@ -407,89 +529,125 @@ const FileViewerPage: React.FC = () => {
       {/* Code display */}
       {!loading && !error && content && (
         <div className="max-h-[calc(100vh-16rem)]" ref={scrollContainerRef}>
-          {shouldFallback && (
-            <div className="mx-4 mt-4 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 neo:rounded-none neo:border-[2px]">
-              Large file detected. Using static rendering for performance. You can still copy/download the file.
-            </div>
-          )}
-
-          {isMarkdown && (
-            <div className="mx-4 mt-3">
-              <button onClick={() => setIsMarkdownRendered(!isMarkdownRendered)} className={cn('px-2 py-1 text-xs rounded border border-border neo:rounded-none neo:border-[2px]', isMarkdownRendered ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-muted')}>
-                {isMarkdownRendered ? 'Rendered' : 'Raw'}
-              </button>
-            </div>
-          )}
-
-          <div className={cn('mt-2', wrap ? 'overflow-hidden' : 'overflow-auto')}>
-            {isMarkdown && isMarkdownRendered && !shouldFallback && (
-              <MarkdownRenderer content={visibleContent} className="px-3 pb-4 prose prose-sm dark:prose-invert max-w-none" />
-            )}
-
-            {!shouldFallback && (!isMarkdown || !isMarkdownRendered) && (
-              <div style={{ maxWidth: wrap && wrapColumn ? `${wrapColumn}ch` : undefined }}>
-                <CodeViewer
-                  ref={viewerRef as any}
-                  code={visibleContent}
-                  filename={filePath}
-                  language={languageOverride}
-                  wrap={wrap}
-                  lineNumbers={showLineNumbers}
-                  fontSize={isMobile && fontSize === 'base' ? 'lg' : fontSize}
-                  theme={theme}
-                  whitespace={whitespace}
-                  indentGuides={indentGuides}
-                  className="border-0 rounded-none"
-                  onStats={setStats}
-                  onSelectionChange={(s) => setSelInfo({ chars: s.to - s.from, lines: s.lines })}
-                  onOpenSearch={() => { setOptionsOpen(false); setSearchOpen(true) }}
-                />
-              </div>
-            )}
-
-            {shouldFallback && (
-              <div className={cn('px-3 py-2', wrap ? 'whitespace-pre-wrap break-words' : 'whitespace-pre overflow-auto')}>
-                <SyntaxHighlighter
-                  code={visibleContent}
-                  filename={filePath}
-                  showLineNumbers={showLineNumbers}
-                  fontSize={isMobile && fontSize === 'base' ? 'lg' : fontSize}
-                  theme={theme === 'one-dark' ? 'default' : theme}
-                  className="border-0 rounded-none"
-                />
-              </div>
-            )}
-
-            {/* Chunk navigation for large files */}
-            {isChunked && (
-              <div className="px-3 py-2 flex items-center justify-between text-xs text-muted-foreground">
-                <div>Chunk {chunkIndex + 1} / {totalChunks} • Lines {chunkStart}–{chunkEnd}</div>
-                <div className="flex items-center gap-2">
-                  <button
-                    disabled={chunkIndex === 0}
-                    onClick={() => { setChunkIndex((i) => Math.max(0, i - 1)); setSearchOpen(false) }}
-                    className={cn('px-2 py-1 rounded border border-border neo:rounded-none neo:border-[2px]', chunkIndex === 0 ? 'opacity-60 cursor-not-allowed' : 'hover:bg-muted')}
-                  >Prev</button>
-                  <button
-                    disabled={chunkIndex >= totalChunks - 1}
-                    onClick={() => { setChunkIndex((i) => Math.min(totalChunks - 1, i + 1)); setSearchOpen(false) }}
-                    className={cn('px-2 py-1 rounded border border-border neo:rounded-none neo:border-[2px]', chunkIndex >= totalChunks - 1 ? 'opacity-60 cursor-not-allowed' : 'hover:bg-muted')}
-                  >Next</button>
+          {/* Image display */}
+          {isImageFile(filePath) && imageData && (
+            <div className="mt-2">
+              {imageState.mediaView === 'preview' ? (
+                imageState.blobUrl ? (
+                  <ImagePreview
+                    src={imageState.blobUrl}
+                    alt={filePath.split('/').pop() || ''}
+                  />
+                ) : (
+                  <BinaryCodeNotice fileSize={imageData.size} />
+                )
+              ) : (
+                <div className="p-4">
+                  {isSvgFile(filePath) ? (
+                    <div className="space-y-4">
+                      <div className="text-sm text-muted-foreground">
+                        SVG content ({formatFileSize(imageData.size)})
+                      </div>
+                      <div className={cn('border rounded-md overflow-auto', wrap ? 'whitespace-pre-wrap break-words' : 'whitespace-pre')}>
+                        <pre className="p-4 text-sm font-mono">{content}</pre>
+                      </div>
+                    </div>
+                  ) : (
+                    <BinaryCodeNotice fileSize={imageData.size} />
+                  )}
                 </div>
-              </div>
-            )}
+              )}
+            </div>
+          )}
 
-            {!wrap && (
-              <div className="md:hidden px-3 py-2 text-xs text-muted-foreground flex items-center gap-1 bg-muted/20">
-                <svg className="w-3 h-3" viewBox="0 0 20 20" fill="currentColor"><path d="M3 10a1.5 1.5 0 113 0 1.5 1.5 0 01-3 0zM8.5 10a1.5 1.5 0 113 0 1.5 1.5 0 01-3 0zM15.5 8.5a1.5 1.5 0 100 3 1.5 1.5 0 000-3z"/></svg>
-                Scroll horizontally to see more
-              </div>
-            )}
+          {/* Regular file display (non-image) */}
+          {!isImageFile(filePath) && (
+            <>
+              {shouldFallback && (
+                <div className="mx-4 mt-4 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 neo:rounded-none neo:border-[2px]">
+                  Large file detected. Using static rendering for performance. You can still copy/download the file.
+                </div>
+              )}
 
-            {(searchOpen || showSelectionRow) && (
-              <div style={{ height: '128px' }} />
-            )}
-          </div>
+              {isMarkdown && (
+                <div className="mx-4 mt-3">
+                  <button onClick={() => setIsMarkdownRendered(!isMarkdownRendered)} className={cn('px-2 py-1 text-xs rounded border border-border neo:rounded-none neo:border-[2px]', isMarkdownRendered ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-muted')}>
+                    {isMarkdownRendered ? 'Rendered' : 'Raw'}
+                  </button>
+                </div>
+              )}
+
+              <div className={cn('mt-2', wrap ? 'overflow-hidden' : 'overflow-auto')}>
+                {isMarkdown && isMarkdownRendered && !shouldFallback && (
+                  <MarkdownRenderer content={visibleContent} className="px-3 pb-4 prose prose-sm dark:prose-invert max-w-none" />
+                )}
+
+                {!shouldFallback && (!isMarkdown || !isMarkdownRendered) && (
+                  <div style={{ maxWidth: wrap && wrapColumn ? `${wrapColumn}ch` : undefined }}>
+                    <CodeViewer
+                      ref={viewerRef as any}
+                      code={visibleContent}
+                      filename={filePath}
+                      language={languageOverride}
+                      wrap={wrap}
+                      lineNumbers={showLineNumbers}
+                      fontSize={isMobile && fontSize === 'base' ? 'lg' : fontSize}
+                      theme={theme}
+                      whitespace={whitespace}
+                      indentGuides={indentGuides}
+                      className="border-0 rounded-none"
+                      onStats={setStats}
+                      onSelectionChange={(s) => setSelInfo({ chars: s.to - s.from, lines: s.lines })}
+                      onOpenSearch={() => { setOptionsOpen(false); setSearchOpen(true) }}
+                    />
+                  </div>
+                )}
+
+                {shouldFallback && (
+                  <div className={cn('px-3 py-2', wrap ? 'whitespace-pre-wrap break-words' : 'whitespace-pre overflow-auto')}>
+                    <SyntaxHighlighter
+                      code={visibleContent}
+                      filename={filePath}
+                      showLineNumbers={showLineNumbers}
+                      fontSize={isMobile && fontSize === 'base' ? 'lg' : fontSize}
+                      theme={theme === 'one-dark' ? 'default' : theme}
+                      className="border-0 rounded-none"
+                    />
+                  </div>
+                )}
+
+                {/* Chunk navigation for large files */}
+                {isChunked && (
+                  <div className="px-3 py-2 flex items-center justify-between text-xs text-muted-foreground">
+                    <div>Chunk {chunkIndex + 1} / {totalChunks} â€¢ Lines {chunkStart}â€“{chunkEnd}</div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        disabled={chunkIndex === 0}
+                        onClick={() => { setChunkIndex((i) => Math.max(0, i - 1)); setSearchOpen(false) }}
+                        className={cn('px-2 py-1 rounded border border-border neo:rounded-none neo:border-[2px]', chunkIndex === 0 ? 'opacity-60 cursor-not-allowed' : 'hover:bg-muted')}
+                      >Prev</button>
+                      <button
+                        disabled={chunkIndex >= totalChunks - 1}
+                        onClick={() => { setChunkIndex((i) => Math.min(totalChunks - 1, i + 1)); setSearchOpen(false) }}
+                        className={cn('px-2 py-1 rounded border border-border neo:rounded-none neo:border-[2px]', chunkIndex >= totalChunks - 1 ? 'opacity-60 cursor-not-allowed' : 'hover:bg-muted')}
+                      >Next</button>
+                    </div>
+                  </div>
+                )}
+
+                {!wrap && (
+                  <div className="md:hidden px-3 py-2 text-xs text-muted-foreground flex items-center gap-1 bg-muted/20">
+                    <svg className="w-3 h-3" viewBox="0 0 20 20" fill="currentColor"><path d="M3 10a1.5 1.5 0 113 0 1.5 1.5 0 01-3 0zM8.5 10a1.5 1.5 0 113 0 1.5 1.5 0 01-3 0zM15.5 8.5a1.5 1.5 0 100 3 1.5 1.5 0 000-3z"/></svg>
+                    Scroll horizontally to see more
+                  </div>
+                )}
+
+                {(searchOpen || showSelectionRow) && (
+                  <div style={{ height: '128px' }} />
+                )}
+              </div>
+            </>
+          )}
         </div>
       )}
 

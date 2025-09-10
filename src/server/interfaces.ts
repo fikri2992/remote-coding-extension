@@ -92,7 +92,10 @@ export interface EnhancedWebSocketMessage extends WebSocketMessage {
             operation: 'tree' | 'open' | 'watch' | 'create' | 'delete' | 'rename';
             path?: string;
             content?: any;
-            options?: any;
+            options?: {
+                format?: 'auto' | 'text' | 'binary';
+                [key: string]: any;
+            };
         };
         
         // Configuration data

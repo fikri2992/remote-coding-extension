@@ -29,6 +29,7 @@ const GitPage: React.FC = () => {
   const pendingMap = useRef<Record<string, string | { operation: string; timeoutId: NodeJS.Timeout }>>({});
   const [activeTab, setActiveTab] = useState<'status' | 'history'>('status');
   const [logCount, setLogCount] = useState<number>(20);
+  const [canLoadMore, setCanLoadMore] = useState<boolean>(true);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const composerAnchorRef = useRef<HTMLDivElement | null>(null);
 
@@ -99,8 +100,12 @@ const GitPage: React.FC = () => {
         }
       }, 10000); // 10 second timeout
 
-      // Store timeout ID for cleanup
-      pendingMap.current[id] = { operation, timeoutId };
+      // Store timeout ID and request metadata for cleanup and response handling
+      pendingMap.current[id] = { 
+        operation, 
+        timeoutId,
+        ...(operation === 'log' ? { requestedCount: options?.count ?? logCount } : {})
+      } as any;
     } else {
       // Clear loading states if send failed
       if (operation === 'log') {
@@ -121,7 +126,7 @@ const GitPage: React.FC = () => {
       if (!pendingData) return; // not ours
 
       // Extract operation from pending data
-      const op = typeof pendingData === 'object' ? pendingData.operation : pendingData;
+      const op = typeof pendingData === 'object' ? (pendingData as any).operation : pendingData;
 
       // Clear timeout if exists
       if (pendingData && typeof pendingData === 'object' && pendingData.timeoutId) {
@@ -152,7 +157,6 @@ const GitPage: React.FC = () => {
           if (result) {
             const r = result as GitRepositoryState;
             setRepo(r);
-            if (Array.isArray(r.recentCommits)) setCommits(r.recentCommits);
           }
           break;
         case 'diff':
@@ -164,7 +168,17 @@ const GitPage: React.FC = () => {
           }
           break;
         case 'log':
-          if (Array.isArray(result)) setCommits(result as any);
+          if (Array.isArray(result)) {
+            setCommits(result as any);
+            // Determine if more commits are available based on requested count
+            const requestedCount = typeof pendingData === 'object' ? (pendingData as any).requestedCount : undefined;
+            if (typeof requestedCount === 'number') {
+              setCanLoadMore((result as any[]).length >= requestedCount);
+            } else {
+              // Fallback heuristic
+              setCanLoadMore((result as any[]).length >= logCount);
+            }
+          }
           break;
         case 'show': {
           if (Array.isArray(result)) {
@@ -228,7 +242,7 @@ const GitPage: React.FC = () => {
       request('diff');
       request('log', { count: logCount });
     }
-  }, [isConnected, logCount]);
+  }, [isConnected]);
 
   // Cleanup on component unmount
   useEffect(() => {
@@ -263,6 +277,7 @@ const GitPage: React.FC = () => {
       request('diff');
     } else {
       setCommits([]); // Clear existing commits to force fresh load
+      setCanLoadMore(true);
       request('log', { count: logCount });
     }
   }, 60);
@@ -442,7 +457,7 @@ const GitPage: React.FC = () => {
               <GitHistoryViewer
                 commits={commits}
                 loading={historyLoading}
-                canLoadMore={logCount < 1000}
+                canLoadMore={canLoadMore}
                 onLoadMore={() => {
                   const next = Math.min(logCount + 20, 1000)
                   if (next === logCount) return

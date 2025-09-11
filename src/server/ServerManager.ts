@@ -13,6 +13,8 @@ import { ErrorHandler, ErrorCategory, ErrorSeverity } from './ErrorHandler';
 import { ConnectionRecoveryManager, RecoveryConfig } from './ConnectionRecoveryManager';
 import * as path from 'path';
 import { ensureCloudflared } from './CloudflaredManager';
+import { AcpHttpController } from '../acp/AcpHttpController';
+import { AcpEventBus } from '../acp/AcpEventBus';
 
 export class ServerManager {
     private _isRunning: boolean = false;
@@ -25,6 +27,8 @@ export class ServerManager {
     private _httpServer: HttpServer | null = null;
     private _webSocketServer: WebSocketServer | null = null;
     private _webServer: WebServer | null = null;
+    private _acpController: AcpHttpController | null = null;
+    private _acpUnsubscribes: Array<() => void> = [];
     private _configManager: ConfigurationManager;
     private _configChangeListener: vscode.Disposable | null = null;
     private _errorHandler: ErrorHandler;
@@ -122,6 +126,81 @@ export class ServerManager {
             // Initialize and start WebSocket server with recovery (attach to HTTP server)
             await this.startWebSocketServerWithRecovery(this._config);
             
+            // Initialize Embedded ACP controller and route into HttpServer
+            try {
+                this._acpController = new AcpHttpController(path.join(process.cwd(), '.on-the-go', 'acp'));
+                await this._acpController.init();
+                this._httpServer?.setAcpController(this._acpController);
+                // Bridge ACP events to WS broadcast
+                const bridge = (event: string) => {
+                    const handler = (payload: any) => {
+                        try { this._webSocketServer?.broadcastMessage(payload); } catch {}
+                    };
+                    AcpEventBus.on(event, handler);
+                    this._acpUnsubscribes.push(() => AcpEventBus.off(event, handler));
+                };
+                [
+                    'agent_connect',
+                    'agent_initialized',
+                    'agent_stderr',
+                    'session_update',
+                    'rpc_debug',
+                    'permission_request',
+                    'terminal_output',
+                    'terminal_exit',
+                ].forEach(bridge);
+
+                // Register WS 'acp' service for request/response routing
+                try {
+                    this._webSocketServer?.registerService('acp', {
+                        handle: async (_clientId: string, message: any) => {
+                            const id = message?.id || `acp_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
+                            const op: string = String(message?.op || '');
+                            const payload: any = message?.payload || {};
+                            const ok = (result: any) => ({ type: 'acp_response', id, ok: true, result });
+                            const err = (e: any) => ({ type: 'acp_response', id, ok: false, error: { message: (e?.message || String(e)), code: e?.code || 500, meta: e?.authMethods ? { authMethods: e.authMethods } : undefined } });
+
+                            if (!this._acpController) return err(new Error('ACP not available'));
+
+                            try {
+                                switch (op) {
+                                    case 'connect': return ok(await this._acpController.connect(payload));
+                                    case 'authMethods': return ok({ methods: this._acpController.getAuthMethods() });
+                                    case 'authenticate': return ok(await this._acpController.authenticate(payload));
+                                    case 'session.new': return ok(await this._acpController.newSession(payload));
+                                    case 'session.setMode': return ok(await this._acpController.setMode(payload));
+                                    case 'prompt': return ok(await this._acpController.prompt(payload));
+                                    case 'cancel': return ok(await this._acpController.cancel(payload));
+                                    case 'models.list': return ok(await this._acpController.listModels(payload?.sessionId));
+                                    case 'model.select': return ok(await this._acpController.selectModel(payload));
+                                    case 'permission': return ok(await this._acpController.permission(payload));
+                                    case 'terminal.create': return ok(this._acpController.terminalCreate(payload));
+                                    case 'terminal.output': return ok(this._acpController.terminalOutput(payload));
+                                    case 'terminal.kill': return ok(this._acpController.terminalKill(payload));
+                                    case 'terminal.release': return ok(this._acpController.terminalRelease(payload));
+                                    case 'terminal.waitForExit': return ok(await this._acpController.terminalWaitForExit(payload));
+                                    case 'sessions.list': return ok(this._acpController.listSessions());
+                                    case 'session.last': return ok(this._acpController.lastSession());
+                                    case 'session.select': return ok(await this._acpController.selectSession(payload));
+                                    case 'session.delete': return ok(await this._acpController.deleteSession(payload));
+                                    case 'threads.list': return ok(await this._acpController.listThreads());
+                                    case 'thread.get': return ok(await this._acpController.getThread(String(payload?.id || '')));
+                                    case 'diff.apply': return ok(await this._acpController.applyDiff(payload));
+                                    default: return err(new Error(`Unknown op: ${op}`));
+                                }
+                            } catch (e: any) {
+                                return err(e);
+                            }
+                        },
+                        onClientDisconnect: (_clientId: string) => {}
+                    });
+                } catch (e) {
+                    console.warn('Failed to register WS acp service:', e instanceof Error ? e.message : e);
+                }
+            } catch (e) {
+                console.warn('ACP controller initialization failed:', e instanceof Error ? e.message : e);
+            }
+            
             // WebServer removed - HttpServer serves React frontend
             // await this.startWebServerWithRecovery(this._config);
             
@@ -186,6 +265,13 @@ export class ServerManager {
                 await this._webSocketServer.stop();
                 this._webSocketServer = null;
             }
+            
+            // Unsubscribe ACP event bridges
+            try {
+                for (const off of this._acpUnsubscribes) { try { off(); } catch {} }
+                this._acpUnsubscribes = [];
+            } catch {}
+            this._acpController = null;
             
             // Stop tunnel if running
             if (this._tunnel) {

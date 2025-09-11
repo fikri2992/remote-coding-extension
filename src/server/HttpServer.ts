@@ -16,6 +16,7 @@ import {
     ensureCloudflared as cfEnsure
 } from './CloudflaredManager';
 import { ErrorHandler, ErrorCategory, ErrorSeverity } from './ErrorHandler';
+import { AcpHttpController } from '../acp/AcpHttpController';
 
 export class HttpServer {
     private server: http.Server | null = null;
@@ -24,6 +25,7 @@ export class HttpServer {
     private errorHandler: ErrorHandler;
     private requestCount: number = 0;
     private errorCount: number = 0;
+    private acpController: AcpHttpController | null = null;
 
     constructor(config: ServerConfig) {
         this.config = config;
@@ -33,6 +35,13 @@ export class HttpServer {
         this.webAssetsPath = path.join(__dirname, '..', 'webview', 'react-frontend', 'dist');
         
         console.log(`HTTP Server configured to serve React web application from: ${this.webAssetsPath}`);
+    }
+
+    /**
+     * Attach ACP controller to serve embedded ACP endpoints
+     */
+    public setAcpController(controller: AcpHttpController): void {
+        this.acpController = controller;
     }
 
     /**
@@ -228,6 +237,172 @@ export class HttpServer {
                     req.on('error', (e) => reject(e));
                 });
             };
+
+            // ===== ACP Embedded API routing =====
+            const acpRestEnabled = process.env.KIRO_ENABLE_ACP_REST === '1';
+            if (this.acpController && acpRestEnabled) {
+                // Connect & Auth
+                if (method === 'POST' && pathname === '/api/connect') {
+                    const body = await readBody();
+                    const result = await this.acpController.connect(body);
+                    return sendJson(200, result);
+                }
+                if (method === 'GET' && pathname === '/api/auth/methods') {
+                    return sendJson(200, { methods: this.acpController.getAuthMethods() });
+                }
+                if (method === 'POST' && pathname === '/api/authenticate') {
+                    const body = await readBody();
+                    try {
+                        const out = await this.acpController.authenticate(body);
+                        return sendJson(200, out);
+                    } catch (err: any) {
+                        return sendJson(400, { error: err?.message || String(err) });
+                    }
+                }
+
+                // Session
+                if (method === 'POST' && pathname === '/api/session/new') {
+                    const body = await readBody();
+                    try {
+                        const resp = await this.acpController.newSession(body);
+                        return sendJson(200, resp);
+                    } catch (err: any) {
+                        const msg = err?.message || String(err);
+                        if (err?.code === 401 || err?.authRequired) {
+                            return sendJson(401, { error: msg, authRequired: true, authMethods: err?.authMethods || this.acpController.getAuthMethods() });
+                        }
+                        return sendJson(500, { error: msg });
+                    }
+                }
+                if (method === 'POST' && pathname === '/api/session/setMode') {
+                    const body = await readBody();
+                    try {
+                        const out = await this.acpController.setMode(body);
+                        return sendJson(200, out);
+                    } catch (err: any) {
+                        return sendJson(400, { error: err?.message || String(err) });
+                    }
+                }
+                if (method === 'POST' && pathname === '/api/cancel') {
+                    const body = await readBody();
+                    try {
+                        const out = await this.acpController.cancel(body);
+                        return sendJson(200, out);
+                    } catch (err: any) {
+                        return sendJson(400, { error: err?.message || String(err) });
+                    }
+                }
+
+                // Prompt
+                if (method === 'POST' && pathname === '/api/prompt') {
+                    const body = await readBody();
+                    try {
+                        const resp = await this.acpController.prompt(body);
+                        return sendJson(200, resp);
+                    } catch (err: any) {
+                        const msg = err?.message || String(err);
+                        if (err?.code === 401 || err?.authRequired) {
+                            return sendJson(401, { error: msg, authRequired: true, authMethods: err?.authMethods || this.acpController.getAuthMethods() });
+                        }
+                        return sendJson(500, { error: msg });
+                    }
+                }
+
+                // Models (optional)
+                if (method === 'GET' && pathname === '/api/models') {
+                    const sid = typeof query.sessionId === 'string' ? query.sessionId : undefined;
+                    const models = await this.acpController.listModels(sid);
+                    return sendJson(200, models);
+                }
+                if (method === 'POST' && pathname === '/api/model/select') {
+                    const body = await readBody();
+                    try {
+                        const out = await this.acpController.selectModel(body);
+                        return sendJson(200, out);
+                    } catch (err: any) {
+                        return sendJson(400, { error: err?.message || String(err) });
+                    }
+                }
+
+                // Permission
+                if (method === 'POST' && pathname === '/api/permission') {
+                    const body = await readBody();
+                    try {
+                        const out = await this.acpController.permission(body);
+                        return sendJson(200, out);
+                    } catch (err: any) {
+                        return sendJson(500, { error: err?.message || String(err) });
+                    }
+                }
+
+                // Terminals
+                if (method === 'POST' && pathname === '/api/terminal/create') {
+                    const body = await readBody();
+                    try { return sendJson(200, this.acpController.terminalCreate(body)); }
+                    catch (err: any) { return sendJson(400, { error: err?.message || String(err) }); }
+                }
+                if (method === 'POST' && pathname === '/api/terminal/output') {
+                    const body = await readBody();
+                    try { return sendJson(200, this.acpController.terminalOutput(body)); }
+                    catch (err: any) { return sendJson(400, { error: err?.message || String(err) }); }
+                }
+                if (method === 'POST' && pathname === '/api/terminal/kill') {
+                    const body = await readBody();
+                    try { return sendJson(200, this.acpController.terminalKill(body)); }
+                    catch (err: any) { return sendJson(400, { error: err?.message || String(err) }); }
+                }
+                if (method === 'POST' && pathname === '/api/terminal/release') {
+                    const body = await readBody();
+                    try { return sendJson(200, this.acpController.terminalRelease(body)); }
+                    catch (err: any) { return sendJson(400, { error: err?.message || String(err) }); }
+                }
+                if (method === 'POST' && pathname === '/api/terminal/waitForExit') {
+                    const body = await readBody();
+                    try { const out = await this.acpController.terminalWaitForExit(body); return sendJson(200, out); }
+                    catch (err: any) { return sendJson(400, { error: err?.message || String(err) }); }
+                }
+
+                // Sessions persistence
+                if (method === 'GET' && pathname === '/api/sessions') {
+                    return sendJson(200, this.acpController.listSessions());
+                }
+                if (method === 'GET' && pathname === '/api/session/last') {
+                    return sendJson(200, this.acpController.lastSession());
+                }
+                if (method === 'POST' && pathname === '/api/session/select') {
+                    const body = await readBody();
+                    try { const out = await this.acpController.selectSession(body); return sendJson(200, out); }
+                    catch (err: any) { return sendJson(400, { error: err?.message || String(err) }); }
+                }
+                if (method === 'POST' && pathname === '/api/session/delete') {
+                    const body = await readBody();
+                    try { const out = await this.acpController.deleteSession(body); return sendJson(200, out); }
+                    catch (err: any) { return sendJson(400, { error: err?.message || String(err) }); }
+                }
+
+                // Threads persistence
+                if (method === 'GET' && pathname === '/api/threads') {
+                    try { const out = await this.acpController.listThreads(); return sendJson(200, out); }
+                    catch (err: any) { return sendJson(500, { error: err?.message || String(err) }); }
+                }
+                if (method === 'GET' && pathname.startsWith('/api/thread/')) {
+                    const id = decodeURIComponent(pathname.substring('/api/thread/'.length));
+                    try { const out = await this.acpController.getThread(id); return sendJson(200, out); }
+                    catch (err: any) { return sendJson(404, { error: err?.message || 'not found' }); }
+                }
+
+                // Diff apply (minimal)
+                if (method === 'POST' && pathname === '/api/diff/apply') {
+                    const body = await readBody();
+                    try {
+                        const out = await this.acpController.applyDiff(body);
+                        return sendJson(200, out);
+                    } catch (err: any) {
+                        const status = err?.code === 400 ? 400 : 500;
+                        return sendJson(status, { error: err?.message || String(err) });
+                    }
+                }
+            }
 
             // Routing
             if (method === 'GET' && pathname === '/api/tunnels') {

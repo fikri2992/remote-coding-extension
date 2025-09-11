@@ -5,11 +5,14 @@ interface WebSocketContextType {
   isConnected: boolean;
   connectionCount: number;
   lastActivity: string | null;
+  supportsAcpRequests: boolean;
   connect: () => void;
   disconnect: () => void;
   // New helpers for sending and subscribing to messages
   sendJson: (message: any) => boolean;
   addMessageListener: (handler: (data: any) => void) => () => void;
+  // ACP request/response helper
+  sendAcp: (op: string, payload?: any, opts?: { timeoutMs?: number }) => Promise<any>;
 }
 
 const WebSocketContext = createContext<WebSocketContextType | undefined>(undefined);
@@ -47,6 +50,9 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
   const [lastActivity, setLastActivity] = useState<string | null>(null);
   const [ws, setWs] = useState<ReconnectingWebSocket | null>(null);
   const listenersRef = useRef<Array<(data: any) => void>>([]);
+  const supportsAcpRef = useRef<boolean>(false);
+  const [supportsAcpRequests, setSupportsAcpRequests] = useState<boolean>(false);
+  const pendingAcpRef = useRef<Map<string, { resolve: (v: any) => void; reject: (e: any) => void; timer?: any }>>(new Map());
 
   useEffect(() => {
     // Force-enable debug logging for terminal communication debugging
@@ -96,6 +102,21 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
         if (data.type === 'connection_established') {
           setConnectionCount(prev => prev + 1);
           setLastActivity(new Date().toLocaleTimeString());
+          if (data.supportsAcpRequests === true) {
+            supportsAcpRef.current = true;
+            setSupportsAcpRequests(true);
+          }
+        }
+
+        // Resolve ACP request/response pairs
+        if (data.type === 'acp_response' && data.id) {
+          const entry = pendingAcpRef.current.get(String(data.id));
+          if (entry) {
+            pendingAcpRef.current.delete(String(data.id));
+            if (entry.timer) { try { clearTimeout(entry.timer); } catch {} }
+            if (data.ok) entry.resolve(data.result);
+            else entry.reject(Object.assign(new Error(data?.error?.message || 'acp error'), { code: data?.error?.code, meta: data?.error?.meta }));
+          }
         }
 
         // Notify subscribers
@@ -171,14 +192,38 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
     };
   };
 
+  // WS-first ACP helper (request/response)
+  const sendAcp = (op: string, payload?: any, opts?: { timeoutMs?: number }): Promise<any> => {
+    return new Promise((resolve, reject) => {
+      try {
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+          return reject(new Error('WebSocket not connected'));
+        }
+        const id = `acp_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
+        const msg = { type: 'acp', id, op, payload: payload || {} };
+        const timeoutMs = Math.max(1000, Math.min(60000, opts?.timeoutMs ?? 15000));
+        const timer = setTimeout(() => {
+          pendingAcpRef.current.delete(id);
+          reject(new Error(`acp timeout for op=${op}`));
+        }, timeoutMs);
+        pendingAcpRef.current.set(id, { resolve, reject, timer });
+        sendJson(msg);
+      } catch (e) {
+        reject(e);
+      }
+    });
+  };
+
   const value: WebSocketContextType = {
     isConnected,
     connectionCount,
     lastActivity,
+    supportsAcpRequests,
     connect,
     disconnect,
     sendJson,
     addMessageListener,
+    sendAcp,
   };
 
   return (

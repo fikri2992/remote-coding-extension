@@ -11,6 +11,7 @@ import ChatTerminalPage from './pages/ChatTerminalPage.tsx';
 import ChatPage from './pages/ChatPage.tsx';
 import SettingsPage from './pages/SettingsPage.tsx';
 import { TunnelManagerPage } from './pages/TunnelManagerPage.tsx';
+import ACPPage from './pages/ACPPage.tsx';
 
 import RootLayout from './layouts/RootLayout.tsx';
 
@@ -69,6 +70,12 @@ const settingsRoute = createRoute({
   component: SettingsPage,
 });
 
+const acpRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/acp',
+  component: ACPPage,
+});
+
 // File viewer route with search param (?path=/...)
 const fileViewRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -96,6 +103,7 @@ const routeTree = rootRoute.addChildren([
   chatTerminalRoute,
   chatRoute,
   settingsRoute,
+  acpRoute,
 ]);
 
 // Create the router

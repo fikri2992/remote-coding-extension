@@ -25,6 +25,7 @@ const menuItems = [
   { id: 'terminal', label: 'Terminal', icon: Terminal, path: '/terminal' },
   { id: 'chat-terminal', label: 'Chat Terminal 🚀', icon: MessageCircle, path: '/chat-terminal' },
   { id: 'chat', label: 'Chat', icon: MessageCircle, path: '/chat' },
+  { id: 'acp', label: 'ACP', icon: Network, path: '/acp' },
   { id: 'settings', label: 'Settings', icon: Settings, path: '/settings' },
 ];
 

@@ -165,7 +165,8 @@ export class WebSocketServer {
           ws.send(JSON.stringify({
             type: 'connection_established',
             connectionId,
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
+            supportsAcpRequests: true
           }));
 
           // Handle pong messages to keep connection alive
@@ -568,6 +569,44 @@ export class WebSocketServer {
         
         this.sendToClient(connectionId, { type: 'terminal', id, data: { ok: false, error: errMsg } });
       });
+    }
+
+    // Generic service routing (e.g., 'acp')
+    try {
+      const msgType = String(message.type);
+      const id = message?.id;
+      const svc = this.services.get(msgType);
+      const respond = (ok: boolean, payload: any) => {
+        const isAcp = msgType === 'acp';
+        const frame = isAcp
+          ? (ok ? { type: 'acp_response', id, ok: true, result: payload } : { type: 'acp_response', id, ok: false, error: { message: String(payload?.message || payload), code: payload?.code || 500 } })
+          : (ok ? { type: msgType, id, ok: true, result: payload } : { type: msgType, id, ok: false, error: String(payload?.message || payload) });
+        this.sendToClient(connectionId, frame);
+      };
+
+      if (!svc || typeof svc.handle !== 'function') {
+        if (msgType === 'acp') {
+          respond(false, new Error('ACP service not available'));
+        }
+      } else {
+        Promise.resolve(svc.handle(connectionId, message))
+          .then((resp) => {
+            if (resp) {
+              // If handler returns its own frame, pass-through; else wrap
+              if (resp.type) this.sendToClient(connectionId, resp);
+              else respond(true, resp);
+            } else {
+              // Nothing to send
+            }
+          })
+          .catch((err) => {
+            const errObj = err instanceof Error ? err : new Error(String(err));
+            respond(false, errObj);
+          });
+      }
+    } catch (e) {
+      // swallow
+      try { console.warn('WS service routing error:', e instanceof Error ? e.message : e); } catch {}
     }
   }
 

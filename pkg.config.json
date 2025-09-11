@@ -1,0 +1,23 @@
+{
+  "name": "kiro-remote",
+  "version": "1.0.0",
+  "description": "Kiro Remote CLI Server",
+  "main": "./out/cli/index.js",
+  "bin": "./out/cli/index.js",
+  "pkg": {
+    "targets": [
+      "node18-win-x64",
+      "node18-macos-x64", 
+      "node18-linux-x64"
+    ],
+    "outputPath": "./dist",
+    "assets": [
+      "out/webview/**/*",
+      "claude-code-acp/dist/**/*",
+      "node_modules/@zed-industries/**/*"
+    ],
+    "scripts": [
+      "out/**/*.js"
+    ]
+  }
+}

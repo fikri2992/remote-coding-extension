@@ -1,227 +1,16 @@
 {
-  "name": "vscode-extension-basic",
-  "displayName": "Basic VSCode Extension",
-  "description": "A basic VSCode extension with activity bar and button functionality",
+  "name": "kiro-remote",
+  "description": "Kiro Remote CLI that runs a local web server + WebSocket backend with ACP integration.",
   "version": "0.0.1",
-  "publisher": "basic-extension-publisher",
-  "engines": {
-    "vscode": "^1.75.0"
-  },
-  "categories": [
-    "Other"
-  ],
   "workspaces": [
     "claude-code-acp"
   ],
-  "activationEvents": [
-    "onStartupFinished"
-  ],
-  "main": "./out/extension.js",
   "bin": {
     "kiro-remote": "./out/cli/index.js"
   },
-  "contributes": {
-    "viewsContainers": {
-      "activitybar": [
-        {
-          "id": "basicExtension",
-          "title": "Basic Extension",
-          "icon": "./src/assets/icon.svg"
-        }
-      ]
-    },
-    "views": {
-      "basicExtension": [
-        {
-          "id": "basicExtensionView",
-          "name": "Web Automation Tunnel",
-          "type": "webview",
-          "icon": "./src/assets/icon.svg"
-        }
-      ]
-    },
-    "commands": [
-      {
-        "command": "kiroAgent.focusPasteEnter",
-        "title": "Kiro Agent: Focus, Paste, Enter",
-        "category": "Kiro Agent"
-      },
-      {
-        "command": "basicExtension.executeAction",
-        "title": "Execute Action",
-        "category": "Basic Extension"
-      },
-      {
-        "command": "basicExtension.focusAuxiliaryBar",
-        "title": "Focus Auxiliary Bar",
-        "category": "Basic Extension"
-      },
-      {
-        "command": "webAutomationTunnel.startServer",
-        "title": "Start Web Automation Server",
-        "category": "Web Automation Tunnel"
-      },
-      {
-        "command": "webAutomationTunnel.stopServer",
-        "title": "Stop Web Automation Server",
-        "category": "Web Automation Tunnel"
-      },
-      {
-        "command": "webAutomationTunnel.openConfiguration",
-        "title": "Open Configuration",
-        "category": "Web Automation Tunnel"
-      },
-      {
-        "command": "webAutomationTunnel.resetConfiguration",
-        "title": "Reset Configuration to Defaults",
-        "category": "Web Automation Tunnel"
-      },
-      {
-        "command": "webAutomationTunnel.toggleUI",
-        "title": "Toggle Enhanced/Basic UI",
-        "category": "Web Automation Tunnel"
-      },
-      {
-        "command": "webAutomationTunnel.runIntegrationTest",
-        "title": "Run Enhanced UI Integration Test",
-        "category": "Web Automation Tunnel"
-      },
-      {
-        "command": "webAutomationTunnel.startTunnel",
-        "title": "Start Cloudflare Tunnel",
-        "category": "Web Automation Tunnel"
-      },
-      {
-        "command": "webAutomationTunnel.stopTunnel",
-        "title": "Stop Cloudflare Tunnel",
-        "category": "Web Automation Tunnel"
-      },
-      {
-        "command": "webAutomationTunnel.installCloudflared",
-        "title": "Install Cloudflare Tunnel",
-        "category": "Web Automation Tunnel"
-      },
-      {
-        "command": "webAutomationTunnel.tunnelStatus",
-        "title": "Check Tunnel Status",
-        "category": "Web Automation Tunnel"
-      },
-      {
-        "command": "webAutomationTunnel.quickStart",
-        "title": "Quick Start: Start Server + Quick Tunnel",
-        "category": "Web Automation Tunnel"
-      },
-      {
-        "command": "webAutomationTunnel.statusBarAction",
-        "title": "Web Automation Status Actions",
-        "category": "Web Automation Tunnel"
-      },
-      {
-        "command": "webAutomationTunnel.diagnosePTY",
-        "title": "Diagnose Terminal PTY",
-        "category": "Web Automation Tunnel"
-      },
-      {
-        "command": "webAutomationTunnel.openPseudoTerminal",
-        "title": "Open Pseudo Terminal (No native PTY)",
-        "category": "Web Automation Tunnel"
-      }
-    ],
-    "configuration": {
-      "title": "Web Automation Tunnel",
-      "properties": {
-        "webAutomationTunnel.httpPort": {
-          "type": "number",
-          "default": 3900,
-          "minimum": 1024,
-          "maximum": 65535,
-          "description": "Port number for the HTTP server"
-        },
-        "webAutomationTunnel.websocketPort": {
-          "type": "number",
-          "default": 3901,
-          "minimum": 1024,
-          "maximum": 65535,
-          "description": "Port number for the WebSocket server (defaults to HTTP port + 1)",
-          "deprecationMessage": "Deprecated: WebSocket server now attaches to the HTTP server automatically. This setting is ignored."
-        },
-        "webAutomationTunnel.tunnelName": {
-          "type": "string",
-          "description": "Optional Cloudflare named tunnel to use (leave empty to use a quick tunnel)",
-          "deprecationMessage": "Deprecated: Configure tunnels via commands or the extension UI. This setting is ignored."
-        },
-        "webAutomationTunnel.cloudflareToken": {
-          "type": "string",
-          "description": "Optional Cloudflare API token for authenticated tunnels (recommended for named tunnels)",
-          "deprecationMessage": "Deprecated: Provide tokens during tunnel start via UI/commands. This setting is ignored."
-        },
-        "webAutomationTunnel.autoStartTunnel": {
-          "type": "boolean",
-          "default": true,
-          "description": "Automatically start Cloudflare tunnel when server starts",
-          "deprecationMessage": "Deprecated: Tunnel start is controlled via the extension UI. This setting is ignored."
-        },
-        "webAutomationTunnel.tunnelStartTimeoutMs": {
-          "type": "number",
-          "default": 60000,
-          "minimum": 5000,
-          "maximum": 300000,
-          "description": "Timeout in milliseconds to wait for Cloudflare tunnel to report its public URL before failing"
-        },
-        "webAutomationTunnel.useEnhancedUI": {
-          "type": "boolean",
-          "default": true,
-          "description": "Use the enhanced UI for the Webview panel (toggle via the 'Toggle Enhanced/Basic UI' command)"
-        },
-        "webAutomationTunnel.terminal.injectAICredentials": {
-          "type": "boolean",
-          "default": false,
-          "description": "Inject AI credentials into terminal environment (OPENAI_API_KEY, ANTHROPIC_API_KEY, etc.). Keep OFF for device-code/OAuth flows."
-        },
-        "webAutomationTunnel.terminal.debug": {
-          "type": "boolean",
-          "default": false,
-          "description": "Enable verbose terminal server logs (ops, sizes). Also toggled by env KIRO_DEBUG_TERMINAL=1."
-        },
-        "webAutomationTunnel.terminal.engineMode": {
-          "type": "string",
-          "enum": [
-            "auto",
-            "line",
-            "pipe"
-          ],
-          "default": "line",
-          "description": "Select terminal engine. 'auto' uses node-pty when available; 'line' forces pseudo line-mode; 'pipe' uses long-lived pipe shell (no native PTY)."
-        },
-        "webAutomationTunnel.terminal.autoOpenPseudoTerminal": {
-          "type": "boolean",
-          "default": false,
-          "description": "When starting the server from VS Code, also open a Pseudo Terminal (line/pipe based on engineMode)."
-        },
-        "webAutomationTunnel.terminal.prompt.enabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable custom prompt rendering in pseudo terminal (line mode)"
-        },
-        "webAutomationTunnel.terminal.prompt.template": {
-          "type": "string",
-          "default": "\u001b[36m${cwd}\u001b[0m$ ",
-          "description": "Prompt template (supports ${cwd})"
-        },
-        "webAutomationTunnel.terminal.hiddenEcho.enabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "Echo typed command locally in line mode (disable to rely on shell echo)"
-        }
-      }
-    }
-  },
   "scripts": {
-    "vscode:prepublish": "npm run build",
     "compile": "tsc -p ./",
     "compile:watch": "tsc -watch -p ./",
-    "copy-assets": "node -e \"const {copyFiles} = require('./scripts/build.js'); const fs = require('fs'); const path = require('path'); fs.mkdirSync('out/webview', {recursive: true}); ['panel.html', 'styles.css', 'script.js'].forEach(f => { try { fs.copyFileSync(path.join('src/webview', f), path.join('out/webview', f)); } catch(e) { console.log('Skipping', f); } });\"",
-    "copy-react-dist": "node -e \"const {copyFiles} = require('./scripts/build.js'); const fs = require('fs'); const src = 'src/webview/react-frontend/dist'; const dest = 'out/webview/react-frontend/dist'; if (fs.existsSync(src)) { fs.mkdirSync(dest, {recursive: true}); copyFiles(src, dest); } else { console.log('React dist not found, skipping copy'); }\"",
     "build:react": "cd src/webview/react-frontend && npm run build",
     "build:react:dev": "cd src/webview/react-frontend && npm run build",
     "build:react:prod": "cd src/webview/react-frontend && npm run build",
@@ -232,7 +21,7 @@
     "lint:react": "cd src/webview/react-frontend && npm run lint",
     "clean": "rimraf out",
     "clean:react": "cd src/webview/react-frontend && npm run clean || echo 'No clean script in React frontend'",
-    "build": "npm run clean && npm run compile && npm run copy-assets && npm run build:react:prod && npm run copy-react-dist",
+    "build": "npm run clean && npm run build:agent || true && npm run compile:cli && npm run build:frontend:cli",
     "build:agent": "npm run -w claude-code-acp build",
     "build:cli": "npm run clean && npm run build:agent || true && npm run compile:cli && npm run build:frontend:cli",
     "build:frontend:cli": "cd src/webview/react-frontend && npm run build",
@@ -242,8 +31,7 @@
     "test:cli": "node ./out/cli/index.js status",
     "init:cli": "node ./out/cli/index.js init",
     "stop:cli": "node ./out/cli/index.js stop",
-    "dev": "npm run compile && npm run copy-assets && npm run build:react:dev && npm run copy-react-dist",
-    "package": "npm run build && vsce package",
+    "dev": "npm run compile && npm run build:react:dev",
     "smoke:acp": "node ./scripts/smoke-acp.js",
     "smoke:acp:ws": "node ./scripts/smoke-acp-ws.js",
     "postinstall": "npm run build:agent || true",
@@ -251,23 +39,17 @@
     "dev:server": "npm run compile:cli && node ./out/cli/index.js start --dev",
     "dev:full": "concurrently \"npm run dev:server\" \"npm run dev:frontend\"",
     "package:cli": "npm run build:cli && pkg ./out/cli/index.js --config pkg.config.json",
-    "package:extension": "npm run build && vsce package",
-    "package:all": "npm run package:extension && npm run package:cli",
     "install:frontend": "cd src/webview/react-frontend && npm install",
     "install:agent": "cd claude-code-acp && npm install",
     "install:all": "npm install && npm run install:frontend && npm run install:agent",
     "build:cross-platform": "node scripts/build.js",
-    "build:extension": "node scripts/build.js extension",
     "build:cli-only": "node scripts/build.js cli",
     "setup": "node scripts/setup-dev.js"
   },
   "devDependencies": {
-    "@electron/rebuild": "^3.6.1",
     "@types/node": "16.x",
-    "@types/vscode": "^1.74.0",
     "@typescript-eslint/eslint-plugin": "^5.45.0",
     "@typescript-eslint/parser": "^5.45.0",
-    "@vscode/vsce": "^2.22.0",
     "autoprefixer": "^10.4.21",
     "concurrently": "^8.2.2",
     "eslint": "^8.28.0",
@@ -291,3 +73,4 @@
     "zod": "^3.23.8"
   }
 }
+

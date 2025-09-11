@@ -12,7 +12,7 @@
     ],
     "outputPath": "./dist",
     "assets": [
-      "out/webview/**/*",
+      "src/webview/react-frontend/dist/**/*",
       "claude-code-acp/dist/**/*",
       "node_modules/@zed-industries/**/*"
     ],

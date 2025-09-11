@@ -23,13 +23,21 @@
     "allowSyntheticDefaultImports": true
   },
   "include": [
-    "src/**/*"
+    "src/types/**/*.d.ts",
+    "src/cli/**/*.ts",
+    "src/server/WebServer.ts",
+    "src/server/WebSocketServer.ts",
+    "src/server/ErrorHandler.ts"
   ],
   "exclude": [
     "node_modules",
     ".vscode-test",
     "out",
     "**/*.test.ts",
-    "src/webview/**/*"
+    "src/webview/**/*",
+    "src/extension.ts",
+    "src/integration-test.ts",
+    "src/commands/**/*",
+    "src/server/**/*"
   ]
 }

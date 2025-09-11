@@ -119,6 +119,34 @@ Or use the command palette:
 - `Basic Extension: Execute Action` - Execute custom actions
 - `Basic Extension: Focus Auxiliary Bar` - Focus the auxiliary bar
 
+## ACP (Zed) Integration with Gemini CLI
+
+This project includes a minimal Agent Client Protocol (ACP) client wired to the Google Gemini CLI so you can send prompts via ACP and stream responses.
+
+Prerequisites:
+
+- Install the Gemini CLI and sign in: `npm i -g @google/gemini-cli` then run `gemini` once to complete auth.
+
+CLI usage:
+
+- Send a prompt through ACP to Gemini:
+  - `kiro-remote acp prompt -p "Explain the architecture of this codebase"`
+- Options:
+  - `--gemini-cmd <cmd>`: Override the Gemini binary (defaults to `gemini`).
+  - `--cwd <path>`: Working directory sent to the agent.
+  - `--debug`: Extra logging to stderr.
+  - `--allow-all`: Auto-approve tool confirmations (use with care).
+
+Environment:
+
+- `GEMINI_CLI_CMD`: Alternative to `--gemini-cmd`, e.g. `GEMINI_CLI_CMD=gemini`.
+
+Implementation notes:
+
+- Uses `@zed-industries/agent-client-protocol` and spawns `gemini --experimental-acp` under the hood.
+- The client streams agent message chunks to stdout and aggregates the final text result.
+- File read/write requests from the agent are supported; tool confirmations default to cancel unless `--allow-all` is passed.
+
 ## Development
 
 ### Prerequisites

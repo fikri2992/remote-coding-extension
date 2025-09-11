@@ -67,6 +67,11 @@ const FileViewerPage: React.FC = () => {
   const viewerRef = useRef<CodeViewerHandle | null>(null)
   const [stats, setStats] = useState<{ lines: number; length: number }>({ lines: 0, length: 0 })
   const [selInfo, setSelInfo] = useState<{ chars: number; lines: number }>({ chars: 0, lines: 0 })
+  const selInfoRef = useRef<{ chars: number; lines: number }>({ chars: 0, lines: 0 })
+  const selectionUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const selectionThrottleTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const lastSelectionUpdateRef = useRef<number>(0)
+  const isSelectingRef = useRef<boolean>(false)
   const [optionsOpen, setOptionsOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = usePersistentState<string>('searchQuery', '')
@@ -314,6 +319,18 @@ const FileViewerPage: React.FC = () => {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
+  // Cleanup timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (selectionUpdateTimeoutRef.current) {
+        clearTimeout(selectionUpdateTimeoutRef.current)
+      }
+      if (selectionThrottleTimeoutRef.current) {
+        clearTimeout(selectionThrottleTimeoutRef.current)
+      }
+    }
+  }, [])
+
   // Close search row on significant scroll in the viewer area
   const scrollContainerRef = useRef<HTMLDivElement | null>(null)
   useEffect(() => {
@@ -329,15 +346,15 @@ const FileViewerPage: React.FC = () => {
     return () => el.removeEventListener('scroll', onScroll)
   }, [searchOpen])
 
-  const shouldFallback = stats.length > 1_000_000 || stats.lines > 20000 || !!meta.truncated
-  const languageOptions = ['javascript', 'typescript', 'json', 'html', 'css', 'markdown', 'xml']
-  const isMarkdown = (filePath || '').toLowerCase().endsWith('.md')
-  const selectionActive = selInfo.chars > 0
-  const showSelectionRow = selectionActive && !searchOpen && !optionsOpen
+  const shouldFallback = React.useMemo(() => stats.length > 1_000_000 || stats.lines > 20000 || !!meta.truncated, [stats.length, stats.lines, meta.truncated])
+  const languageOptions = React.useMemo(() => ['javascript', 'typescript', 'json', 'html', 'css', 'markdown', 'xml'], [])
+  const isMarkdown = React.useMemo(() => (filePath || '').toLowerCase().endsWith('.md'), [filePath])
+  const selectionActive = React.useMemo(() => selInfoRef.current.chars > 0, [selInfoRef.current.chars])
+  const showSelectionRow = React.useMemo(() => selectionActive && !searchOpen && !optionsOpen, [selectionActive, searchOpen, optionsOpen])
 
   // Chunked viewing for very large files
-  const CHUNK_LINE_THRESHOLD = 4000
-  const CHUNK_SIZE = 2000
+  const CHUNK_LINE_THRESHOLD = 3000
+  const CHUNK_SIZE = 1000
   const [chunkIndex, setChunkIndex] = useState(0)
   const isChunked = stats.lines >= CHUNK_LINE_THRESHOLD
   const totalChunks = isChunked ? Math.ceil((stats.lines || 0) / CHUNK_SIZE) : 1
@@ -352,7 +369,7 @@ const FileViewerPage: React.FC = () => {
   const showTopBar = useDelayedFlag(pendingNav.isActive, 200)
 
   return (
-    <div className="bg-card rounded-lg shadow-sm border border-border neo:rounded-none neo:border-[3px] neo:shadow-[8px_8px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[8px_8px_0_0_rgba(255,255,255,0.9)] overflow-hidden">
+    <div className="bg-card rounded-lg shadow-sm border border-border neo:rounded-none neo:border-[3px] neo:shadow-[8px_8px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[8px_8px_0_0_rgba(255,255,255,0.9)] flex flex-col h-full">
       {/* Header - Mobile Responsive */}
       <div className="p-3 sm:p-4 border-b border-border bg-muted/20 neo:border-b-[2px]" aria-busy={loading || refreshing || undefined}>
         <TopProgressBar active={showTopBar} />
@@ -528,7 +545,7 @@ const FileViewerPage: React.FC = () => {
 
       {/* Code display */}
       {!loading && !error && content && (
-        <div className="max-h-[calc(100vh-16rem)]" ref={scrollContainerRef}>
+        <div className="flex-1 overflow-y-auto max-h-[calc(100vh-16rem)] no-scrollbar" ref={scrollContainerRef}>
           {/* Image display */}
           {isImageFile(filePath) && imageData && (
             <div className="mt-2">
@@ -597,7 +614,38 @@ const FileViewerPage: React.FC = () => {
                       indentGuides={indentGuides}
                       className="border-0 rounded-none"
                       onStats={setStats}
-                      onSelectionChange={(s) => setSelInfo({ chars: s.to - s.from, lines: s.lines })}
+                      onSelectionChange={(s) => {
+                        const now = Date.now()
+                        const newSelInfo = { chars: s.to - s.from, lines: s.lines }
+                        
+                        // Update ref immediately for responsive UI
+                        selInfoRef.current = newSelInfo
+                        
+                        // Mark that we're in an active selection
+                        isSelectingRef.current = true
+                        lastSelectionUpdateRef.current = now
+                        
+                        // Clear any existing timeout
+                        if (selectionUpdateTimeoutRef.current) {
+                          clearTimeout(selectionUpdateTimeoutRef.current)
+                        }
+                        if (selectionThrottleTimeoutRef.current) {
+                          clearTimeout(selectionThrottleTimeoutRef.current)
+                        }
+                        
+                        // For rapid selection changes (mouse drag), use throttling
+                        if (now - lastSelectionUpdateRef.current < 16) { // ~60fps
+                          selectionThrottleTimeoutRef.current = setTimeout(() => {
+                            setSelInfo(newSelInfo)
+                          }, 100) // 100ms throttle for rapid changes
+                        } else {
+                          // For slower changes, use debouncing
+                          selectionUpdateTimeoutRef.current = setTimeout(() => {
+                            setSelInfo(newSelInfo)
+                            isSelectingRef.current = false
+                          }, 150) // 150ms debounce for slower changes
+                        }
+                      }}
                       onOpenSearch={() => { setOptionsOpen(false); setSearchOpen(true) }}
                     />
                   </div>

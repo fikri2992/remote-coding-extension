@@ -7,6 +7,8 @@ export interface ToolCallBlockProps {
   status?: string
   id?: string
   initiallyOpen?: boolean
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
   className?: string
   children?: React.ReactNode
 }
@@ -20,9 +22,15 @@ const statusStyle = (status?: string) => {
   return 'bg-muted text-foreground/80 border-border'
 }
 
-export const ToolCallBlock: React.FC<ToolCallBlockProps> = ({ name, status, id, initiallyOpen, className, children }) => {
-  const [open, setOpen] = React.useState<boolean>(!!initiallyOpen)
-  React.useEffect(() => { if (typeof initiallyOpen === 'boolean') setOpen(initiallyOpen) }, [initiallyOpen])
+export const ToolCallBlock: React.FC<ToolCallBlockProps> = ({ name, status, id, initiallyOpen, open: openProp, onOpenChange, className, children }) => {
+  const isControlled = typeof openProp === 'boolean'
+  const [openState, setOpenState] = React.useState<boolean>(!!initiallyOpen)
+  React.useEffect(() => { if (!isControlled && typeof initiallyOpen === 'boolean') setOpenState(initiallyOpen) }, [initiallyOpen, isControlled])
+  const open = isControlled ? (openProp as boolean) : openState
+  const setOpen = (v: boolean | ((b: boolean) => boolean)) => {
+    const next = typeof v === 'function' ? (v as any)(open) : v
+    if (isControlled) { onOpenChange?.(next) } else { setOpenState(next) }
+  }
   const label = name || 'tool'
   return (
     <div className={cn('border rounded-lg neo:rounded-none neo:border-[3px] overflow-hidden', className)}>
@@ -51,4 +59,3 @@ export const ToolCallBlock: React.FC<ToolCallBlockProps> = ({ name, status, id, 
 }
 
 export default ToolCallBlock
-

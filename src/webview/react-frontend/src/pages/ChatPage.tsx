@@ -54,6 +54,39 @@ export const ChatPage: React.FC = () => {
   const [sessionSheetOpen, setSessionSheetOpen] = useState(false);
   const [confirm, ConfirmUI] = useConfirm();
   const [collapseTools, setCollapseTools] = useState<boolean>(true);
+  const [openToolMap, setOpenToolMap] = useState<Record<string, boolean>>({});
+
+  // Persist tool-collapse preference per session
+  useEffect(() => {
+    const key = sessionId ? `chatToolsCollapsed:${sessionId}` : 'chatToolsCollapsed';
+    try {
+      const v = localStorage.getItem(key);
+      if (v === '0') setCollapseTools(false);
+      else if (v === '1') setCollapseTools(true);
+      else setCollapseTools(true);
+    } catch {}
+  }, [sessionId]);
+
+  // Per-call open/close persisted per session
+  useEffect(() => {
+    const key = sessionId ? `chatToolOpenMap:${sessionId}` : 'chatToolOpenMap';
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw) setOpenToolMap(JSON.parse(raw));
+      else setOpenToolMap({});
+    } catch { setOpenToolMap({}); }
+  }, [sessionId]);
+
+  const handleToolOpenChange = (id: string, open: boolean) => {
+    setOpenToolMap((prev) => {
+      const next = { ...prev, [id]: open } as Record<string, boolean>;
+      try {
+        const key = sessionId ? `chatToolOpenMap:${sessionId}` : 'chatToolOpenMap';
+        localStorage.setItem(key, JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  };
 
   // Composer
   const [input, setInput] = useState('');
@@ -100,6 +133,15 @@ export const ChatPage: React.FC = () => {
         } else if ((update as any).type === 'mode_updated' && ((update as any).modeId || (update as any).mode_id)) {
           const mId = (update as any).modeId || (update as any).mode_id;
           setCurrentModeId(mId);
+        }
+      } else if (msg.type === 'session_recovered') {
+        // Adopt new session id when server recovered from missing session
+        const newId = msg.newSessionId || msg.sessionId;
+        if (newId && typeof newId === 'string') {
+          setSessionId(newId);
+          // Best-effort refresh threads and current transcript for the new session
+          try { refreshThreads(); } catch {}
+          try { loadThreadHistory(newId); } catch {}
         }
       } else if (msg.type === 'permission_request') {
         setPermissionReq({ requestId: msg.requestId, request: msg.request });
@@ -295,10 +337,6 @@ export const ChatPage: React.FC = () => {
       } catch {}
       await wsFirst('prompt', { sessionId, prompt });
     } catch (err: any) {
-      const msg = err?.message || '';
-      if (/Session not found/i.test(msg) || /no sessionId/i.test(msg)) {
-        try { const resp = await wsFirst<any>('session.new', {}); if (resp?.sessionId) { setSessionId(resp.sessionId); await wsFirst('prompt', { sessionId: resp.sessionId, prompt: [{ type: 'text', text }] }); return; } } catch {}
-      }
       alert(err?.message || String(err));
     } finally { setSending(false); }
   }
@@ -462,8 +500,29 @@ export const ChatPage: React.FC = () => {
 
   function mapUpdateToMessages(update: any, push: React.Dispatch<React.SetStateAction<ChatMessage[]>>) {
     const now = Date.now();
+    const mergeBlocks = (a: ContentBlock[], b: ContentBlock[]): ContentBlock[] => {
+      const out = [...a];
+      for (const p of b) {
+        let dup = false;
+        try { dup = out.some((x) => JSON.stringify(x) === JSON.stringify(p)); } catch {}
+        if (!dup) out.push(p as any);
+      }
+      return out;
+    };
     const add = (role: ChatMessage['role'], parts: ContentBlock[], meta?: any) =>
       push((prev) => {
+        // Upsert tool calls by id so updates replace the same call
+        const toolId = role === 'tool' ? (meta?.id || meta?.toolCallId || meta?.tool_id) : undefined;
+        if (role === 'tool' && toolId) {
+          const idx = prev.findIndex((m) => m.role === 'tool' && (m.meta?.id === toolId));
+          if (idx >= 0) {
+            const cur = prev[idx];
+            const merged = mergeBlocks(cur.parts, parts);
+            const next = [...prev];
+            next[idx] = { ...cur, parts: merged, meta: { ...(cur.meta || {}), ...(meta || {}) }, ts: now } as any;
+            return next;
+          }
+        }
         // de-duplicate recent identical bubbles (helps with repeated plan/summary frames)
         const recent = prev.slice(-8);
         const isDup = recent.some((m) => {
@@ -566,7 +625,11 @@ export const ChatPage: React.FC = () => {
               !collapseTools && 'bg-primary/10 border-primary'
             )}
             title="Toggle tool call visibility"
-            onClick={() => setCollapseTools((v) => !v)}
+            onClick={() => setCollapseTools((v) => {
+              const nv = !v;
+              try { const key = sessionId ? `chatToolsCollapsed:${sessionId}` : 'chatToolsCollapsed'; localStorage.setItem(key, nv ? '1' : '0'); } catch {}
+              return nv;
+            })}
           >
             {collapseTools ? 'Tools: collapsed' : 'Tools: expanded'}
           </button>
@@ -601,7 +664,7 @@ export const ChatPage: React.FC = () => {
               const running = items.some((it) => /running|in_progress|progress|execut/i.test(String(it.status || '')));
               nodes.push((
                 <MessageBubble key={group[0].id + '-group'} role="tool">
-                  <ToolCallsGroup items={items} initiallyOpen={!collapseTools || running} />
+                  <ToolCallsGroup items={items} initiallyOpen={!collapseTools || running} openMap={openToolMap} onItemOpenChange={handleToolOpenChange} />
                 </MessageBubble>
               ));
             } else {

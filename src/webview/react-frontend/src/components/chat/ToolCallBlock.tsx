@@ -6,6 +6,7 @@ export interface ToolCallBlockProps {
   name?: string
   status?: string
   id?: string
+  kind?: string
   initiallyOpen?: boolean
   open?: boolean
   onOpenChange?: (open: boolean) => void
@@ -22,7 +23,7 @@ const statusStyle = (status?: string) => {
   return 'bg-muted text-foreground/80 border-border'
 }
 
-export const ToolCallBlock: React.FC<ToolCallBlockProps> = ({ name, status, id, initiallyOpen, open: openProp, onOpenChange, className, children }) => {
+export const ToolCallBlock: React.FC<ToolCallBlockProps> = ({ name, status, id, kind, initiallyOpen, open: openProp, onOpenChange, className, children }) => {
   const isControlled = typeof openProp === 'boolean'
   const [openState, setOpenState] = React.useState<boolean>(!!initiallyOpen)
   React.useEffect(() => { if (!isControlled && typeof initiallyOpen === 'boolean') setOpenState(initiallyOpen) }, [initiallyOpen, isControlled])
@@ -32,6 +33,7 @@ export const ToolCallBlock: React.FC<ToolCallBlockProps> = ({ name, status, id, 
     if (isControlled) { onOpenChange?.(next) } else { setOpenState(next) }
   }
   const label = name || 'tool'
+  const showKindBadge = !!(kind && kind.toLowerCase() !== String(label).toLowerCase())
   return (
     <div className={cn('border rounded-lg neo:rounded-none neo:border-[3px] overflow-hidden', className)}>
       <button
@@ -44,7 +46,9 @@ export const ToolCallBlock: React.FC<ToolCallBlockProps> = ({ name, status, id, 
         <div className="flex items-center gap-2 min-w-0">
           <Wrench className="w-4 h-4 shrink-0" />
           <div className="truncate font-medium">{label}</div>
-          {id && <div className="text-[11px] opacity-60 truncate">#{String(id).slice(0, 8)}</div>}
+          {showKindBadge && (
+            <span className={cn('ml-1 inline-flex items-center px-2 py-0.5 rounded border text-[11px] shrink-0 bg-muted text-foreground/80 border-border')}>{kind}</span>
+          )}
           {status && (
             <span className={cn('ml-2 inline-flex items-center px-2 py-0.5 rounded border text-[11px] shrink-0', statusStyle(status))}>{status}</span>
           )}

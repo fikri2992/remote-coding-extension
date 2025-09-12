@@ -7,6 +7,7 @@ export interface ToolCallItem {
   id: string
   name?: string
   status?: string
+  kind?: string
   content: React.ReactNode
 }
 
@@ -43,7 +44,6 @@ export const ToolCallsGroup: React.FC<ToolCallsGroupProps> = ({ items, initially
   React.useEffect(() => { if (typeof initiallyOpen === 'boolean') setInternalOpen(initiallyOpen) }, [initiallyOpen])
   const open = typeof controlledOpen === 'boolean' ? controlledOpen : internalOpen
   const counts = React.useMemo(() => statusSummary(items), [items])
-  const running = !!counts.running
   const total = items.length
   const summary = React.useMemo(() => {
     const parts: string[] = []
@@ -88,6 +88,7 @@ export const ToolCallsGroup: React.FC<ToolCallsGroupProps> = ({ items, initially
               id={it.id}
               name={it.name}
               status={it.status}
+              kind={it.kind}
               initiallyOpen={defOpen}
               open={typeof itemOpen === 'boolean' ? itemOpen : undefined}
               onOpenChange={(v) => onItemOpenChange?.(it.id, v)}

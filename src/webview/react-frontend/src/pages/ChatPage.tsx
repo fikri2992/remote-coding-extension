@@ -106,6 +106,8 @@ export const ChatPage: React.FC = () => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [updates, setUpdates] = useState<SessionUpdate[]>([]);
   const endRef = useRef<HTMLDivElement | null>(null);
+  // Cached tool-call metadata by id, used to backfill missing fields on later updates
+  const toolCallsByIdRef = useRef<Record<string, { kind?: string; name?: string; title?: string }>>({});
 
   // Context chips
   const [selectedContext, setSelectedContext] = useState<ContextItem[]>([]);
@@ -569,16 +571,31 @@ export const ChatPage: React.FC = () => {
       else nu.content = unwrapContent(u.content);
     }
     if (t === 'tool_call' || t === 'tool_call_update') {
-      const toolCall = u.tool_call || {
-        id: u.toolCallId || u.id,
-        status: u.status,
-        name: u.title || u.name || u.kind,
-        kind: u.kind,
-        content: Array.isArray(u.content) ? normalizeContentList(u.content) : [],
-        rawInput: u.rawInput,
-        locations: u.locations,
-      };
-      nu.tool_call = toolCall;
+      if (u.tool_call && typeof u.tool_call === 'object') {
+        const tc: any = { ...u.tool_call };
+        if (!tc.id) tc.id = u.toolCallId || u.id;
+        if (!tc.status && u.status) tc.status = u.status;
+        if (!tc.name) tc.name = u.title || u.name || u.kind;
+        if (!tc.kind && u.kind) tc.kind = u.kind;
+        if (!tc.rawInput && u.rawInput) tc.rawInput = u.rawInput;
+        if (!tc.locations && u.locations) tc.locations = u.locations;
+        // normalize content list
+        if (Array.isArray(tc.content)) tc.content = normalizeContentList(tc.content);
+        else if (Array.isArray(u.content)) tc.content = normalizeContentList(u.content);
+        else if (u.content) tc.content = normalizeContentList([u.content]);
+        nu.tool_call = tc;
+      } else {
+        const toolCall = {
+          id: u.toolCallId || u.id,
+          status: u.status,
+          name: u.title || u.name || u.kind,
+          kind: u.kind,
+          content: Array.isArray(u.content) ? normalizeContentList(u.content) : [],
+          rawInput: u.rawInput,
+          locations: u.locations,
+        };
+        nu.tool_call = toolCall;
+      }
     }
     return nu;
   }
@@ -588,12 +605,57 @@ export const ChatPage: React.FC = () => {
     return b && (b.type !== 'text' || isMeaningfulText(b.text));
   }
 
+  // Format tool call "name" if it looks like a file path.
+  // Goal: turn absolute paths like "C:\\...\\project\\src\\acp\\File.ts" into ".\\src\\acp\\File.ts"
+  // and generic long paths into a short relative-looking tail like ".\\a\\b\\c" (or "./a/b/c" on slash style)
+  function formatToolName(n: any): string {
+    const s = (typeof n === 'string' ? n : (n ? String(n) : '')).trim();
+    if (!s) return s;
+    const hasSep = /[\\/]/.test(s);
+    if (!hasSep) return s;
+    const lower = s.toLowerCase();
+    let idx = lower.indexOf('\\src\\');
+    if (idx === -1) idx = lower.indexOf('/src/');
+    if (idx >= 0) {
+      // Keep the original slash style; prefix with .
+      return '.' + s.slice(idx);
+    }
+    // Fallback: keep last 3 segments
+    const parts = s.split(/[\\/]+/).filter(Boolean);
+    const tail = parts.slice(Math.max(0, parts.length - 3));
+    const sep = s.includes('\\') ? '\\' : '/';
+    const dot = sep === '\\' ? '.\\' : './';
+    return dot + tail.join(sep);
+  }
+
   function buildToolCallParts(tc: any): ContentBlock[] {
     const headerBits: string[] = [];
-    headerBits.push(`[tool ${tc?.status || 'pending'}] ${tc?.name || 'tool'}` + (tc?.id ? ` (${tc.id})` : ''));
+    const rawKind = typeof tc?.kind === 'string' ? tc.kind.trim() : (tc?.kind ? String(tc.kind) : '');
+    const rawName = typeof tc?.name === 'string' ? tc.name.trim() : (tc?.name ? String(tc.name) : '');
+    const formattedName = rawName ? formatToolName(rawName) : '';
+    const displayKind = rawKind || '';
+    const displayName = formattedName || '';
+    let title = '';
+    if (displayKind && displayName && displayKind.toLowerCase() !== displayName.toLowerCase()) {
+      title = `"${displayKind}" • ${displayName}`;
+    } else if (displayKind) {
+      title = `"${displayKind}"`;
+    } else if (displayName) {
+      title = `"${displayName}"`;
+    } else {
+      title = '"tool"';
+    }
+    const callId = tc?.id || tc?.toolCallId;
+    headerBits.push(`[tool ${tc?.status || 'pending'}] ${title}` + (callId ? ` (${callId})` : ''));
     if (tc?.rawInput && typeof tc.rawInput === 'object') {
-      if (tc.rawInput.path) headerBits.push(`path: ${tc.rawInput.path}`);
-      if (tc.rawInput.abs_path) headerBits.push(`abs_path: ${tc.rawInput.abs_path}`);
+      const ri: any = tc.rawInput;
+      if (ri.path) headerBits.push(`path: ${ri.path}`);
+      if (ri.abs_path) headerBits.push(`abs_path: ${ri.abs_path}`);
+      if (ri.pattern) headerBits.push(`pattern: ${ri.pattern}`);
+      if (ri.glob) headerBits.push(`glob: ${ri.glob}`);
+      if (ri.output_mode) headerBits.push(`output: ${ri.output_mode}`);
+      if (ri.query) headerBits.push(`query: ${ri.query}`);
+      if (ri.command) headerBits.push(`cmd: ${ri.command}`);
     }
     if (Array.isArray(tc?.locations) && tc.locations.length) headerBits.push(`${tc.locations.length} location(s)`);
     const parts: ContentBlock[] = [] as any;
@@ -625,7 +687,14 @@ export const ChatPage: React.FC = () => {
             const cur = prev[idx];
             const merged = mergeBlocks(cur.parts, parts);
             const next = [...prev];
-            next[idx] = { ...cur, parts: merged, meta: { ...(cur.meta || {}), ...(meta || {}) }, ts: now } as any;
+            const mergedMeta: any = { ...(cur.meta || {}) };
+            if (meta && typeof meta === 'object') {
+              for (const k of Object.keys(meta)) {
+                const v = (meta as any)[k];
+                if (v !== undefined && v !== null) mergedMeta[k] = v;
+              }
+            }
+            next[idx] = { ...cur, parts: merged, meta: mergedMeta, ts: now } as any;
             return next;
           }
         }
@@ -668,9 +737,23 @@ export const ChatPage: React.FC = () => {
       }
       case 'tool_call':
       case 'tool_call_update': {
-        const tc = update.tool_call || { id: update.toolCallId, status: update.status, name: update.title || update.name || update.kind, kind: update.kind, content: Array.isArray(update.content) ? update.content : [], rawInput: update.rawInput, locations: update.locations };
+        let tc = update.tool_call || { id: update.toolCallId, status: update.status, name: update.title || update.name || update.kind, kind: update.kind, content: Array.isArray(update.content) ? update.content : [], rawInput: update.rawInput, locations: update.locations };
+        // Backfill missing kind/name from cached metadata by id
+        try {
+          const key = tc?.id || update.toolCallId || update.id;
+          if (key) {
+            const prev = toolCallsByIdRef.current[key] || {};
+            const merged = {
+              kind: tc.kind || prev.kind,
+              name: tc.name || prev.name || update.title || prev.title,
+              title: update.title || prev.title,
+            };
+            toolCallsByIdRef.current[key] = merged;
+            tc = { ...tc, kind: merged.kind, name: merged.name };
+          }
+        } catch {}
         const parts = buildToolCallParts(tc);
-        if (parts.length) add('tool', parts, { id: tc?.id, status: tc?.status, name: tc?.name });
+        if (parts.length) add('tool', parts, { id: tc?.id, status: tc?.status, name: tc?.name, kind: tc?.kind, title: (update as any)?.title });
         break;
       }
       case 'mode_updated': {
@@ -806,7 +889,7 @@ export const ChatPage: React.FC = () => {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 min-h-0 overflow-y-auto p-1 sm:p-3 space-y-1 sm:space-y-2 pb-12 sm:pb-0">
+      <div className="flex-1 min-h-0 overflow-y-auto p-2 sm:p-3 space-y-2 sm:space-y-2 pb-12 sm:pb-0">
         {(() => {
           const nodes: React.ReactNode[] = [];
           for (let i = 0; i < messages.length; ) {
@@ -822,7 +905,12 @@ export const ChatPage: React.FC = () => {
                 const parts = Array.isArray(tm.parts) && tm.parts.length > 0 && (tm.parts as any)[0]?.type === 'text' && String((tm.parts as any)[0].text || '').trim().toLowerCase().startsWith('[tool')
                   ? (tm.parts as any).slice(1)
                   : tm.parts;
-                return { id: meta.id || tm.id, name: meta.name, status: meta.status, content: renderMessageParts(parts as any) };
+                const id = meta.id || tm.id;
+                const cached = id ? (toolCallsByIdRef.current[id] || {}) : {};
+                const nameRaw = meta.name || cached.name || meta.title || cached.title;
+                const name = nameRaw ? formatToolName(nameRaw) : nameRaw;
+                const kind = meta.kind || cached.kind;
+                return { id, name, status: meta.status, kind, content: renderMessageParts(parts as any) };
               });
               const running = items.some((it) => /running|in_progress|progress|execut/i.test(String(it.status || '')));
               nodes.push((
@@ -1070,12 +1158,12 @@ export const ChatPage: React.FC = () => {
       {actionsOpen && (
         <div className="fixed inset-0 z-50 flex items-end sm:hidden">
           <div className="absolute inset-0 bg-black/40" onClick={() => setActionsOpen(false)} />
-          <div className="relative bg-card border border-border rounded-t-lg w-full p-3 space-y-2">
-            <div className="flex items-center justify-between mb-1">
+          <div className="relative bg-card border border-border rounded-t-2xl w-[calc(100%-1rem)] mx-auto p-4 pt-5 pb-[calc(env(safe-area-inset-bottom)+16px)] space-y-3 shadow-lg">
+            <div className="flex items-center justify-between mb-2 px-1">
               <div className="text-sm font-semibold">Chat Actions</div>
               <Button size="sm" variant="secondary" onClick={() => setActionsOpen(false)}>Close</Button>
             </div>
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-3">
               {modes && (
                 <Button variant="secondary" onClick={() => { setModeSheetOpen(true); setActionsOpen(false); }}>
                   {currentModelId ? `Mode: ${currentModelId}` : 'Mode'}

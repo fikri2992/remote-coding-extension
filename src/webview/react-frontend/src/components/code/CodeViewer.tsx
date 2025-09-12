@@ -33,6 +33,8 @@ export interface CodeViewerProps {
   onStats?: (stats: { lines: number; length: number }) => void
   onSelectionChange?: (sel: { from: number; to: number; text: string; lines: number }) => void
   onOpenSearch?: () => void
+  // Reserve gutter width to avoid flicker when line digit count changes
+  gutterDigits?: number
 }
 
 const detectLangId = (lang?: string, filename?: string): string | undefined => {
@@ -115,7 +117,7 @@ const neoTheme = EditorView.theme({
 })
 
 export const CodeViewer = React.forwardRef<CodeViewerHandle, CodeViewerProps>(function CodeViewer(
-  { code, language, filename, wrap = false, lineNumbers: ln = true, fontSize = 'base', theme = 'default', whitespace = false, indentGuides = false, wrapColumn: _wrapColumn, className, onStats, onSelectionChange, onOpenSearch },
+  { code, language, filename, wrap = false, lineNumbers: ln = true, fontSize = 'base', theme = 'default', whitespace = false, indentGuides = false, wrapColumn: _wrapColumn, className, onStats, onSelectionChange, onOpenSearch, gutterDigits },
   ref
 ) {
   const containerRef = React.useRef<HTMLDivElement | null>(null)
@@ -129,6 +131,7 @@ export const CodeViewer = React.forwardRef<CodeViewerHandle, CodeViewerProps>(fu
   const wsComp = React.useRef(new Compartment())
   const indentComp = React.useRef(new Compartment())
   const keysComp = React.useRef(new Compartment())
+  const gutterComp = React.useRef(new Compartment())
 
   // build base extensions
   const baseExtensions = React.useMemo<Extension[]>(() => [
@@ -160,6 +163,12 @@ export const CodeViewer = React.forwardRef<CodeViewerHandle, CodeViewerProps>(fu
       keysComp.current.of([]),
       wrapComp.current.of(wrap ? EditorView.lineWrapping : []),
       lnComp.current.of(ln ? lineNumbers() : []),
+      // Reserve a fixed gutter width based on expected digit count.
+      // Using !important to override CodeMirror's dynamic inline width to prevent flicker.
+      gutterComp.current.of(EditorView.theme({
+        '.cm-gutter': { width: `${Math.max(1, (gutterDigits || 3)) + 1}ch !important`, minWidth: `${Math.max(1, (gutterDigits || 3)) + 1}ch !important`, flex: 'none' },
+        '.cm-gutters': { flex: 'none' }
+      })),
       themeComp.current.of([]),
       fontComp.current.of(fontSizeTheme(fontSize)),
       wsComp.current.of(whitespace ? EditorView.theme({ '.cm-content': { backgroundImage: 'none' } }) : []),
@@ -214,6 +223,19 @@ export const CodeViewer = React.forwardRef<CodeViewerHandle, CodeViewerProps>(fu
     if (!view) return
     view.dispatch({ effects: lnComp.current.reconfigure(ln ? lineNumbers() : []) })
   }, [ln])
+
+  // Update gutter fixed width when digit count changes
+  React.useEffect(() => {
+    const view = viewRef.current
+    if (!view) return
+    const digits = Math.max(1, (gutterDigits || 3))
+    view.dispatch({
+      effects: gutterComp.current.reconfigure(EditorView.theme({
+        '.cm-gutter': { width: `${digits + 1}ch !important`, minWidth: `${digits + 1}ch !important`, flex: 'none' },
+        '.cm-gutters': { flex: 'none' }
+      }))
+    })
+  }, [gutterDigits])
 
   const loadThemeExt = React.useCallback(async (t: CodeTheme): Promise<Extension> => {
     if (t === 'neo') return neoTheme

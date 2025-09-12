@@ -44,7 +44,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
       {/* Navigation Menu */}
       <nav className="flex-1 px-4 py-6">
         <ul className="space-y-3">
-          {menuItems.filter((i) => ['acp','files','terminal','git','server','settings'].includes(i.id)).map((item) => {
+          {menuItems.filter((i) => ['home','acp','files','terminal','git','server','settings'].includes(i.id)).map((item) => {
             const Icon = item.icon;
             return (
               <li key={item.id}>

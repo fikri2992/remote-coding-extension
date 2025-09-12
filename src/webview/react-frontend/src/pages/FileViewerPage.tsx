@@ -78,9 +78,11 @@ const FileViewerPage: React.FC = () => {
   const [searchOpts, setSearchOpts] = usePersistentState<{ caseSensitive: boolean; regexp: boolean; wholeWord: boolean }>('searchOpts', { caseSensitive: false, regexp: false, wholeWord: false })
   const isMobile = useMediaQuery('(max-width: 767px)')
   const pendingIdRef = useRef<string | null>(null)
+  const fileWsUnsubRef = useRef<(() => void) | null>(null)
 
   const filePath = (location.search as any)?.path || ''
   const fromDir = (location.search as any)?.from as string | undefined
+  const pathname = (location as any)?.pathname || ''
   
   // Image detection helpers
   const imageExtensions = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'ico', 'svg'])
@@ -111,6 +113,11 @@ const FileViewerPage: React.FC = () => {
 
     const id = `fs_${Date.now()}_${Math.random().toString(36).slice(2,8)}`
     pendingIdRef.current = id
+    // Cancel any previous in-flight listener before starting a new request
+    if (fileWsUnsubRef.current) {
+      try { fileWsUnsubRef.current() } catch {}
+      fileWsUnsubRef.current = null
+    }
     if (!background) {
       setLoading(true)
     } else {
@@ -186,9 +193,21 @@ const FileViewerPage: React.FC = () => {
           }
         } else {
           // Handle regular files
+          const contentStr = r.content || ''
+          // Precompute stats before first render to avoid initial flicker
+          try {
+            const len = contentStr.length
+            let lines = 0
+            for (let i = 0; i < contentStr.length; i++) {
+              if (contentStr.charCodeAt(i) === 10) lines++ // '\n'
+            }
+            if (len > 0) lines += 1
+            setStats({ lines, length: len })
+          } catch {}
+
           const fileContent = {
             path: r.path,
-            content: r.content || '',
+            content: contentStr,
             size: r.size || 0,
             truncated: r.truncated || false,
             mimeType: r.mimeType,
@@ -225,15 +244,30 @@ const FileViewerPage: React.FC = () => {
       setLoading(false)
       setRefreshing(false)
       unsub()
+      if (fileWsUnsubRef.current === unsub) fileWsUnsubRef.current = null
     })
+    // Track unsubscribe so we can cancel on route change/unmount
+    fileWsUnsubRef.current = unsub
   }
 
   useEffect(() => {
+    // Guard against transient updates when navigating away from this route
+    if (pathname !== '/files/view') return
     if (!filePath) return
     // Try view-state first for instant paint
     const vs = getFileState(filePath)
     if (vs && typeof vs.content === 'string' && vs.content.length > 0) {
       setContent(vs.content)
+      // Precompute stats from cached view-state for stable gutter width
+      try {
+        const len = vs.content.length
+        let lines = 0
+        for (let i = 0; i < vs.content.length; i++) {
+          if (vs.content.charCodeAt(i) === 10) lines++ // '\n'
+        }
+        if (len > 0) lines += 1
+        setStats({ lines, length: len })
+      } catch {}
       if (vs.meta) setMeta(vs.meta)
       setLoading(false)
       setRefreshing(true)
@@ -244,6 +278,16 @@ const FileViewerPage: React.FC = () => {
     const cached = peekFile(filePath, { allowStale: true })
     if (cached) {
       setContent(cached.content)
+      // Precompute stats from cache for stable gutter width
+      try {
+        const len = cached.content.length
+        let lines = 0
+        for (let i = 0; i < cached.content.length; i++) {
+          if (cached.content.charCodeAt(i) === 10) lines++ // '\n'
+        }
+        if (len > 0) lines += 1
+        setStats({ lines, length: len })
+      } catch {}
       setMeta({ path: cached.path, truncated: cached.truncated, size: cached.size })
       setLoading(false)
       setRefreshing(true)
@@ -253,7 +297,7 @@ const FileViewerPage: React.FC = () => {
     // Otherwise, do regular fetch
     setRefreshing(false)
     loadFile(filePath, false)
-  }, [filePath, isConnected])
+  }, [filePath, isConnected, pathname])
 
   // Persist view-state whenever content/meta updates
   useEffect(() => {
@@ -328,8 +372,25 @@ const FileViewerPage: React.FC = () => {
       if (selectionThrottleTimeoutRef.current) {
         clearTimeout(selectionThrottleTimeoutRef.current)
       }
+      // Cancel any pending WS listener on unmount to avoid late toasts
+      if (fileWsUnsubRef.current) {
+        try { fileWsUnsubRef.current() } catch {}
+        fileWsUnsubRef.current = null
+      }
+      pendingIdRef.current = null
     }
   }, [])
+
+  // If we navigate away from the file viewer route, cancel any pending listener
+  useEffect(() => {
+    if (pathname !== '/files/view') {
+      if (fileWsUnsubRef.current) {
+        try { fileWsUnsubRef.current() } catch {}
+        fileWsUnsubRef.current = null
+      }
+      pendingIdRef.current = null
+    }
+  }, [pathname])
 
   // Close search row on significant scroll in the viewer area
   const scrollContainerRef = useRef<HTMLDivElement | null>(null)
@@ -608,6 +669,7 @@ const FileViewerPage: React.FC = () => {
                       language={languageOverride}
                       wrap={wrap}
                       lineNumbers={showLineNumbers}
+                      gutterDigits={Math.max(3, String(stats.lines || 0).length)}
                       fontSize={isMobile && fontSize === 'base' ? 'lg' : fontSize}
                       theme={theme}
                       whitespace={whitespace}

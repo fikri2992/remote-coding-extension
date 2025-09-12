@@ -19,11 +19,11 @@ const rootRoute = createRootRoute({
   component: RootLayout,
 });
 
-// Create index route
+// Create index route (Chat at "/")
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
-  component: ACPPage,
+  component: ChatPage,
 });
 
 // Create other routes

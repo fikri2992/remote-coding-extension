@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils';
 import { Send } from 'lucide-react';
 import { MentionSuggestions } from '@/components/chat/MentionSuggestions';
 import MessageBubble from '@/components/chat/MessageBubble';
+import Markdown from '@/components/chat/Markdown';
 import ContextChip from '@/components/chat/ContextChip';
 import ModeChip from '@/components/chat/ModeChip';
 import ModelPickerSheet from '@/components/chat/ModelPickerSheet';
@@ -45,6 +46,7 @@ export const ChatPage: React.FC = () => {
   const [currentModelId, setCurrentModelId] = useState<string | null>(null);
   const [modelSheetOpen, setModelSheetOpen] = useState(false);
   const [modeSheetOpen, setModeSheetOpen] = useState(false);
+  const [sessionSheetOpen, setSessionSheetOpen] = useState(false);
 
   // Composer
   const [input, setInput] = useState('');
@@ -68,6 +70,7 @@ export const ChatPage: React.FC = () => {
   // FS results for mention search (workspace root only for now)
   const [fsResults, setFsResults] = useState<Array<{ name: string; path: string; type: 'file' | 'directory'; size?: number }>>([]);
   const [gitChangedFiles, setGitChangedFiles] = useState<string[]>([]);
+  const [threads, setThreads] = useState<Array<{ id: string; title?: string; createdAt: string; updatedAt: string }>>([]);
 
   const canPrompt = useMemo(() => !!sessionId && input.trim().length > 0 && !sending, [sessionId, input, sending]);
 
@@ -105,18 +108,25 @@ export const ChatPage: React.FC = () => {
       setConnecting(true);
       try {
         await safeConnect();
-        const s = await wsFirst<any>('session.new', {});
-        if (s?.sessionId) setSessionId(s.sessionId);
-        if (s?.modes) {
-          setModes(s.modes);
-          const cm = s.modes.current_mode_id || s.modes.currentModeId;
-          if (cm) setCurrentModeId(cm);
+        // Prefer last session if available; do not auto-create
+        let sid: string | null = null;
+        try {
+          const last = await wsFirst<any>('session.last', {});
+          sid = (last?.sessionId || last?.session_id || last?.id || null) as string | null;
+        } catch {}
+        // No new session is created automatically here
+        if (sid) {
+          setSessionId(sid);
+          // Load existing transcript for this session into chat
+          try { await loadThreadHistory(sid); } catch {}
         }
         // prime lists
         fetchGitStatus().catch(() => {});
         discoverFiles('/').catch(() => {});
         // load models if supported
         refreshModels().catch(() => {});
+        // load threads list for picker
+        refreshThreads().catch(() => {});
       } catch (e) {
         console.warn('[chat] auto-connect failed', e);
       } finally { setConnecting(false); }
@@ -271,6 +281,11 @@ export const ChatPage: React.FC = () => {
         if (opened?.text && (opened.size ?? 0) <= 256 * 1024) prompt.push({ type: 'resource', resource: { text: opened.text, uri } } as any);
         else prompt.push({ type: 'resource_link', uri } as any);
       }
+      // Local-echo user's message so it appears immediately
+      try {
+        const now = Date.now();
+        setMessages((prev) => [...prev, { id: `local-${now}-${prev.length}`, role: 'user', parts: prompt, ts: now } as any]);
+      } catch {}
       await wsFirst('prompt', { sessionId, prompt });
     } catch (err: any) {
       const msg = err?.message || '';
@@ -310,13 +325,53 @@ export const ChatPage: React.FC = () => {
     try { await wsFirst('session.setMode', { sessionId, modeId }); setCurrentModeId(modeId); setModeSheetOpen(false); } catch (e: any) { alert(e?.message || String(e)); }
   }
 
+  // Sessions picker helpers
+  async function refreshThreads() {
+    try {
+      const res = await wsFirst<any>('threads.list', {});
+      const list = Array.isArray(res?.threads) ? res.threads : [];
+      setThreads(list);
+    } catch { setThreads([]); }
+  }
+
+  async function handleSelectSession(id: string) {
+    try {
+      await wsFirst('session.select', { sessionId: id });
+      setSessionId(id);
+      await loadThreadHistory(id);
+      setSessionSheetOpen(false);
+    } catch (e: any) { alert(e?.message || String(e)); }
+  }
+
+  async function handleDeleteSession(id: string) {
+    try { await wsFirst('session.delete', { sessionId: id }); await refreshThreads(); } catch (e: any) { alert(e?.message || String(e)); }
+  }
+
+  async function handleNewSession() {
+    try {
+      const s = await wsFirst<any>('session.new', {});
+      const sid = (s?.sessionId || s?.session_id) as string | undefined;
+      if (s?.modes) {
+        setModes(s.modes);
+        const cm = s.modes.current_mode_id || s.modes.currentModeId;
+        if (cm) setCurrentModeId(cm);
+      }
+      if (sid) {
+        setSessionId(sid);
+        setMessages([]);
+      }
+      await refreshThreads();
+      setSessionSheetOpen(false);
+    } catch (e: any) { alert(e?.message || String(e)); }
+  }
+
   // Render helpers
   function renderMessageParts(parts: any[]) {
     return (
       <div className="space-y-2">
         {parts.map((part, i) => {
           if (!part) return null;
-          if (part.type === 'text') return <div key={i} className="whitespace-pre-wrap text-sm leading-relaxed">{String(part.text || '')}</div>;
+          if (part.type === 'text') return <Markdown key={i} className="prose prose-invert max-w-none text-sm leading-relaxed" text={String(part.text || '')} />;
           if (part.type === 'resource_link') { const uri = String(part.uri || ''); const name = uri.split('/').pop() || uri; return (<div key={i} className="text-xs"><a className="underline" href={uri} target="_blank" rel="noreferrer">@{name}</a></div>); }
           if (part.type === 'resource' && 'text' in (part.resource || {})) { const uri = String((part.resource as any).uri || ''); const name = uri ? (uri.split('/').pop() || uri) : 'context'; return (<div key={i} className="border border-border rounded p-2"><div className="text-[10px] opacity-70 mb-1">@{name}</div><pre className="text-xs whitespace-pre-wrap">{String((part.resource as any).text || '').slice(0, 4000)}</pre></div>); }
           if (part.type === 'diff' && (part.newText || part.diff?.newText)) { const path = part.path || part.file || part.filepath || part.uri || ''; return (<div key={i} className="border border-border rounded"><div className="flex items-center justify-between px-2 py-1 bg-muted/40 text-xs"><div className="opacity-70 truncate">{path || '(unknown path)'}</div><button className="px-2 py-0.5 border border-input rounded text-xs hover:bg-muted" onClick={async () => { try { const pth = String(path || ''); const newText = String(part.diff?.newText || part.newText || ''); await wsFirst('diff.apply', { path: pth, newText }); alert('Applied diff to ' + (pth || '(unknown)')); } catch (e: any) { alert(e?.message || String(e)); } }}>Apply</button></div><pre className="p-2 text-xs whitespace-pre-wrap">{String(part.diff?.newText || part.newText).slice(0, 4000)}</pre></div>); }
@@ -377,17 +432,44 @@ export const ChatPage: React.FC = () => {
 
   function mapUpdateToMessages(update: any, push: React.Dispatch<React.SetStateAction<ChatMessage[]>>) {
     const now = Date.now();
-    const add = (role: ChatMessage['role'], parts: ContentBlock[], meta?: any) => push((prev) => [...prev, { id: `${now}-${prev.length}`, role, parts, meta, ts: now }]);
+    const add = (role: ChatMessage['role'], parts: ContentBlock[], meta?: any) =>
+      push((prev) => {
+        // de-duplicate recent identical bubbles (helps with repeated plan/summary frames)
+        const recent = prev.slice(-8);
+        const isDup = recent.some((m) => {
+          if (m.role !== role) return false;
+          try { return JSON.stringify(m.parts) === JSON.stringify(parts); } catch { return false; }
+        });
+        if (isDup) return prev;
+        return [...prev, { id: `${now}-${prev.length}`, role, parts, meta, ts: now }];
+      });
     const t = update?.type;
     switch (t) {
       case 'user_message_chunk': {
         const c = update.content; const list = Array.isArray(c) ? c.filter(isNonEmptyBlock) : (isNonEmptyBlock(c) ? [c] : []); if (list.length) add('user', list as any); break;
       }
+      case 'user_message': {
+        const c = update.content; const list = Array.isArray(c) ? c.filter(isNonEmptyBlock) : (isNonEmptyBlock(c) ? [c] : []); if (list.length) add('user', list as any); break;
+      }
       case 'agent_message_chunk': {
+        const c = update.content; const list = Array.isArray(c) ? c.filter(isNonEmptyBlock) : (isNonEmptyBlock(c) ? [c] : []); if (list.length) add('assistant', list as any); break;
+      }
+      case 'agent_message':
+      case 'assistant_message': {
         const c = update.content; const list = Array.isArray(c) ? c.filter(isNonEmptyBlock) : (isNonEmptyBlock(c) ? [c] : []); if (list.length) add('assistant', list as any); break;
       }
       case 'agent_thought_chunk': {
         const c = update.content; const list = Array.isArray(c) ? c.filter(isNonEmptyBlock) : (isNonEmptyBlock(c) ? [c] : []); if (list.length) add('assistant', list as any, { thought: true }); break;
+      }
+      case 'message': {
+        const role = (update.role || update.message?.role || '').toLowerCase();
+        const c = update.content || update.message?.content;
+        const list = Array.isArray(c) ? c.filter(isNonEmptyBlock) : (isNonEmptyBlock(c) ? [c] : []);
+        if (!list.length) break;
+        if (role === 'user') add('user', list as any);
+        else if (role === 'tool') add('tool', list as any);
+        else add('assistant', list as any);
+        break;
       }
       case 'tool_call':
       case 'tool_call_update': {
@@ -398,6 +480,9 @@ export const ChatPage: React.FC = () => {
       }
       case 'mode_updated': {
         const mId = update.modeId || update.mode_id; if (mId) add('system', [{ type: 'text', text: `Mode: ${mId}` } as any]); break;
+      }
+      case 'current_mode_update': {
+        const mId = update.current_mode_id || update.modeId || update.mode_id; if (mId) add('system', [{ type: 'text', text: `Mode: ${mId}` } as any]); break;
       }
       case 'plan': {
         const plan = update.plan; const text = (Array.isArray(plan?.entries) ? plan.entries.map((e: any) => `• ${e.name || e.id || e.title || ''}`).join('\n') : JSON.stringify(plan || {})); add('system', [{ type: 'text', text } as any]); break;
@@ -411,6 +496,30 @@ export const ChatPage: React.FC = () => {
     }
   }
 
+  // Load existing transcript for a session id and map them into message bubbles
+  async function loadThreadHistory(sid: string) {
+    try {
+      const thread = await wsFirst<any>('thread.get', { id: sid });
+      const updatesArr: any[] = Array.isArray(thread?.updates) ? thread.updates : [];
+      setMessages([]);
+      for (const raw of updatesArr) {
+        try {
+          const nu = normalizeUpdateShape(raw);
+          // keep current mode id in sync when replaying
+          if ((nu as any).type === 'current_mode_update' && (nu as any).current_mode_id) {
+            setCurrentModeId((nu as any).current_mode_id);
+          } else if ((nu as any).type === 'mode_updated' && ((nu as any).modeId || (nu as any).mode_id)) {
+            const mId = (nu as any).modeId || (nu as any).mode_id;
+            setCurrentModeId(mId);
+          }
+          mapUpdateToMessages(nu, setMessages);
+        } catch {}
+      }
+    } catch (e) {
+      try { console.warn('[chat] failed loading thread history', (e as any)?.message || String(e)); } catch {}
+    }
+  }
+
   return (
     <div className="flex flex-col min-h-[80vh]">
       {/* Header (minimal) */}
@@ -418,6 +527,9 @@ export const ChatPage: React.FC = () => {
         <div className="flex items-center gap-2">
           <div className="text-sm font-medium">Chat</div>
           <ModeChip modeId={currentModeId} hidden={!modes} onClick={() => setModeSheetOpen(true)} />
+          <button className="text-xs px-2 py-1 rounded-full border border-border bg-muted/40 hover:bg-muted" onClick={() => { setSessionSheetOpen(true); refreshThreads().catch(()=>{}); }}>
+            Sessions
+          </button>
           {!!models.length && (
             <button className="text-xs px-2 py-1 rounded-full border border-border bg-muted/40 hover:bg-muted" onClick={() => setModelSheetOpen(true)}>
               {currentModelId ? `Model: ${currentModelId}` : 'Model'}
@@ -450,6 +562,11 @@ export const ChatPage: React.FC = () => {
 
       {/* Composer - pinned to bottom by flex layout */}
       <div className="border-t border-border p-3">
+        {!sessionId && (
+          <div className="mb-2 text-xs text-amber-600 bg-amber-600/10 border border-amber-600/30 rounded px-2 py-1">
+            No active session. Start typing and Send to create one, or pick an existing session via the Sessions button.
+          </div>
+        )}
         {/* Context chips */}
         {selectedContext.length > 0 && (
           <div className="mb-2 flex flex-wrap gap-2">
@@ -506,6 +623,36 @@ export const ChatPage: React.FC = () => {
         current={currentModelId}
         onSelect={handleSelectModel}
       />
+      {/* Sessions Picker */}
+      {sessionSheetOpen && (
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setSessionSheetOpen(false)} />
+          <div className="relative bg-card border border-border rounded-t-lg md:rounded-lg w-full md:w-[560px] p-4">
+            <div className="flex items-center justify-between mb-2">
+              <div className="font-semibold">Sessions</div>
+              <Button variant="secondary" onClick={() => setSessionSheetOpen(false)}>Close</Button>
+            </div>
+            <div className="mb-2 flex gap-2">
+              <Button onClick={handleNewSession}>New Session</Button>
+              <Button variant="secondary" onClick={() => refreshThreads()}>Refresh</Button>
+            </div>
+            <div className="space-y-1 max-h-[50vh] overflow-auto">
+              {threads.length === 0 && (
+                <div className="text-xs text-muted-foreground">No sessions yet</div>
+              )}
+              {threads.map((t) => (
+                <div key={t.id} className="flex items-center gap-2 border border-input rounded px-2 py-1">
+                  <button className="text-left text-sm flex-1 hover:underline" onClick={() => handleSelectSession(t.id)}>
+                    {t.title || t.id}
+                    <div className="text-[10px] opacity-60">{t.updatedAt || t.createdAt}</div>
+                  </button>
+                  <button className="text-xs px-2 py-0.5 border border-input rounded hover:bg-muted" onClick={() => handleDeleteSession(t.id)}>Delete</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
       {/* Mode Picker (simple) */}
       {modeSheetOpen && modes && (
         <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center">

@@ -9,4 +9,13 @@ export default defineConfig({
             '@': path.resolve(__dirname, './src'),
         },
     },
+    server: {
+        proxy: {
+            '/ws': {
+                target: 'http://localhost:3900',
+                ws: true,
+                secure: false,
+            },
+        },
+    },
 });

@@ -62,11 +62,15 @@ export class ACPConnection extends EventEmitter {
   async connect(command: AgentCommand): Promise<InitializeResponse> {
     if (this.rpc) return this.initialized!;
 
+    // Spawn the agent process directly (no shell) to avoid Windows quoting issues
+    // when the executable path contains spaces (e.g., "C:\\Program Files\\...").
+    // Using a shell here causes cmd.exe to mis-parse unquoted paths and results in
+    // "'C:\\Program' is not recognized..." errors.
     this.child = spawn(command.path, command.args ?? [], {
       stdio: ['pipe', 'pipe', 'pipe'],
       env: { ...process.env, ...(command.env ?? {}) },
       cwd: command.cwd ?? process.cwd(),
-      shell: process.platform === 'win32',
+      shell: false,
       windowsHide: true,
     });
 
@@ -233,12 +237,19 @@ export class ACPConnection extends EventEmitter {
   }
 
   async prompt(req: PromptRequest): Promise<PromptResponse> {
-    const res = await this.rpc?.request('session/prompt', req);
+    // Normalize payload for different adapters (claude vs generic)
+    const payload = this.adapterName === 'claude'
+      ? req
+      : ({ ...req, session_id: (req as any).sessionId, sessionId: undefined } as any);
+    const res = await this.rpc?.request('session/prompt', payload);
     return res as PromptResponse;
   }
 
   async cancel(sessionId: SessionId): Promise<void> {
-    await this.rpc?.notify('session/cancel', { sessionId });
+    const payload = this.adapterName === 'claude'
+      ? { sessionId }
+      : { session_id: sessionId };
+    await this.rpc?.notify('session/cancel', payload);
   }
 
   respondPermission(requestId: number, outcome: 'cancelled' | 'selected', optionId?: string) {

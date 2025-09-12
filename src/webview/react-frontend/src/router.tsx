@@ -1,7 +1,6 @@
 import { createRootRoute, createRoute, createRouter } from '@tanstack/react-router';
 
 // Import route components
-import HomePage from './pages/HomePage.tsx';
 import ServerPage from './pages/ServerPage.tsx';
 import FilesPage from './pages/FilesPage.tsx';
 import FileViewerPage from './pages/FileViewerPage.tsx';
@@ -24,7 +23,7 @@ const rootRoute = createRootRoute({
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
-  component: HomePage,
+  component: ACPPage,
 });
 
 // Create other routes

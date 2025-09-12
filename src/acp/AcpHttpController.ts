@@ -100,13 +100,27 @@ export class AcpHttpController {
       AcpEventBus.emit('agent_connect', { type: 'agent_connect', exe, args, cwd: cwd || process.cwd(), envKeys: env ? Object.keys(env) : [], providedCmd: provided, reason });
     } catch {}
 
-    const init = await this.conn.connect({ path: exe, args, cwd: cwd || process.cwd(), env: env as any });
+    // Merge proxy into env for agent consumption (common Node proxy vars)
+    const envWithProxy: Record<string, string> | undefined = (() => {
+      if (!env && !proxy) return env as any;
+      const out: Record<string, string> = { ...(env || {}) };
+      if (proxy) {
+        if (!out.HTTPS_PROXY) out.HTTPS_PROXY = proxy;
+        if (!out.HTTP_PROXY) out.HTTP_PROXY = proxy;
+      }
+      return out;
+    })();
+
+    const init = await this.conn.connect({ path: exe, args, cwd: cwd || process.cwd(), env: envWithProxy as any });
     if (!init || typeof (init as any).protocolVersion === 'undefined') {
       const e: any = new Error('Agent failed to initialize');
       e.code = 500;
       e.debug = { exe, args, cwd: cwd || process.cwd(), providedCmd: provided, reason };
       throw e;
     }
+    // On fresh connect, clear lastSessionId to avoid pointing at stale threads from a previous agent instance
+    try { await this.sessions.clearLast(); } catch {}
+    this.lastSessionId = null;
     return { ok: true, init, debug: { exe, args, cwd: cwd || process.cwd(), providedCmd: provided, reason } } as any;
   }
 
@@ -131,9 +145,13 @@ export class AcpHttpController {
     const mcpServers = parsed.success && Array.isArray(parsed.data.mcpServers) ? parsed.data.mcpServers : [];
     try {
       const resp = await this.conn.newSession({ cwd, mcpServers });
-      this.lastSessionId = resp.sessionId;
-      try { await this.sessions.add(resp.sessionId); } catch {}
-      return resp as any;
+      // Normalize response to ensure camelCase sessionId is present
+      const sessionId: string = (resp as any).sessionId || (resp as any).session_id;
+      if (!sessionId) throw new Error('Agent did not return sessionId');
+      this.lastSessionId = sessionId;
+      try { await this.sessions.add(sessionId); } catch {}
+      const modes = (resp as any).modes;
+      return { sessionId, modes } as any;
     } catch (err: any) {
       throw this.authMapError(err);
     }
@@ -165,16 +183,47 @@ export class AcpHttpController {
     const parsed = AcpHttpController.PromptSchema.safeParse(body ?? {});
     if (!parsed.success) throw new Error('prompt array required');
     const prompt = parsed.data.prompt;
-    const sessionId = String(parsed.data.sessionId || this.lastSessionId || '');
+    let sessionId = String(parsed.data.sessionId || this.lastSessionId || '');
     if (!sessionId) throw new Error('no sessionId');
-    const req: PromptRequest = { sessionId, prompt } as PromptRequest;
+    let req: PromptRequest = { sessionId, prompt } as PromptRequest;
     try {
       const resp = await this.conn.prompt(req);
       try { await this.sessions.touch(sessionId); } catch {}
       return resp;
     } catch (err: any) {
+      // Seamless recovery: if the agent reports the session is missing, create a new one and retry once
+      const msg = err?.message || '';
+      const code = typeof err?.code === 'number' ? err.code : undefined;
+      const notFound = /Session not found/i.test(msg) || (code === -32603 && /Session not found/i.test(String(err?.data?.details || '')));
+      if (notFound) {
+        try {
+          const resp = await this.conn.newSession({ cwd: process.cwd(), mcpServers: [] });
+          const newSid: string = (resp as any).sessionId || (resp as any).session_id;
+          if (newSid) {
+            this.lastSessionId = newSid;
+            try { await this.sessions.add(newSid); } catch {}
+            // Notify UI about recovery so it can update selected session
+            try { AcpEventBus.emit('session_recovered', { type: 'session_recovered', oldSessionId: sessionId, newSessionId: newSid, reason: 'not_found' }); } catch {}
+            // Retry prompt on the new session
+            sessionId = newSid;
+            req = { sessionId: newSid, prompt } as PromptRequest;
+            const retry = await this.conn.prompt(req);
+            try { await this.sessions.touch(newSid); } catch {}
+            return retry;
+          }
+        } catch {}
+      }
       throw this.authMapError(err);
     }
+  }
+
+  // Graceful disconnect from agent
+  async disconnect(): Promise<{ ok: true }>{
+    if (this.conn) {
+      try { this.conn.dispose(); } catch {}
+      this.conn = null;
+    }
+    return { ok: true };
   }
 
   // --- Models ---
@@ -319,8 +368,17 @@ export class AcpHttpController {
     let parts: string[] = matches ? Array.from(matches) : [];
     const exe = parts.shift()?.replace(/^\"|\"$/g, '').replace(/^'|'$/g, '');
     if (!exe) throw new Error('invalid agentCmd');
-    if (proxy && !parts.includes('--proxy')) parts = parts.concat(['--proxy', proxy]);
-    return { exe, args: parts };
+    // Sanitize quotes for executable and arguments now that we've tokenized
+    const dequote = (s: string): string => {
+      if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
+        return s.slice(1, -1);
+      }
+      return s;
+    };
+    const sanitizedExe = dequote(exe);
+    let sanitizedArgs = parts.map(dequote);
+    if (proxy && !sanitizedArgs.includes('--proxy')) sanitizedArgs = sanitizedArgs.concat(['--proxy', proxy]);
+    return { exe: sanitizedExe, args: sanitizedArgs };
   }
 
   // --- Diffs ---

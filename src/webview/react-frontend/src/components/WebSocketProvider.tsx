@@ -114,7 +114,16 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
           if (entry) {
             pendingAcpRef.current.delete(String(data.id));
             if (entry.timer) { try { clearTimeout(entry.timer); } catch {} }
-            if (data.ok) entry.resolve(data.result);
+            if (data.ok) {
+              let result = data.result;
+              // Unwrap common { success/ok, data } envelope returned by services
+              try {
+                if (result && typeof result === 'object' && 'data' in result && (('success' in result) || ('ok' in result))) {
+                  result = (result as any).data;
+                }
+              } catch {}
+              entry.resolve(result);
+            }
             else entry.reject(Object.assign(new Error(data?.error?.message || 'acp error'), { code: data?.error?.code, meta: data?.error?.meta }));
           }
         }

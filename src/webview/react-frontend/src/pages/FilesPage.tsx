@@ -150,11 +150,7 @@ const FilesPage: React.FC = () => {
 
   useEffect(() => {
     if (!isConnected) return;
-    // initial load respects ?path= in URL
-    const initialPath = ((location.search as any)?.path as string) || '/';
-    // Always fetch fresh data; do not use view-state or cache
-    loadDirectory(initialPath);
-    
+    // Register listener first to avoid racing the first response
     const unsub = addMessageListener((msg) => {
       if (msg?.type !== 'fileSystem') return;
         if (msg.data?.operation === 'tree') {
@@ -183,6 +179,10 @@ const FilesPage: React.FC = () => {
       }
       // watch events can be handled here later
     });
+    // initial load respects ?path= in URL
+    const initialPath = ((location.search as any)?.path as string) || '/';
+    // Always fetch fresh data; do not use view-state or cache
+    loadDirectory(initialPath);
     return unsub;
   }, [location.search, isConnected, showHidden, showIgnored]);
 

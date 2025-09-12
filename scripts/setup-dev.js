@@ -42,7 +42,7 @@ function main() {
   
   // Initial build
   console.log('🏗️  Running initial build...');
-  run('npm run build:cli');
+  run('npm run build');
   
   console.log('✅ Development setup complete!');
   console.log('');

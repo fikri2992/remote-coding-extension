@@ -27,7 +27,10 @@
     "src/cli/**/*.ts",
     "src/server/WebServer.ts",
     "src/server/WebSocketServer.ts",
-    "src/server/ErrorHandler.ts"
+    "src/server/ErrorHandler.ts",
+    "src/server/HttpServer.ts",
+    "src/server/CloudflaredManager.ts",
+    "src/server/interfaces.ts"
   ],
   "exclude": [
     "node_modules",

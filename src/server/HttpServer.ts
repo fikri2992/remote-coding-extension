@@ -16,7 +16,6 @@ import {
     ensureCloudflared as cfEnsure
 } from './CloudflaredManager';
 import { ErrorHandler, ErrorCategory, ErrorSeverity } from './ErrorHandler';
-import { AcpHttpController } from '../acp/AcpHttpController';
 
 export class HttpServer {
     private server: http.Server | null = null;
@@ -25,7 +24,7 @@ export class HttpServer {
     private errorHandler: ErrorHandler;
     private requestCount: number = 0;
     private errorCount: number = 0;
-    private acpController: AcpHttpController | null = null;
+    private acpController: any | null = null;
 
     constructor(config: ServerConfig) {
         this.config = config;
@@ -37,10 +36,10 @@ export class HttpServer {
         console.log(`HTTP Server configured to serve React web application from: ${this.webAssetsPath}`);
     }
 
-    /**
-     * Attach ACP controller to serve embedded ACP endpoints
-     */
-    public setAcpController(controller: AcpHttpController): void {
+    // Note: All app RPCs use WebSocket; this HTTP server only serves static assets.
+
+    // Backwards-compat method: retained for ABI but not used
+    public setAcpController(controller: any): void {
         this.acpController = controller;
     }
 
@@ -130,9 +129,9 @@ export class HttpServer {
 
             let pathname = parsedUrl.pathname || '/';
 
-            // API routes (allow POST and GET)
+            // No HTTP JSON API; all app RPCs are over WebSocket
             if (pathname.startsWith('/api/')) {
-                this.handleApiRequest(req, res, pathname, parsedUrl.query || {});
+                this.sendErrorResponse(res, 404, 'API disabled. Use WebSocket endpoint /ws');
                 return;
             }
 
@@ -142,19 +141,7 @@ export class HttpServer {
                 return;
             }
 
-            // Health endpoint (no SPA rewrite)
-            if (pathname === '/health') {
-                const body = JSON.stringify({
-                    ok: true,
-                    port: this.config.httpPort,
-                    requests: this.requestCount,
-                    errors: this.errorCount,
-                    timestamp: new Date().toISOString()
-                });
-                res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-                res.end(body);
-                return;
-            }
+            // No HTTP health endpoint; use WebSocket-based status if needed
 
             // Handle React Router - serve index.html for client-side routes
             if (pathname !== '/' && !pathname.includes('.')) {
@@ -197,278 +184,13 @@ export class HttpServer {
         }
     }
 
-    /**
-     * Handle /api/* JSON endpoints for tunnel management
-     */
-    private async handleApiRequest(req: http.IncomingMessage, res: http.ServerResponse, pathname: string, query: any): Promise<void> {
-        try {
-            // Normalize method
-            const method = (req.method || 'GET').toUpperCase();
-
-            // Helper to send JSON
-            const sendJson = (code: number, obj: any) => {
-                if (!res.headersSent) {
-                    res.setHeader('Content-Type', 'application/json; charset=utf-8');
-                    res.setHeader('Cache-Control', 'no-store');
-                    res.writeHead(code);
-                }
-                res.end(JSON.stringify(obj));
-            };
-
-            // Helper to read JSON body (max 1MB)
-            const readBody = async (): Promise<any> => {
-                return new Promise((resolve, reject) => {
-                    let data = '';
-                    let size = 0;
-                    req.on('data', (chunk) => {
-                        size += chunk.length;
-                        if (size > 1024 * 1024) {
-                            reject(new Error('Payload too large'));
-                            try { req.destroy(); } catch {}
-                            return;
-                        }
-                        data += chunk.toString();
-                    });
-                    req.on('end', () => {
-                        if (!data) return resolve({});
-                        try { resolve(JSON.parse(data)); }
-                        catch (e) { reject(new Error('Invalid JSON')); }
-                    });
-                    req.on('error', (e) => reject(e));
-                });
-            };
-
-            // ===== ACP Embedded API routing =====
-            const acpRestEnabled = process.env.KIRO_ENABLE_ACP_REST === '1';
-            if (this.acpController && acpRestEnabled) {
-                // Connect & Auth
-                if (method === 'POST' && pathname === '/api/connect') {
-                    const body = await readBody();
-                    const result = await this.acpController.connect(body);
-                    return sendJson(200, result);
-                }
-                if (method === 'GET' && pathname === '/api/auth/methods') {
-                    return sendJson(200, { methods: this.acpController.getAuthMethods() });
-                }
-                if (method === 'POST' && pathname === '/api/authenticate') {
-                    const body = await readBody();
-                    try {
-                        const out = await this.acpController.authenticate(body);
-                        return sendJson(200, out);
-                    } catch (err: any) {
-                        return sendJson(400, { error: err?.message || String(err) });
-                    }
-                }
-
-                // Session
-                if (method === 'POST' && pathname === '/api/session/new') {
-                    const body = await readBody();
-                    try {
-                        const resp = await this.acpController.newSession(body);
-                        return sendJson(200, resp);
-                    } catch (err: any) {
-                        const msg = err?.message || String(err);
-                        if (err?.code === 401 || err?.authRequired) {
-                            return sendJson(401, { error: msg, authRequired: true, authMethods: err?.authMethods || this.acpController.getAuthMethods() });
-                        }
-                        return sendJson(500, { error: msg });
-                    }
-                }
-                if (method === 'POST' && pathname === '/api/session/setMode') {
-                    const body = await readBody();
-                    try {
-                        const out = await this.acpController.setMode(body);
-                        return sendJson(200, out);
-                    } catch (err: any) {
-                        return sendJson(400, { error: err?.message || String(err) });
-                    }
-                }
-                if (method === 'POST' && pathname === '/api/cancel') {
-                    const body = await readBody();
-                    try {
-                        const out = await this.acpController.cancel(body);
-                        return sendJson(200, out);
-                    } catch (err: any) {
-                        return sendJson(400, { error: err?.message || String(err) });
-                    }
-                }
-
-                // Prompt
-                if (method === 'POST' && pathname === '/api/prompt') {
-                    const body = await readBody();
-                    try {
-                        const resp = await this.acpController.prompt(body);
-                        return sendJson(200, resp);
-                    } catch (err: any) {
-                        const msg = err?.message || String(err);
-                        if (err?.code === 401 || err?.authRequired) {
-                            return sendJson(401, { error: msg, authRequired: true, authMethods: err?.authMethods || this.acpController.getAuthMethods() });
-                        }
-                        return sendJson(500, { error: msg });
-                    }
-                }
-
-                // Models (optional)
-                if (method === 'GET' && pathname === '/api/models') {
-                    const sid = typeof query.sessionId === 'string' ? query.sessionId : undefined;
-                    const models = await this.acpController.listModels(sid);
-                    return sendJson(200, models);
-                }
-                if (method === 'POST' && pathname === '/api/model/select') {
-                    const body = await readBody();
-                    try {
-                        const out = await this.acpController.selectModel(body);
-                        return sendJson(200, out);
-                    } catch (err: any) {
-                        return sendJson(400, { error: err?.message || String(err) });
-                    }
-                }
-
-                // Permission
-                if (method === 'POST' && pathname === '/api/permission') {
-                    const body = await readBody();
-                    try {
-                        const out = await this.acpController.permission(body);
-                        return sendJson(200, out);
-                    } catch (err: any) {
-                        return sendJson(500, { error: err?.message || String(err) });
-                    }
-                }
-
-                // Terminals
-                if (method === 'POST' && pathname === '/api/terminal/create') {
-                    const body = await readBody();
-                    try { return sendJson(200, this.acpController.terminalCreate(body)); }
-                    catch (err: any) { return sendJson(400, { error: err?.message || String(err) }); }
-                }
-                if (method === 'POST' && pathname === '/api/terminal/output') {
-                    const body = await readBody();
-                    try { return sendJson(200, this.acpController.terminalOutput(body)); }
-                    catch (err: any) { return sendJson(400, { error: err?.message || String(err) }); }
-                }
-                if (method === 'POST' && pathname === '/api/terminal/kill') {
-                    const body = await readBody();
-                    try { return sendJson(200, this.acpController.terminalKill(body)); }
-                    catch (err: any) { return sendJson(400, { error: err?.message || String(err) }); }
-                }
-                if (method === 'POST' && pathname === '/api/terminal/release') {
-                    const body = await readBody();
-                    try { return sendJson(200, this.acpController.terminalRelease(body)); }
-                    catch (err: any) { return sendJson(400, { error: err?.message || String(err) }); }
-                }
-                if (method === 'POST' && pathname === '/api/terminal/waitForExit') {
-                    const body = await readBody();
-                    try { const out = await this.acpController.terminalWaitForExit(body); return sendJson(200, out); }
-                    catch (err: any) { return sendJson(400, { error: err?.message || String(err) }); }
-                }
-
-                // Sessions persistence
-                if (method === 'GET' && pathname === '/api/sessions') {
-                    return sendJson(200, this.acpController.listSessions());
-                }
-                if (method === 'GET' && pathname === '/api/session/last') {
-                    return sendJson(200, this.acpController.lastSession());
-                }
-                if (method === 'POST' && pathname === '/api/session/select') {
-                    const body = await readBody();
-                    try { const out = await this.acpController.selectSession(body); return sendJson(200, out); }
-                    catch (err: any) { return sendJson(400, { error: err?.message || String(err) }); }
-                }
-                if (method === 'POST' && pathname === '/api/session/delete') {
-                    const body = await readBody();
-                    try { const out = await this.acpController.deleteSession(body); return sendJson(200, out); }
-                    catch (err: any) { return sendJson(400, { error: err?.message || String(err) }); }
-                }
-
-                // Threads persistence
-                if (method === 'GET' && pathname === '/api/threads') {
-                    try { const out = await this.acpController.listThreads(); return sendJson(200, out); }
-                    catch (err: any) { return sendJson(500, { error: err?.message || String(err) }); }
-                }
-                if (method === 'GET' && pathname.startsWith('/api/thread/')) {
-                    const id = decodeURIComponent(pathname.substring('/api/thread/'.length));
-                    try { const out = await this.acpController.getThread(id); return sendJson(200, out); }
-                    catch (err: any) { return sendJson(404, { error: err?.message || 'not found' }); }
-                }
-
-                // Diff apply (minimal)
-                if (method === 'POST' && pathname === '/api/diff/apply') {
-                    const body = await readBody();
-                    try {
-                        const out = await this.acpController.applyDiff(body);
-                        return sendJson(200, out);
-                    } catch (err: any) {
-                        const status = err?.code === 400 ? 400 : 500;
-                        return sendJson(status, { error: err?.message || String(err) });
-                    }
-                }
-            }
-
-            // Routing
-            if (method === 'GET' && pathname === '/api/tunnels') {
-                const tunnels = cfGetActiveTunnels();
-                return sendJson(200, { success: true, tunnels });
-            }
-
-            if (method === 'GET' && pathname === '/api/tunnels/status') {
-                const status = await cfGetTunnelsSummary();
-                return sendJson(200, { success: true, status });
-            }
-
-            if (method === 'POST' && pathname === '/api/tunnels/create') {
-                const body = await readBody();
-                const localPort = Number(body.localPort || 0);
-                const name = typeof body.name === 'string' ? body.name : undefined;
-                const token = typeof body.token === 'string' ? body.token : undefined;
-                const type: 'quick' | 'named' = name || token ? 'named' : 'quick';
-
-                if (!localPort || isNaN(localPort)) {
-                    return sendJson(400, { success: false, error: 'localPort is required' });
-                }
-
-                const tunnel = await cfCreateTunnel({ localPort, name, token, type });
-                return sendJson(200, { success: true, tunnel });
-            }
-
-            if (method === 'POST' && pathname === '/api/tunnels/stop') {
-                const body = await readBody();
-                const id = typeof body.id === 'string' ? body.id : undefined;
-                const pid = typeof body.pid === 'number' ? body.pid : undefined;
-
-                let ok = false;
-                if (id) {
-                    ok = await cfStopTunnelById(id);
-                } else if (typeof pid === 'number' && pid > 0) {
-                    // Use exported killProcessTree to terminate
-                    const { killProcessTree } = await import('./CloudflaredManager');
-                    ok = await killProcessTree(pid);
-                } else {
-                    return sendJson(400, { success: false, error: 'id or pid is required' });
-                }
-                return sendJson(200, { success: ok });
-            }
-
-            if (method === 'POST' && pathname === '/api/tunnels/stopAll') {
-                const count = await cfStopAllTunnels();
-                return sendJson(200, { success: true, stopped: count });
-            }
-
-            if (method === 'POST' && pathname === '/api/cloudflared/install') {
-                const bin = await cfEnsure(undefined);
-                return sendJson(200, { success: true, binary: bin });
-            }
-
-            // Unknown API route
-            return sendJson(404, { success: false, error: 'Not Found' });
-
-        } catch (error) {
-            const msg = error instanceof Error ? error.message : 'Unknown API error';
-            if (!res.headersSent) {
-                res.setHeader('Content-Type', 'application/json; charset=utf-8');
-            }
-            res.writeHead(500);
-            res.end(JSON.stringify({ success: false, error: msg }));
+    // No HTTP JSON API: all application RPCs use WebSocket services.
+    private async handleApiRequest(_req: http.IncomingMessage, res: http.ServerResponse, _pathname: string, _query: any): Promise<void> {
+        if (!res.headersSent) {
+            res.setHeader('Content-Type', 'application/json; charset=utf-8');
         }
+        res.writeHead(404);
+        res.end(JSON.stringify({ success: false, error: 'API disabled. Use WebSocket endpoint /ws' }));
     }
 
     /**

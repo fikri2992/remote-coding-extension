@@ -1,8 +1,19 @@
-import { WebServer, WebServerConfig } from '../server/WebServer';
+import { HttpServer } from '../server/HttpServer';
 import { WebSocketServer } from '../server/WebSocketServer';
+import { ServerConfig } from '../server/interfaces';
 import { TerminalService } from './services/TerminalService';
 import { CLIGitService } from './services/GitService';
 import { CLIFileSystemService } from './services/FileSystemService';
+import { AcpHttpController } from '../acp/AcpHttpController';
+import {
+  createTunnel as cfCreateTunnel,
+  getActiveTunnels as cfGetActiveTunnels,
+  getTunnelsSummary as cfGetTunnelsSummary,
+  stopTunnelById as cfStopTunnelById,
+  stopAllTunnels as cfStopAllTunnels,
+  ensureCloudflared as cfEnsure,
+  killProcessTree as cfKillTree,
+} from '../server/CloudflaredManager';
 import fs from 'fs/promises';
 import path from 'path';
 
@@ -55,11 +66,12 @@ export interface CliServerStatus {
 }
 
 export class CliServer {
-  private webServer?: WebServer | undefined;
+  private webServer?: HttpServer | undefined;
   private webSocketServer?: WebSocketServer | undefined;
   private terminalService?: TerminalService | undefined;
   private gitService?: CLIGitService | undefined;
   private filesystemService?: CLIFileSystemService | undefined;
+  private acpController?: AcpHttpController | undefined;
   private isRunning = false;
   private config?: CliConfig;
   private configPath?: string;
@@ -99,20 +111,18 @@ export class CliServer {
       console.log(`📁 Configuration: ${this.configPath}`);
       console.log(`🌐 Port: ${port}`);
 
-      // Start web server with React frontend
-      const webServerConfig: WebServerConfig = {
-        port: port,
-        host: this.config.server.host,
-        distPath: './src/webview/react-frontend/dist'
+      // Start unified HTTP server (serves React dist; WS upgrades attach here)
+      const serverCfg: ServerConfig = {
+        httpPort: port,
+        autoStartTunnel: false,
       };
-
-      this.webServer = new WebServer(webServerConfig);
+      this.webServer = new HttpServer(serverCfg);
       await this.webServer.start();
 
       // Start WebSocket server attached to the HTTP server
       this.webSocketServer = new WebSocketServer(
         { httpPort: port },
-        (this.webServer as any).server,
+        this.webServer.nodeServer!,
         '/ws'
       );
       await this.webSocketServer.start();
@@ -146,6 +156,11 @@ export class CliServer {
 
       // Log filesystem service configuration for debugging
       console.log(`📁 FileSystem Service config:`, this.filesystemService.getConfig());
+
+      // Initialize ACP controller (WS-only; no REST endpoints)
+      console.log(`🤖 Initializing ACP controller (WS-only)...`);
+      this.acpController = new AcpHttpController();
+      await this.acpController.init();
 
       // Register terminal service with WebSocket server
       if (this.webSocketServer) {
@@ -297,6 +312,148 @@ export class CliServer {
             }
           }
         });
+
+        // Register tunnels service (Cloudflared) over WebSocket
+        (this.webSocketServer as any).registerService('tunnels', {
+          handle: async (_clientId: string, message: any) => {
+            try {
+              const op = message.op || message.operation || message.data?.operation;
+              const body = message.payload || message.data || {};
+              switch (op) {
+                case 'list':
+                  return { success: true, data: cfGetActiveTunnels() };
+                case 'status':
+                  return { success: true, data: await cfGetTunnelsSummary() };
+                case 'create': {
+                  const localPort = Number(body.localPort || 0);
+                  if (!localPort || Number.isNaN(localPort)) {
+                    return { success: false, error: 'localPort is required' };
+                  }
+                  const name = typeof body.name === 'string' ? body.name : undefined;
+                  const token = typeof body.token === 'string' ? body.token : undefined;
+                  const type: 'quick' | 'named' = name || token ? 'named' : 'quick';
+                  const tunnel = await cfCreateTunnel({ localPort, name, token, type });
+                  return { success: true, data: tunnel };
+                }
+                case 'stop': {
+                  const id = typeof body.id === 'string' ? body.id : undefined;
+                  const pid = typeof body.pid === 'number' ? body.pid : undefined;
+                  let ok = false;
+                  if (id) ok = await cfStopTunnelById(id);
+                  else if (pid && pid > 0) ok = await cfKillTree(pid);
+                  else return { success: false, error: 'id or pid is required' };
+                  return { success: true, data: { ok } };
+                }
+                case 'stopAll': {
+                  const count = await cfStopAllTunnels();
+                  return { success: true, data: { stopped: count } };
+                }
+                case 'install': {
+                  const bin = await cfEnsure(undefined);
+                  return { success: true, data: { binary: bin } };
+                }
+                default:
+                  return { success: false, error: `Unknown tunnels op: ${op}` };
+              }
+            } catch (error) {
+              return {
+                success: false,
+                error: error instanceof Error ? error.message : 'Unknown error'
+              };
+            }
+          },
+          onClientDisconnect: (_clientId: string) => {}
+        });
+
+        // Register ACP service (WebSocket only)
+        (this.webSocketServer as any).registerService('acp', {
+          handle: async (_clientId: string, message: any) => {
+            if (!this.acpController) {
+              return { error: 'ACP service not available' };
+            }
+            try {
+              const operation = message.op;
+              const payload = message.payload || {};
+              switch (operation) {
+                case 'connect':
+                  return { success: true, data: await this.acpController.connect(payload) };
+                case 'authenticate':
+                  return { success: true, data: await this.acpController.authenticate(payload) };
+                case 'authMethods':
+                  return { success: true, data: { methods: this.acpController.getAuthMethods() } };
+                case 'session.new':
+                  return { success: true, data: await this.acpController.newSession(payload) };
+                case 'session.setMode':
+                  return { success: true, data: await this.acpController.setMode(payload) };
+                case 'cancel':
+                  return { success: true, data: await this.acpController.cancel(payload) };
+                case 'prompt':
+                  return { success: true, data: await this.acpController.prompt(payload) };
+                case 'disconnect':
+                  return { success: true, data: await this.acpController.disconnect() };
+                case 'models.list':
+                  return { success: true, data: await this.acpController.listModels(payload.sessionId) };
+                case 'model.select':
+                  return { success: true, data: await this.acpController.selectModel(payload) };
+                case 'permission':
+                  return { success: true, data: await this.acpController.permission(payload) };
+                case 'sessions.list':
+                  return { success: true, data: this.acpController.listSessions() };
+                case 'session.select':
+                  return { success: true, data: await this.acpController.selectSession(payload) };
+                case 'session.delete':
+                  return { success: true, data: await this.acpController.deleteSession(payload) };
+                case 'terminal.create':
+                  return { success: true, data: this.acpController.terminalCreate(payload) };
+                case 'terminal.output':
+                  return { success: true, data: this.acpController.terminalOutput(payload) };
+                case 'terminal.kill':
+                  return { success: true, data: this.acpController.terminalKill(payload) };
+                case 'terminal.release':
+                  return { success: true, data: this.acpController.terminalRelease(payload) };
+                case 'terminal.waitForExit':
+                  return { success: true, data: await this.acpController.terminalWaitForExit(payload) };
+                case 'diff.apply':
+                  return { success: true, data: await this.acpController.applyDiff(payload) };
+                case 'session.last':
+                  return { success: true, data: this.acpController.lastSession() };
+                case 'threads.list':
+                  return { success: true, data: await this.acpController.listThreads() };
+                case 'thread.get':
+                  return { success: true, data: await this.acpController.getThread(payload.id) };
+                default:
+                  return { error: `Unknown ACP operation: ${operation}` };
+              }
+            } catch (error) {
+              return {
+                success: false,
+                error: error instanceof Error ? error.message : 'Unknown error'
+              };
+            }
+          },
+          onClientDisconnect: (_clientId: string) => {
+            // No special handling needed
+          }
+        });
+
+        // Bridge ACP event bus to all connected WS clients for live feedback
+        try {
+          const forward = (msg: any) => {
+            try { this.webSocketServer?.broadcast(msg); } catch {}
+          };
+          const bus = require('../acp/AcpEventBus');
+          if (bus && bus.AcpEventBus && bus.AcpEventBus.on) {
+            bus.AcpEventBus.on('agent_connect', forward);
+            bus.AcpEventBus.on('agent_initialized', forward);
+            bus.AcpEventBus.on('agent_stderr', forward);
+            bus.AcpEventBus.on('agent_exit', forward);
+            bus.AcpEventBus.on('permission_request', forward);
+            bus.AcpEventBus.on('terminal_output', forward);
+            bus.AcpEventBus.on('terminal_exit', forward);
+            bus.AcpEventBus.on('session_update', forward);
+            console.log('🔗 ACP event bus bridged to WebSocket broadcast');
+          }
+        } catch {}
       }
 
       this.isRunning = true;
@@ -363,10 +520,10 @@ export class CliServer {
       isRunning: this.isRunning,
       config: this.config,
       configPath: this.configPath,
-      port: this.webServer ? (this.webServer as any).status?.port : undefined,
+      ...(this.webServer ? { port: this.webServer.port } : {}),
       uptime: this.isRunning && this.startTime ? Date.now() - this.startTime.getTime() : undefined,
       startTime: this.startTime,
-      webServerStatus: this.webServer ? (this.webServer as any).status : undefined,
+      ...(this.webServer ? { webServerStatus: this.webServer.getDiagnostics() } : {}),
       terminalStats: this.terminalService ? this.terminalService.getStats() : undefined,
       gitStats: this.gitService ? {
         repositoryCache: this.gitService['repositoryCache'].size,

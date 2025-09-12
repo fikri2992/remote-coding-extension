@@ -84,4 +84,9 @@ export default class SessionsStore {
     }
     await this.save();
   }
+
+  async clearLast(): Promise<void> {
+    this.data.lastSessionId = null;
+    await this.save();
+  }
 }

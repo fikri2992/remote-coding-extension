@@ -38,8 +38,8 @@ src/
 ## Development Workflow
 
 ### Build Commands
-- `npm run build` - Complete build (extension + CLI + frontend)
-- `npm run build:cli` - CLI-only build (faster iteration)
+- `npm run build` - Complete build (agent + CLI + frontend)
+- `npm run compile` - CLI-only TypeScript compile
 - `npm run dev:cli` - Quick CLI development cycle
 - `npm run compile:watch` - TypeScript watch mode
 
@@ -49,7 +49,7 @@ src/
 
 ### Development Iteration
 1. **CLI changes**: `npm run dev:cli` → restart server
-2. **Frontend changes**: `npm run build:frontend:cli` → refresh browser
+2. **Frontend changes**: `npm run build:react` → refresh browser
 3. **Extension changes**: `npm run build` → reload Extension Development Host (Ctrl+R)
 
 ## Configuration
@@ -72,7 +72,7 @@ src/
 ### Common Issues
 - **Build failures**: `npm run clean && npm install && npm run build`
 - **Port conflicts**: Use `--port 3901` flag
-- **Frontend not loading**: `npm run build:frontend:cli`
+- **Frontend not loading**: `npm run build:react`
 
 ### Status Checking
 - `npm run test:cli` - Check server status

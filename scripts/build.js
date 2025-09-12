@@ -33,7 +33,7 @@ function main() {
 
   // Build React frontend
   console.log('Building React frontend...');
-  run('npm run build:react:prod');
+  run('npm run build:react');
 
   if (target === 'cli' || target === 'all') {
     console.log('Packaging CLI binaries...');
@@ -48,4 +48,3 @@ if (require.main === module) {
 }
 
 module.exports = { run };
-

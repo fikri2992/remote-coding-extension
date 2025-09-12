@@ -458,6 +458,8 @@ export class WebSocketServer {
           } 
         });
       }
+      // Prevent duplicate handling by the generic service router
+      return;
     }
 
     // Git protocol - Route to registered git service
@@ -508,6 +510,8 @@ export class WebSocketServer {
           } 
         });
       }
+      // Prevent duplicate handling by the generic service router
+      return;
     }
 
     // VS Code command execution protocol
@@ -569,6 +573,8 @@ export class WebSocketServer {
         
         this.sendToClient(connectionId, { type: 'terminal', id, data: { ok: false, error: errMsg } });
       });
+      // Prevent duplicate handling by the generic service router
+      return;
     }
 
     // Generic service routing (e.g., 'acp')

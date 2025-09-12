@@ -5,6 +5,7 @@ import { TunnelActions } from '../components/TunnelActions';
 import { TunnelInfo, CreateTunnelRequest } from '../types/tunnel';
 import { AlertCircle, CheckCircle, Info } from 'lucide-react';
 import { useToast } from '../components/ui/toast';
+import useConfirm from '../lib/hooks/useConfirm';
 
 // VS Code API with fallback for development
 declare const acquireVsCodeApi: () => any;
@@ -34,6 +35,7 @@ export const TunnelManagerPage: React.FC = () => {
     message: string;
   } | null>(null);
   const { show } = useToast();
+  const [confirm, ConfirmUI] = useConfirm();
 
   // Handle messages from extension
   useEffect(() => {
@@ -117,6 +119,15 @@ export const TunnelManagerPage: React.FC = () => {
   };
 
   const handleStopTunnel = async (tunnelId: string) => {
+    const target = tunnels.find(t => t.id === tunnelId);
+    const ok = await confirm({
+      title: 'Stop tunnel?',
+      description: target?.name ? `This will stop “${target.name}” and close its public URL.` : 'This will stop the tunnel and close its public URL.',
+      confirmLabel: 'Stop',
+      cancelLabel: 'Cancel',
+      confirmVariant: 'destructive',
+    });
+    if (!ok) return;
     try {
       if (isVSCode) {
         vscode!.postMessage({ type: 'stopTunnel', tunnelId });
@@ -131,6 +142,17 @@ export const TunnelManagerPage: React.FC = () => {
   };
 
   const handleStopAll = async () => {
+    const running = tunnels.filter(t => t.status === 'running').length;
+    if (running > 0) {
+      const ok = await confirm({
+        title: 'Stop all tunnels?',
+        description: `This will stop ${running} running tunnel${running === 1 ? '' : 's'} and close their URLs.`,
+        confirmLabel: 'Stop All',
+        cancelLabel: 'Cancel',
+        confirmVariant: 'destructive',
+      });
+      if (!ok) return;
+    }
     setLoading(true);
     try {
       if (isVSCode) {
@@ -207,11 +229,13 @@ export const TunnelManagerPage: React.FC = () => {
       {/* Active Tunnels List */}
       <div className="space-y-4 neo:divide-y-[3px] neo:divide-border">
         <h3 className="text-lg font-semibold text-foreground">Active Tunnels</h3>
-        <TunnelList
-          tunnels={tunnels}
-          onStopTunnel={handleStopTunnel}
-          loading={refreshing}
-        />
+      <TunnelList
+        tunnels={tunnels}
+        onStopTunnel={handleStopTunnel}
+        loading={refreshing}
+      />
+
+      <ConfirmUI />
       </div>
 
       {/* Status Summary */}

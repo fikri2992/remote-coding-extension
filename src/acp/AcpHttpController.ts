@@ -187,6 +187,8 @@ export class AcpHttpController {
     if (!sessionId) throw new Error('no sessionId');
     let req: PromptRequest = { sessionId, prompt } as PromptRequest;
     try {
+      // Persist the user's prompt so it shows up in history on reload
+      try { await this.threads.append(sessionId, { type: 'user_message', content: prompt }); } catch {}
       const resp = await this.conn.prompt(req);
       try { await this.sessions.touch(sessionId); } catch {}
       return resp;
@@ -207,6 +209,7 @@ export class AcpHttpController {
             // Retry prompt on the new session
             sessionId = newSid;
             req = { sessionId: newSid, prompt } as PromptRequest;
+            try { await this.threads.append(newSid, { type: 'user_message', content: prompt }); } catch {}
             const retry = await this.conn.prompt(req);
             try { await this.sessions.touch(newSid); } catch {}
             return retry;

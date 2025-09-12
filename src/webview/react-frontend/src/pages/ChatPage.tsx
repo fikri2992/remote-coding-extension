@@ -1,11 +1,16 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useWebSocket } from '@/components/WebSocketProvider';
 import { Button } from '@/components/ui/button';
+import useConfirm from '@/lib/hooks/useConfirm';
 import { cn } from '@/lib/utils';
-import { Send } from 'lucide-react';
+import { Send, CircleDot } from 'lucide-react';
 import { MentionSuggestions } from '@/components/chat/MentionSuggestions';
 import MessageBubble from '@/components/chat/MessageBubble';
+import ToolCallsGroup from '@/components/chat/ToolCallsGroup';
 import Markdown from '@/components/chat/Markdown';
+import DiffBlock from '@/components/chat/DiffBlock';
+import TerminalBlock from '@/components/chat/TerminalBlock';
+import TextAttachmentBlock from '@/components/chat/TextAttachmentBlock';
 import ContextChip from '@/components/chat/ContextChip';
 import ModeChip from '@/components/chat/ModeChip';
 import ModelPickerSheet from '@/components/chat/ModelPickerSheet';
@@ -47,6 +52,8 @@ export const ChatPage: React.FC = () => {
   const [modelSheetOpen, setModelSheetOpen] = useState(false);
   const [modeSheetOpen, setModeSheetOpen] = useState(false);
   const [sessionSheetOpen, setSessionSheetOpen] = useState(false);
+  const [confirm, ConfirmUI] = useConfirm();
+  const [collapseTools, setCollapseTools] = useState<boolean>(true);
 
   // Composer
   const [input, setInput] = useState('');
@@ -327,9 +334,10 @@ export const ChatPage: React.FC = () => {
 
   // Sessions picker helpers
   async function refreshThreads() {
+    // Use sessions.list so UI reflects created/selected sessions even before updates exist
     try {
-      const res = await wsFirst<any>('threads.list', {});
-      const list = Array.isArray(res?.threads) ? res.threads : [];
+      const res = await wsFirst<any>('sessions.list', {});
+      const list = Array.isArray(res?.sessions) ? res.sessions : [];
       setThreads(list);
     } catch { setThreads([]); }
   }
@@ -344,7 +352,29 @@ export const ChatPage: React.FC = () => {
   }
 
   async function handleDeleteSession(id: string) {
-    try { await wsFirst('session.delete', { sessionId: id }); await refreshThreads(); } catch (e: any) { alert(e?.message || String(e)); }
+    const ok = await confirm({
+      title: 'Delete session?',
+      description: 'This will remove the session’s local history and cannot be undone.',
+      confirmLabel: 'Delete',
+      cancelLabel: 'Cancel',
+      confirmVariant: 'destructive',
+    });
+    if (!ok) return;
+    try {
+      const resp = await wsFirst<any>('session.delete', { sessionId: id });
+      const nextId: string | null = (resp?.lastSessionId || null) as any;
+      if (sessionId === id) {
+        setSessionId(nextId);
+        setMessages([]);
+        if (nextId) {
+          try {
+            await wsFirst('session.select', { sessionId: nextId });
+            await loadThreadHistory(nextId);
+          } catch {}
+        }
+      }
+      await refreshThreads();
+    } catch (e: any) { alert(e?.message || String(e)); }
   }
 
   async function handleNewSession() {
@@ -373,9 +403,9 @@ export const ChatPage: React.FC = () => {
           if (!part) return null;
           if (part.type === 'text') return <Markdown key={i} className="prose prose-invert max-w-none text-sm leading-relaxed" text={String(part.text || '')} />;
           if (part.type === 'resource_link') { const uri = String(part.uri || ''); const name = uri.split('/').pop() || uri; return (<div key={i} className="text-xs"><a className="underline" href={uri} target="_blank" rel="noreferrer">@{name}</a></div>); }
-          if (part.type === 'resource' && 'text' in (part.resource || {})) { const uri = String((part.resource as any).uri || ''); const name = uri ? (uri.split('/').pop() || uri) : 'context'; return (<div key={i} className="border border-border rounded p-2"><div className="text-[10px] opacity-70 mb-1">@{name}</div><pre className="text-xs whitespace-pre-wrap">{String((part.resource as any).text || '').slice(0, 4000)}</pre></div>); }
-          if (part.type === 'diff' && (part.newText || part.diff?.newText)) { const path = part.path || part.file || part.filepath || part.uri || ''; return (<div key={i} className="border border-border rounded"><div className="flex items-center justify-between px-2 py-1 bg-muted/40 text-xs"><div className="opacity-70 truncate">{path || '(unknown path)'}</div><button className="px-2 py-0.5 border border-input rounded text-xs hover:bg-muted" onClick={async () => { try { const pth = String(path || ''); const newText = String(part.diff?.newText || part.newText || ''); await wsFirst('diff.apply', { path: pth, newText }); alert('Applied diff to ' + (pth || '(unknown)')); } catch (e: any) { alert(e?.message || String(e)); } }}>Apply</button></div><pre className="p-2 text-xs whitespace-pre-wrap">{String(part.diff?.newText || part.newText).slice(0, 4000)}</pre></div>); }
-          if (part.type === 'terminal') { const out = typeof part.output === 'string' ? part.output : ''; if (out) return <pre key={i} className="bg-background p-2 rounded border border-border whitespace-pre-wrap">{out.slice(0, 4000)}</pre>; const tid = part.terminalId || part.id; return <div key={i} className="text-xs text-muted-foreground">[terminal]{tid ? ` (${tid})` : ''}</div>; }
+          if (part.type === 'resource' && 'text' in (part.resource || {})) { const uri = String((part.resource as any).uri || ''); const name = uri ? (uri.split('/').pop() || uri) : 'context'; return (<TextAttachmentBlock key={i} label={name} text={String((part.resource as any).text || '')} initiallyCollapsed />); }
+          if (part.type === 'diff' && (part.newText || part.diff?.newText)) { const path = part.path || part.file || part.filepath || part.uri || ''; const text = String(part.diff?.newText || part.newText || ''); return (<DiffBlock key={i} path={path || '(unknown path)'} diffText={text} initiallyCollapsed onApply={async () => { try { const pth = String(path || ''); await wsFirst('diff.apply', { path: pth, newText: text }); alert('Applied diff to ' + (pth || '(unknown)')); } catch (e: any) { alert(e?.message || String(e)); } }} />); }
+          if (part.type === 'terminal') { const out = typeof part.output === 'string' ? part.output : ''; if (out) return <TerminalBlock key={i} output={out} terminalId={String(part.terminalId || part.id || '') || undefined} initiallyCollapsed />; const tid = part.terminalId || part.id; return <div key={i} className="text-xs text-muted-foreground">[terminal]{tid ? ` (${tid})` : ''}</div>; }
           if (part.type === 'image') { try { const url = `data:${part.mimeType};base64,${part.data}`; return <img key={i} src={url} alt="image" className="max-w-full rounded border border-border" />; } catch { return <div key={i} className="text-xs text-muted-foreground">[image]</div>; } }
           if (part.type === 'audio') { try { const url = `data:${part.mimeType};base64,${part.data}`; return (<audio key={i} controls className="w-full"><source src={url} type={String(part.mimeType || 'audio/mpeg')} /></audio>); } catch { return <div key={i} className="text-xs text-muted-foreground">[audio]</div>; } }
           return <pre key={i} className="text-xs text-muted-foreground overflow-auto whitespace-pre-wrap">{JSON.stringify(part, null, 2)}</pre>;
@@ -527,8 +557,18 @@ export const ChatPage: React.FC = () => {
         <div className="flex items-center gap-2">
           <div className="text-sm font-medium">Chat</div>
           <ModeChip modeId={currentModeId} hidden={!modes} onClick={() => setModeSheetOpen(true)} />
-          <button className="text-xs px-2 py-1 rounded-full border border-border bg-muted/40 hover:bg-muted" onClick={() => { setSessionSheetOpen(true); refreshThreads().catch(()=>{}); }}>
+          <button className="text-xs px-2 py-1 rounded-full border border-border bg-muted/40 hover:bg-muted" onClick={() => { setSessionSheetOpen(true); refreshThreads().catch(()=>{}); refreshModels().catch(()=>{}); }}>
             Sessions
+          </button>
+          <button
+            className={cn(
+              'text-xs px-2 py-1 rounded-full border border-border bg-muted/40 hover:bg-muted',
+              !collapseTools && 'bg-primary/10 border-primary'
+            )}
+            title="Toggle tool call visibility"
+            onClick={() => setCollapseTools((v) => !v)}
+          >
+            {collapseTools ? 'Tools: collapsed' : 'Tools: expanded'}
           </button>
           {!!models.length && (
             <button className="text-xs px-2 py-1 rounded-full border border-border bg-muted/40 hover:bg-muted" onClick={() => setModelSheetOpen(true)}>
@@ -541,11 +581,40 @@ export const ChatPage: React.FC = () => {
 
       {/* Messages */}
       <div className="flex-1 overflow-auto p-3 space-y-2">
-        {messages.map((m) => (
-          <MessageBubble key={m.id} role={m.role}>
-            {renderMessageParts(m.parts)}
-          </MessageBubble>
-        ))}
+        {(() => {
+          const nodes: React.ReactNode[] = [];
+          for (let i = 0; i < messages.length; ) {
+            const m = messages[i];
+            if (m.role === 'tool') {
+              const group: any[] = [];
+              while (i < messages.length && messages[i].role === 'tool') {
+                group.push(messages[i]);
+                i++;
+              }
+              const items = group.map((tm) => {
+                const meta: any = tm.meta || {};
+                const parts = Array.isArray(tm.parts) && tm.parts.length > 0 && (tm.parts as any)[0]?.type === 'text' && String((tm.parts as any)[0].text || '').trim().toLowerCase().startsWith('[tool')
+                  ? (tm.parts as any).slice(1)
+                  : tm.parts;
+                return { id: meta.id || tm.id, name: meta.name, status: meta.status, content: renderMessageParts(parts as any) };
+              });
+              const running = items.some((it) => /running|in_progress|progress|execut/i.test(String(it.status || '')));
+              nodes.push((
+                <MessageBubble key={group[0].id + '-group'} role="tool">
+                  <ToolCallsGroup items={items} initiallyOpen={!collapseTools || running} />
+                </MessageBubble>
+              ));
+            } else {
+              nodes.push((
+                <MessageBubble key={m.id} role={m.role}>
+                  {renderMessageParts(m.parts)}
+                </MessageBubble>
+              ));
+              i++;
+            }
+          }
+          return nodes;
+        })()}
         <div ref={endRef} />
       </div>
 
@@ -632,27 +701,104 @@ export const ChatPage: React.FC = () => {
               <div className="font-semibold">Sessions</div>
               <Button variant="secondary" onClick={() => setSessionSheetOpen(false)}>Close</Button>
             </div>
-            <div className="mb-2 flex gap-2">
+            <div className="mb-4 flex gap-2 pr-2">
               <Button onClick={handleNewSession}>New Session</Button>
               <Button variant="secondary" onClick={() => refreshThreads()}>Refresh</Button>
+              {!!(modes && (modes.available_modes || modes.availableModes)?.length) && (
+                <Button variant="secondary" onClick={() => setModeSheetOpen(true)}>
+                  {currentModeId ? `Mode: ${currentModeId}` : 'Modes'}
+                </Button>
+              )}
+              {!!models.length && (
+                <Button variant="secondary" onClick={() => setModelSheetOpen(true)}>
+                  {currentModelId ? `Model: ${currentModelId}` : 'Models'}
+                </Button>
+              )}
             </div>
-            <div className="space-y-1 max-h-[50vh] overflow-auto">
+            <div className="space-y-3 max-h-[50vh] overflow-auto">
+              {/* Modes inline (like sessions) */}
+              {modes && (modes.available_modes || modes.availableModes)?.length ? (
+                <div className="space-y-1">
+                  <div className="text-xs font-semibold opacity-70 px-1">Modes</div>
+                  {(modes.available_modes || modes.availableModes || []).map((m: any) => (
+                    <div
+                      key={m.id}
+                      className={cn(
+                        'flex items-center gap-3 rounded px-3 py-2 border',
+                        currentModeId === m.id ? 'border-primary bg-primary/10' : 'border-input hover:bg-muted'
+                      )}
+                    >
+                      <button
+                        className={cn('text-left text-sm flex-1', currentModeId === m.id ? 'font-semibold' : 'font-normal')}
+                        onClick={() => handleSelectMode(m.id)}
+                      >
+                        {m.name || m.id}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+
+              {/* Models inline (like sessions) */}
+              {models.length ? (
+                <div className="space-y-1">
+                  <div className="text-xs font-semibold opacity-70 px-1">Models</div>
+                  {models.map((mid) => (
+                    <div
+                      key={mid}
+                      className={cn(
+                        'flex items-center gap-3 rounded px-3 py-2 border',
+                        currentModelId === mid ? 'border-primary bg-primary/10' : 'border-input hover:bg-muted'
+                      )}
+                    >
+                      <button
+                        className={cn('text-left text-sm flex-1', currentModelId === mid ? 'font-semibold' : 'font-normal')}
+                        onClick={() => handleSelectModel(mid)}
+                      >
+                        {mid}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+
               {threads.length === 0 && (
                 <div className="text-xs text-muted-foreground">No sessions yet</div>
               )}
-              {threads.map((t) => (
-                <div key={t.id} className="flex items-center gap-2 border border-input rounded px-2 py-1">
-                  <button className="text-left text-sm flex-1 hover:underline" onClick={() => handleSelectSession(t.id)}>
-                    {t.title || t.id}
-                    <div className="text-[10px] opacity-60">{t.updatedAt || t.createdAt}</div>
-                  </button>
-                  <button className="text-xs px-2 py-0.5 border border-input rounded hover:bg-muted" onClick={() => handleDeleteSession(t.id)}>Delete</button>
-                </div>
-              ))}
+              {threads.map((t) => {
+                const active = t.id === sessionId;
+                return (
+                  <div
+                    key={t.id}
+                    className={cn(
+                      'relative flex items-center gap-3 rounded px-3 py-2 border',
+                      active ? 'border-primary bg-primary/10' : 'border-input hover:bg-muted'
+                    )}
+                    aria-current={active ? 'true' : undefined}
+                  >
+                    {active && (
+                      <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary rounded-l" aria-hidden />
+                    )}
+                    <button
+                      className={cn('text-left text-sm flex-1 inline-flex items-start gap-2', active ? 'font-semibold' : 'font-normal')}
+                      onClick={() => handleSelectSession(t.id)}
+                    >
+                      {active && <CircleDot className="w-4 h-4 mt-[2px] text-primary" />}
+                      <div className="min-w-0">
+                        <div className="truncate">{t.title || t.id}</div>
+                        <div className="text-[11px] opacity-70">{t.updatedAt || t.createdAt}</div>
+                      </div>
+                    </button>
+                    <Button variant="secondary" size="sm" onClick={() => handleDeleteSession(t.id)}>Delete</Button>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
       )}
+      {/* Global confirm dialog host */}
+      <ConfirmUI />
       {/* Mode Picker (simple) */}
       {modeSheetOpen && modes && (
         <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center">

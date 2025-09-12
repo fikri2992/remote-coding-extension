@@ -17,12 +17,12 @@ function escapeHtml(input: string): string {
 
 function renderInline(md: string): string {
   // inline code
-  let out = md.replace(/`([^`]+)`/g, (_m, p1) => `<code>${escapeHtml(p1)}</code>`);
+  let out = md.replace(/`([^`]+)`/g, (_m, p1) => `<code class="px-1.5 py-0.5 bg-muted/50 border border-border rounded text-[0.85em] font-mono">${escapeHtml(p1)}</code>`);
   // links
   out = out.replace(/\[([^\]]+)\]\((https?:[^\s)]+)\)/g, (_m, label, url) => {
     const safeUrl = escapeHtml(url);
     const safeLabel = escapeHtml(label);
-    return `<a href="${safeUrl}" target="_blank" rel="noreferrer" class="underline">${safeLabel}</a>`;
+    return `<a href="${safeUrl}" target="_blank" rel="noreferrer" class="underline decoration-2 underline-offset-2 hover:opacity-90">${safeLabel}</a>`;
   });
   return out;
 }
@@ -42,7 +42,7 @@ function renderBlocks(md: string): string {
       if (!inCode) {
         flushList();
         codeLang = line.trim().slice(3).trim();
-        html.push(`<pre class="bg-muted/30 border border-border rounded p-2 overflow-auto"><code>`);
+        html.push(`<pre class="bg-muted/40 border border-border rounded-lg p-3 overflow-auto text-xs leading-snug font-mono max-h-[520px]"><code>`);
         inCode = true;
       } else {
         html.push('</code></pre>');
@@ -66,13 +66,14 @@ function renderBlocks(md: string): string {
     const m = line.match(/^\s*(#{1,6})\s+(.*)$/);
     if (m) {
       const lvl = Math.min(6, m[1].length);
-      html.push(`<h${lvl} class="font-semibold mt-2">${renderInline(escapeHtml(m[2]))}</h${lvl}>`);
+      const cls = lvl <= 2 ? 'text-base font-semibold mt-3 mb-1' : (lvl === 3 ? 'text-[0.95rem] font-semibold mt-3 mb-1' : 'text-sm font-semibold mt-2 mb-1');
+      html.push(`<h${lvl} class="${cls}">${renderInline(escapeHtml(m[2]))}</h${lvl}>`);
       continue;
     }
 
     // paragraph or blank
-    if (line.trim().length === 0) { html.push('<br/>'); }
-    else { html.push(`<p>${renderInline(escapeHtml(line))}</p>`); }
+    if (line.trim().length === 0) { html.push('<div class="h-2"></div>'); }
+    else { html.push(`<p class="my-2">${renderInline(escapeHtml(line))}</p>`); }
   }
   flushList();
   if (inCode) { html.push('</code></pre>'); }
@@ -85,4 +86,3 @@ const Markdown: React.FC<MarkdownProps> = ({ text, className }) => {
 };
 
 export default Markdown;
-

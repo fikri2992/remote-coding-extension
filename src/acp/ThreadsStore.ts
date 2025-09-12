@@ -59,7 +59,14 @@ export default class ThreadsStore {
     if (!thread) {
       thread = { id, createdAt: now, updatedAt: now, updates: [] };
     }
-    thread.updates.push(update);
+    // Deduplicate consecutive identical updates to reduce noise
+    try {
+      const last = thread.updates.length > 0 ? thread.updates[thread.updates.length - 1] : undefined;
+      const same = last && JSON.stringify(last) === JSON.stringify(update);
+      if (!same) thread.updates.push(update);
+    } catch {
+      thread.updates.push(update);
+    }
     thread.updatedAt = now;
     await fs.writeFile(filePath, JSON.stringify(thread, null, 2), 'utf8');
 

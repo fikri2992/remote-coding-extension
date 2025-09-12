@@ -30,7 +30,7 @@
     "smoke:acp:ws": "node ./scripts/smoke-acp-ws.js",
     "postinstall": "npm run build:agent || true",
     "dev:server": "npm run compile && node ./out/cli/index.js start --skip-build",
-    "dev:full": "concurrently \"npm run dev:server\" \"npm run dev:frontend\"",
+    "dev:full": "concurrently \"npm run dev:server\" \"wait-on tcp:3900 && npm run dev:frontend\"",
     "package:cli": "npm run build && pkg ./out/cli/index.js --config pkg.config.json",
     "install:frontend": "cd src/webview/react-frontend && npm install",
     "install:agent": "cd claude-code-acp && npm install",
@@ -50,7 +50,8 @@
     "postcss": "^8.5.6",
     "rimraf": "^3.0.2",
     "tailwindcss": "^4.1.12",
-    "typescript": "^5.0.0"
+    "typescript": "^5.0.0",
+    "wait-on": "^7.0.1"
   },
   "dependencies": {
     "@types/uuid": "^10.0.0",

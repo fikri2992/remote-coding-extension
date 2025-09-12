@@ -389,6 +389,12 @@ export class CliServer {
                   return { success: true, data: await this.acpController.cancel(payload) };
                 case 'prompt':
                   return { success: true, data: await this.acpController.prompt(payload) };
+                case 'session.state':
+                  return { success: true, data: this.acpController.state() };
+                case 'session.ensureActive':
+                  return { success: true, data: { sessionId: await (this.acpController as any)['ensureActiveSession']() } };
+                case 'session.selectThread':
+                  return { success: true, data: await this.acpController.selectThread(payload) };
                 case 'disconnect':
                   return { success: true, data: await this.acpController.disconnect() };
                 case 'models.list':
@@ -451,6 +457,7 @@ export class CliServer {
             bus.AcpEventBus.on('terminal_output', forward);
             bus.AcpEventBus.on('terminal_exit', forward);
             bus.AcpEventBus.on('session_update', forward);
+            try { bus.AcpEventBus.on('session_recovered', forward); } catch {}
             console.log('🔗 ACP event bus bridged to WebSocket broadcast');
           }
         } catch {}

@@ -38,7 +38,7 @@ type ChatMessage = {
 type ContextItem = { id: string; type: 'file'; path: string; label: string; size?: number };
 
 export const ChatPage: React.FC = () => {
-  const { addMessageListener, sendAcp, isConnected, sendJson } = useWebSocket() as any;
+  const { addMessageListener, sendAcp, isConnected, sendJson, connect } = useWebSocket() as any;
 
   // Auto-connect/session state
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -53,35 +53,38 @@ export const ChatPage: React.FC = () => {
   const [modeSheetOpen, setModeSheetOpen] = useState(false);
   const [sessionSheetOpen, setSessionSheetOpen] = useState(false);
   const [confirm, ConfirmUI] = useConfirm();
-  const [collapseTools, setCollapseTools] = useState<boolean>(true);
+  // Group open persisted per thread
+  // Track the selected thread independently of agent session id
+  const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+  const [toolsGroupOpen, setToolsGroupOpen] = useState<boolean>(false);
   const [openToolMap, setOpenToolMap] = useState<Record<string, boolean>>({});
 
-  // Persist tool-collapse preference per session
+  // Persist group open preference per thread
   useEffect(() => {
-    const key = sessionId ? `chatToolsCollapsed:${sessionId}` : 'chatToolsCollapsed';
+    const key = activeThreadId ? `chatToolsGroupOpen:${activeThreadId}` : 'chatToolsGroupOpen';
     try {
       const v = localStorage.getItem(key);
-      if (v === '0') setCollapseTools(false);
-      else if (v === '1') setCollapseTools(true);
-      else setCollapseTools(true);
+      if (v === '1') setToolsGroupOpen(true);
+      else if (v === '0') setToolsGroupOpen(false);
+      else setToolsGroupOpen(false);
     } catch {}
-  }, [sessionId]);
+  }, [activeThreadId]);
 
   // Per-call open/close persisted per session
   useEffect(() => {
-    const key = sessionId ? `chatToolOpenMap:${sessionId}` : 'chatToolOpenMap';
+    const key = activeThreadId ? `chatToolOpenMap:${activeThreadId}` : 'chatToolOpenMap';
     try {
       const raw = localStorage.getItem(key);
       if (raw) setOpenToolMap(JSON.parse(raw));
       else setOpenToolMap({});
     } catch { setOpenToolMap({}); }
-  }, [sessionId]);
+  }, [activeThreadId]);
 
   const handleToolOpenChange = (id: string, open: boolean) => {
     setOpenToolMap((prev) => {
       const next = { ...prev, [id]: open } as Record<string, boolean>;
       try {
-        const key = sessionId ? `chatToolOpenMap:${sessionId}` : 'chatToolOpenMap';
+        const key = activeThreadId ? `chatToolOpenMap:${activeThreadId}` : 'chatToolOpenMap';
         localStorage.setItem(key, JSON.stringify(next));
       } catch {}
       return next;
@@ -112,7 +115,7 @@ export const ChatPage: React.FC = () => {
   const [gitChangedFiles, setGitChangedFiles] = useState<string[]>([]);
   const [threads, setThreads] = useState<Array<{ id: string; title?: string; createdAt: string; updatedAt: string }>>([]);
 
-  const canPrompt = useMemo(() => !!sessionId && input.trim().length > 0 && !sending, [sessionId, input, sending]);
+  const canPrompt = useMemo(() => input.trim().length > 0 && !sending, [input, sending]);
 
   const wsFirst = async <T = any,>(op: string, payload: any): Promise<T> => await sendAcp(op, payload);
 
@@ -139,6 +142,11 @@ export const ChatPage: React.FC = () => {
         const newId = msg.newSessionId || msg.sessionId;
         if (newId && typeof newId === 'string') {
           setSessionId(newId);
+          // Treat recovered session as the active thread id
+          try {
+            setActiveThreadId(newId);
+            localStorage.setItem('chat:activeThreadId', newId);
+          } catch {}
           // Best-effort refresh threads and current transcript for the new session
           try { refreshThreads(); } catch {}
           try { loadThreadHistory(newId); } catch {}
@@ -150,24 +158,50 @@ export const ChatPage: React.FC = () => {
     return unsub;
   }, [addMessageListener]);
 
-  // First time: auto-connect, create session, prime workspace data
+  // Restore once after WebSocket connects
+  const didRestoreRef = useRef(false);
   useEffect(() => {
+    if (!isConnected || didRestoreRef.current) return;
     (async () => {
       if (connecting) return;
       setConnecting(true);
       try {
+        try { connect?.(); } catch {}
         await safeConnect();
-        // Prefer last session if available; do not auto-create
-        let sid: string | null = null;
-        try {
-          const last = await wsFirst<any>('session.last', {});
-          sid = (last?.sessionId || last?.session_id || last?.id || null) as string | null;
-        } catch {}
-        // No new session is created automatically here
-        if (sid) {
-          setSessionId(sid);
-          // Load existing transcript for this session into chat
-          try { await loadThreadHistory(sid); } catch {}
+        // Try to restore the last selected thread from localStorage first
+        let restored = null as string | null;
+        try { restored = localStorage.getItem('chat:activeThreadId'); } catch {}
+        if (restored) {
+          try { setActiveThreadId(restored); } catch {}
+          // Ensure backend associates this thread, and adopt its session id
+          try {
+            const sel = await wsFirst<any>('session.selectThread', { threadId: restored });
+            const sid = (sel?.sessionId || sel?.session_id || sel?.data?.sessionId || sel?.data?.session_id || null) as string | null;
+            if (sid) setSessionId(sid);
+          } catch {}
+          try { await loadThreadHistory(restored); } catch {}
+        } else {
+          // Fall back to server state (last session) if no persisted thread
+          try {
+            const st = await wsFirst<any>('session.state', {});
+            const sid = (st?.sessionId || null) as string | null;
+            if (sid) {
+              setSessionId(sid);
+              try { setActiveThreadId(sid); localStorage.setItem('chat:activeThreadId', sid); } catch {}
+              try { await loadThreadHistory(sid); } catch {}
+            }
+          } catch {}
+          // As an offline-friendly fallback, try local last-session id
+          if (!sessionId) {
+            try {
+              const last = localStorage.getItem('chat:lastSessionId');
+              if (last) {
+                setSessionId(last);
+                try { setActiveThreadId(last); localStorage.setItem('chat:activeThreadId', last); } catch {}
+                try { await loadThreadHistory(last); } catch {}
+              }
+            } catch {}
+          }
         }
         // prime lists
         fetchGitStatus().catch(() => {});
@@ -177,10 +211,20 @@ export const ChatPage: React.FC = () => {
         // load threads list for picker
         refreshThreads().catch(() => {});
       } catch (e) {
-        console.warn('[chat] auto-connect failed', e);
-      } finally { setConnecting(false); }
+        console.warn('[chat] auto-restore failed', e);
+      } finally {
+        didRestoreRef.current = true;
+        setConnecting(false);
+      }
     })();
-  }, []);
+  }, [isConnected]);
+
+  // Persist last seen session id for faster local restore
+  useEffect(() => {
+    try {
+      if (sessionId) localStorage.setItem('chat:lastSessionId', sessionId);
+    } catch {}
+  }, [sessionId]);
 
   async function safeConnect() {
     try { await wsFirst('connect', {}); } catch {}
@@ -335,7 +379,20 @@ export const ChatPage: React.FC = () => {
         const now = Date.now();
         setMessages((prev) => [...prev, { id: `local-${now}-${prev.length}`, role: 'user', parts: prompt, ts: now } as any]);
       } catch {}
-      await wsFirst('prompt', { sessionId, prompt });
+      try {
+        const resp: any = await wsFirst('prompt', { prompt });
+        if (resp && typeof resp === 'object' && resp.success === false) {
+          throw new Error(String(resp.error || 'prompt failed'));
+        }
+      } catch (e: any) {
+        const msg = String(e?.message || e || '');
+        if (/not connected/i.test(msg) || /ACP service not available/i.test(msg)) {
+          try { await wsFirst('connect', {}); } catch {}
+          await wsFirst('prompt', { prompt });
+        } else {
+          throw e;
+        }
+      }
     } catch (err: any) {
       alert(err?.message || String(err));
     } finally { setSending(false); }
@@ -380,13 +437,49 @@ export const ChatPage: React.FC = () => {
     } catch { setThreads([]); }
   }
 
+  // Helper: extract a session id from various response shapes
+  function pickSessionId(res: any): string | null {
+    try {
+      if (!res || typeof res !== 'object') return null;
+      // Common shapes we might receive
+      if (typeof res.sessionId === 'string' && res.sessionId) return res.sessionId;
+      if (typeof res.session_id === 'string' && res.session_id) return res.session_id;
+      if (res.data && typeof res.data === 'object') {
+        if (typeof res.data.sessionId === 'string' && res.data.sessionId) return res.data.sessionId;
+        if (typeof res.data.session_id === 'string' && res.data.session_id) return res.data.session_id;
+      }
+      return null;
+    } catch { return null; }
+  }
+
   async function handleSelectSession(id: string) {
     try {
-      await wsFirst('session.select', { sessionId: id });
-      setSessionId(id);
+      const res = await wsFirst<any>('session.selectThread', { threadId: id });
+      // Prefer server-reported session id; fall back to thread id for UI state
+      const sid = pickSessionId(res) || id || null;
+      try { setActiveThreadId(id); localStorage.setItem('chat:activeThreadId', id); } catch {}
+      if (sid) setSessionId(sid);
       await loadThreadHistory(id);
       setSessionSheetOpen(false);
-    } catch (e: any) { alert(e?.message || String(e)); }
+    } catch (e: any) {
+      const msg = String(e?.message || e || '');
+      if (/not connected/i.test(msg) || /ACP service not available/i.test(msg)) {
+        try { await wsFirst('connect', {}); } catch {}
+        try {
+          const res2 = await wsFirst<any>('session.selectThread', { threadId: id });
+          const sid2 = pickSessionId(res2) || id || null;
+          try { setActiveThreadId(id); localStorage.setItem('chat:activeThreadId', id); } catch {}
+          if (sid2) setSessionId(sid2);
+          await loadThreadHistory(id);
+          setSessionSheetOpen(false);
+          return;
+        } catch (e2: any) {
+          alert(e2?.message || String(e2));
+        }
+      } else {
+        alert(e?.message || String(e));
+      }
+    }
   }
 
   async function handleDeleteSession(id: string) {
@@ -403,6 +496,10 @@ export const ChatPage: React.FC = () => {
       const nextId: string | null = (resp?.lastSessionId || null) as any;
       if (sessionId === id) {
         setSessionId(nextId);
+        try {
+          if (nextId) { setActiveThreadId(nextId); localStorage.setItem('chat:activeThreadId', nextId); }
+          else { setActiveThreadId(null); localStorage.removeItem('chat:activeThreadId'); }
+        } catch {}
         setMessages([]);
         if (nextId) {
           try {
@@ -426,6 +523,7 @@ export const ChatPage: React.FC = () => {
       }
       if (sid) {
         setSessionId(sid);
+        try { setActiveThreadId(sid); localStorage.setItem('chat:activeThreadId', sid); } catch {}
         setMessages([]);
       }
       await refreshThreads();
@@ -590,8 +688,19 @@ export const ChatPage: React.FC = () => {
     try {
       const thread = await wsFirst<any>('thread.get', { id: sid });
       const updatesArr: any[] = Array.isArray(thread?.updates) ? thread.updates : [];
+      // Hide legacy synthetic markers like "Thread continued"
+      const filtered = updatesArr.filter((raw: any) => {
+        try {
+          if (raw && raw.type === 'system' && typeof raw.text === 'string') {
+            const t = raw.text.trim().toLowerCase();
+            if (t === 'thread continued') return false;
+          }
+        } catch {}
+        return true;
+      });
       setMessages([]);
-      for (const raw of updatesArr) {
+      try { setActiveThreadId(sid); localStorage.setItem('chat:activeThreadId', sid); } catch {}
+      for (const raw of filtered) {
         try {
           const nu = normalizeUpdateShape(raw);
           // keep current mode id in sync when replaying
@@ -610,40 +719,27 @@ export const ChatPage: React.FC = () => {
   }
 
   return (
-    <div className="flex flex-col min-h-[80vh]">
+    <div className="flex flex-col h-[100vh] overflow-hidden">
       {/* Header (minimal) */}
-      <div className="border-b border-border p-2 flex items-center justify-between gap-2">
+      <div className="border-b border-border p-2 flex items-center justify-between gap-2 flex-none">
         <div className="flex items-center gap-2">
           <div className="text-sm font-medium">Chat</div>
           <ModeChip modeId={currentModeId} hidden={!modes} onClick={() => setModeSheetOpen(true)} />
-          <button className="text-xs px-2 py-1 rounded-full border border-border bg-muted/40 hover:bg-muted" onClick={() => { setSessionSheetOpen(true); refreshThreads().catch(()=>{}); refreshModels().catch(()=>{}); }}>
+          <button className="text-xs px-2 py-1 rounded-full border border-border bg-muted/40 hover:bg-muted" onClick={() => { setSessionSheetOpen(true); refreshThreads().catch(()=>{}); refreshModels().catch(()=>{}); wsFirst('session.state', {}).catch(()=>{}); }}>
             Sessions
           </button>
-          <button
-            className={cn(
-              'text-xs px-2 py-1 rounded-full border border-border bg-muted/40 hover:bg-muted',
-              !collapseTools && 'bg-primary/10 border-primary'
-            )}
-            title="Toggle tool call visibility"
-            onClick={() => setCollapseTools((v) => {
-              const nv = !v;
-              try { const key = sessionId ? `chatToolsCollapsed:${sessionId}` : 'chatToolsCollapsed'; localStorage.setItem(key, nv ? '1' : '0'); } catch {}
-              return nv;
-            })}
-          >
-            {collapseTools ? 'Tools: collapsed' : 'Tools: expanded'}
-          </button>
+          {/* Removed collapse-all chip per request */}
           {!!models.length && (
             <button className="text-xs px-2 py-1 rounded-full border border-border bg-muted/40 hover:bg-muted" onClick={() => setModelSheetOpen(true)}>
               {currentModelId ? `Model: ${currentModelId}` : 'Model'}
             </button>
           )}
         </div>
-        <div className="text-xs text-muted-foreground">{sessionId ? `Session: ${sessionId.slice(0,8)}…` : connecting ? 'Connecting…' : 'Idle'}</div>
+        <div className="text-xs text-muted-foreground">{sessionId ? `Session: ${sessionId.slice(0,8)}…` : connecting ? 'Connecting…' : 'Idle'}{activeThreadId && sessionId !== activeThreadId ? ` • Thread: ${activeThreadId.slice(0,8)}…` : ''}</div>
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-auto p-3 space-y-2">
+      <div className="flex-1 overflow-y-auto p-3 space-y-2">
         {(() => {
           const nodes: React.ReactNode[] = [];
           for (let i = 0; i < messages.length; ) {
@@ -664,7 +760,16 @@ export const ChatPage: React.FC = () => {
               const running = items.some((it) => /running|in_progress|progress|execut/i.test(String(it.status || '')));
               nodes.push((
                 <MessageBubble key={group[0].id + '-group'} role="tool">
-                  <ToolCallsGroup items={items} initiallyOpen={!collapseTools || running} openMap={openToolMap} onItemOpenChange={handleToolOpenChange} />
+                  <ToolCallsGroup
+                    items={items}
+                    open={toolsGroupOpen || running}
+                    onOpenChange={(o) => {
+                      setToolsGroupOpen(o);
+                      try { const key = activeThreadId ? `chatToolsGroupOpen:${activeThreadId}` : 'chatToolsGroupOpen'; localStorage.setItem(key, o ? '1' : '0'); } catch {}
+                    }}
+                    openMap={openToolMap}
+                    onItemOpenChange={handleToolOpenChange}
+                  />
                 </MessageBubble>
               ));
             } else {
@@ -692,8 +797,8 @@ export const ChatPage: React.FC = () => {
         />
       </div>
 
-      {/* Composer - pinned to bottom by flex layout */}
-      <div className="border-t border-border p-3">
+      {/* Composer - pinned to bottom by flex layout (non-growing) */}
+      <div className="border-t border-border p-3 flex-none">
         {!sessionId && (
           <div className="mb-2 text-xs text-amber-600 bg-amber-600/10 border border-amber-600/30 rounded px-2 py-1">
             No active session. Start typing and Send to create one, or pick an existing session via the Sessions button.
@@ -829,7 +934,7 @@ export const ChatPage: React.FC = () => {
                 <div className="text-xs text-muted-foreground">No sessions yet</div>
               )}
               {threads.map((t) => {
-                const active = t.id === sessionId;
+                const active = t.id === (activeThreadId || sessionId || '');
                 return (
                   <div
                     key={t.id}

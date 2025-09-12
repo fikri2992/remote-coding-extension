@@ -55,12 +55,6 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
   const pendingAcpRef = useRef<Map<string, { resolve: (v: any) => void; reject: (e: any) => void; timer?: any }>>(new Map());
 
   useEffect(() => {
-    // Force-enable debug logging for terminal communication debugging
-    if (typeof window !== 'undefined' && window.localStorage) {
-      window.localStorage.setItem('KIRO_DEBUG_WS', '1');
-      window.localStorage.setItem('KIRO_DEBUG_TERMINAL_CLIENT', '1');
-    }
-
     const connectUrl = url || defaultUrl;
     const websocket = new ReconnectingWebSocket(connectUrl, [], {
       maxReconnectionDelay: 10000,
@@ -87,7 +81,11 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
         try {
           const debug = (typeof window !== 'undefined' && (window as any).localStorage?.getItem('KIRO_DEBUG_WS') === '1');
           if (debug) {
-            console.log('🔽 WebSocket Received:', data);
+            // Suppress noisy heartbeat frames
+            const t = data?.type;
+            if (t !== 'ping' && t !== 'pong') {
+              console.log('🔽 WebSocket Received:', data);
+            }
             // Track terminal frames specifically
             if (data.type === 'terminal') {
               console.log('📟 Terminal Frame:', {
@@ -153,6 +151,20 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
     };
   }, [url]);
 
+  // Lightweight application-level heartbeat to keep connections alive across proxies.
+  // Sends a small JSON ping every 20s when connected.
+  useEffect(() => {
+    if (!ws) return;
+    const interval = setInterval(() => {
+      try {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          sendJson({ type: 'ping', ts: Date.now() });
+        }
+      } catch {}
+    }, 20000);
+    return () => clearInterval(interval);
+  }, [ws]);
+
   const connect = () => {
     if (ws && ws.readyState === WebSocket.CLOSED) {
       ws.reconnect();
@@ -173,7 +185,11 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
       try {
         const debug = (typeof window !== 'undefined' && ((window as any).localStorage?.getItem('KIRO_DEBUG_WS') === '1' || (window as any).localStorage?.getItem('KIRO_DEBUG_TERMINAL_CLIENT') === '1'));
         if (debug) {
-          console.log('🔼 WebSocket Sending:', message);
+          // Suppress noisy heartbeat frames
+          const t = message?.type;
+          if (t !== 'ping' && t !== 'pong') {
+            console.log('🔼 WebSocket Sending:', message);
+          }
           // Track terminal frames specifically
           if (message.type === 'terminal') {
             console.log('📟 Terminal Frame Out:', {

@@ -60,10 +60,21 @@ export class AcpHttpController {
 
     const { exe, args } = this.parseAgentCmd(agentCmd, proxy);
 
-    if (this.conn) {
-      try { this.conn.dispose(); } catch {}
+    // Idempotent connect: if already connected, return existing init
+    if (this.conn && (this.conn as any).isConnected) {
+      const init = this.conn.getInitializeInfo();
+      if (init) {
+        try { AcpEventBus.emit('agent_connect', { type: 'agent_connect', exe, args, cwd: cwd || process.cwd(), envKeys: env ? Object.keys(env) : [], providedCmd: provided, reason: 'reuse_existing' }); } catch {}
+        return { ok: true, init } as any;
+      }
     }
-    this.conn = new ACPConnection('kiro-remote');
+
+    if (!this.conn) {
+      this.conn = new ACPConnection('kiro-remote');
+    } else {
+      try { this.conn.dispose(); } catch {}
+      this.conn = new ACPConnection('kiro-remote');
+    }
 
     // Wire ACP events => EventBus + persistence
     this.conn.on('session_update', (update: SessionUpdate, sid?: string) => {
@@ -118,9 +129,7 @@ export class AcpHttpController {
       e.debug = { exe, args, cwd: cwd || process.cwd(), providedCmd: provided, reason };
       throw e;
     }
-    // On fresh connect, clear lastSessionId to avoid pointing at stale threads from a previous agent instance
-    try { await this.sessions.clearLast(); } catch {}
-    this.lastSessionId = null;
+    // Do not clear lastSessionId silently; validity will be handled by ensureActiveSession()
     return { ok: true, init, debug: { exe, args, cwd: cwd || process.cwd(), providedCmd: provided, reason } } as any;
   }
 
@@ -183,8 +192,8 @@ export class AcpHttpController {
     const parsed = AcpHttpController.PromptSchema.safeParse(body ?? {});
     if (!parsed.success) throw new Error('prompt array required');
     const prompt = parsed.data.prompt;
-    let sessionId = String(parsed.data.sessionId || this.lastSessionId || '');
-    if (!sessionId) throw new Error('no sessionId');
+    // Ignore client-provided sessionId; use server-maintained active session
+    let sessionId = await this.ensureActiveSession();
     let req: PromptRequest = { sessionId, prompt } as PromptRequest;
     try {
       // Persist the user's prompt so it shows up in history on reload
@@ -218,6 +227,34 @@ export class AcpHttpController {
       }
       throw this.authMapError(err);
     }
+  }
+
+  // Ensure an active agent session and return its id
+  private async ensureActiveSession(): Promise<string> {
+    if (!this.conn) throw new Error('not connected');
+    if (this.lastSessionId && typeof this.lastSessionId === 'string') return this.lastSessionId;
+    const resp = await this.conn.newSession({ cwd: process.cwd(), mcpServers: [] });
+    const sid: string = (resp as any).sessionId || (resp as any).session_id;
+    if (!sid) throw new Error('failed to create session');
+    this.lastSessionId = sid;
+    try { await this.sessions.add(sid); } catch {}
+    try { AcpEventBus.emit('session_activated', { type: 'session_activated', sessionId: sid }); } catch {}
+    return sid;
+  }
+
+  // Expose minimal state for UI
+  state(): { connected: boolean; sessionId: string | null } {
+    return { connected: !!this.conn, sessionId: this.lastSessionId };
+  }
+
+  // Associate a thread for continuation and ensure session is active
+  async selectThread(body: any): Promise<{ ok: true; sessionId: string }> {
+    const threadId = String(body?.threadId || body?.id || '');
+    if (!threadId) throw new Error('threadId required');
+    const sid = await this.ensureActiveSession();
+    try { await this.sessions.touch(sid); } catch {}
+    // No longer append a synthetic marker; selection should be transparent to users
+    return { ok: true, sessionId: sid };
   }
 
   // Graceful disconnect from agent

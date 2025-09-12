@@ -11,11 +11,23 @@ export default defineConfig({
     },
   },
   server: {
+    // Ensure dev server is reachable from network if needed
+    host: 'localhost',
     proxy: {
       '/ws': {
-        target: 'http://localhost:3900',
+        // Use ws scheme for clarity; http works too for upgrade
+        target: 'ws://localhost:3900',
         ws: true,
         secure: false,
+        changeOrigin: true,
+        configure: (proxy) => {
+          // Swallow initial ECONNREFUSED noise while backend boots
+          proxy.on('error', (err) => {
+            if ((err as any)?.code === 'ECONNREFUSED') return;
+            // eslint-disable-next-line no-console
+            console.warn('[vite-proxy] ws error:', err?.message || String(err));
+          });
+        },
       },
     },
   },

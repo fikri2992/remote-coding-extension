@@ -115,13 +115,16 @@ export class WebSocketServer {
 
               // Origin allowlist: allow common localhost origins and same-origin over tunnels
               const origin = request.headers['origin'] as string | undefined;
+              const allowAnyOrigin = process.env.KIRO_WS_ALLOW_ANY_ORIGIN === '1' || process.env.NODE_ENV !== 'production';
               const allowedOrigins = new Set([
                 'http://localhost:3000',
                 'http://localhost:3900',
                 'http://127.0.0.1:3000',
                 'http://127.0.0.1:3900',
                 'http://localhost:3901',
-                'http://127.0.0.1:3901'
+                'http://127.0.0.1:3901',
+                'http://localhost:5173',
+                'http://127.0.0.1:5173'
               ]);
               let sameOriginOk = false;
               try {
@@ -131,7 +134,7 @@ export class WebSocketServer {
                   sameOriginOk = o.host === String(request.headers['host']);
                 }
               } catch {}
-              if (origin && !allowedOrigins.has(origin) && !sameOriginOk) {
+              if (!allowAnyOrigin && origin && !allowedOrigins.has(origin) && !sameOriginOk) {
                 socket.destroy();
                 return;
               }
@@ -176,6 +179,9 @@ export class WebSocketServer {
 
           // Handle incoming messages
           ws.on('message', (data: WebSocket.RawData) => {
+            // Mark connection alive on any application message to tolerate proxies
+            // that may not forward protocol-level pong frames reliably.
+            try { connection.isAlive = true; } catch {}
             try {
               const message = JSON.parse(data.toString());
               this.handleMessage(connectionId, message);
@@ -597,9 +603,26 @@ export class WebSocketServer {
       } else {
         Promise.resolve(svc.handle(connectionId, message))
           .then((resp) => {
+            // Special handling for ACP-style envelopes so client gets proper ok/error semantics
+            if (msgType === 'acp') {
+              try {
+                if (resp && typeof resp === 'object') {
+                  const r: any = resp;
+                  if (r && r.success === false) {
+                    const errMsg = typeof r.error === 'string' ? r.error : (r.error?.message || 'acp error');
+                    respond(false, new Error(errMsg));
+                    return;
+                  }
+                  if (r && r.success === true && Object.prototype.hasOwnProperty.call(r, 'data')) {
+                    respond(true, r.data);
+                    return;
+                  }
+                }
+              } catch {}
+            }
             if (resp) {
               // If handler returns its own frame, pass-through; else wrap
-              if (resp.type) this.sendToClient(connectionId, resp);
+              if ((resp as any).type) this.sendToClient(connectionId, resp);
               else respond(true, resp);
             } else {
               // Nothing to send

@@ -35,7 +35,8 @@ export class FileSystemService {
       switch (op) {
         case 'tree': {
           const target = await this.resolvePathWithinWorkspace(data?.path);
-          const result = await this.getTree(target);
+          const depth = Math.max(1, Math.min(20, Number(data?.options?.depth) || 1));
+          const result = await this.getTree(target, depth);
           this.reply(clientId, id, op, { ok: true, result });
           break;
         }
@@ -157,7 +158,7 @@ export class FileSystemService {
     return normalized;
   }
 
-  private async getTree(absPath: string): Promise<TreeResult> {
+  private async getTree(absPath: string, depth: number): Promise<TreeResult> {
     const root = this.getWorkspaceRoot();
     const entries = await fsp.readdir(absPath, { withFileTypes: true });
     const children: FileNode[] = [];
@@ -174,6 +175,13 @@ export class FileSystemService {
       if (stat) {
         node.size = Number(stat.size);
         node.modified = new Date(Number(stat.mtime));
+      }
+      // Recurse into subdirectories if depth allows
+      if (dirent.isDirectory() && depth > 1) {
+        try {
+          const sub = await this.getTree(childAbs, depth - 1);
+          if (Array.isArray(sub.children)) node.children = sub.children;
+        } catch {}
       }
       children.push(node);
     }

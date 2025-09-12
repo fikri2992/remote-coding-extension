@@ -271,9 +271,17 @@ export const ChatPage: React.FC = () => {
 
   async function discoverFiles(pathStr: string) {
     try {
-      const result = await wsRpc<any>('fileSystem', { fileSystemData: { operation: 'tree', path: pathStr, options: { depth: 1 } } });
-      const children = Array.isArray(result?.children) ? result.children : [];
-      setFsResults(children.map((c: any) => ({ name: c.name, path: c.path, type: c.type, size: c.size })));
+      const result = await wsRpc<any>('fileSystem', { fileSystemData: { operation: 'tree', path: pathStr, options: { depth: 4 } } });
+      const all: any[] = [];
+      const walk = (node: any) => {
+        if (!node) return;
+        if (Array.isArray(node.children)) {
+          for (const ch of node.children) { all.push(ch); if (ch.children) walk(ch); }
+        }
+      };
+      walk(result);
+      const items = all.map((c: any) => ({ name: c.name, path: c.path, type: c.type, size: c.size }));
+      setFsResults(items);
     } catch { setFsResults([]); }
   }
 
@@ -321,7 +329,7 @@ export const ChatPage: React.FC = () => {
     const m = detectMention(text, caret);
     if (!m) { setMentionOpen(false); return; }
     setMentionQuery(m.query);
-    const fsItems = fsResults.filter((n) => n.type === 'file').map((n) => ({ key: `file:${n.path}`, label: n.name, path: n.path }));
+    const fsItems = fsResults.map((n) => ({ key: `${n.type}:${n.path}`, label: n.type === 'directory' ? `${n.name}/` : n.name, path: n.path }));
     const gitItems = gitChangedFiles.map((p) => ({ key: `file:${p}`, label: p.split('/').pop() || p, path: p }));
     const map = new Map<string, { key: string; label: string; path: string }>();
     [...fsItems, ...gitItems].forEach((it) => map.set(it.key, it));

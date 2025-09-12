@@ -100,7 +100,7 @@ export const ChatPage: React.FC = () => {
   const [mentionOpen, setMentionOpen] = useState(false);
   const [mentionQuery, setMentionQuery] = useState('');
   const [mentionItems, setMentionItems] = useState<Array<{ key: string; label: string; path: string }>>([]);
-  const [mentionPos, setMentionPos] = useState<{ left: number; top: number } | null>(null);
+
 
   // Messages & updates
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -315,26 +315,6 @@ export const ChatPage: React.FC = () => {
     const el = inputRef.current; if (!el) return;
     const pos = typeof el.selectionStart === 'number' ? el.selectionStart : input.length;
     updateMentionSuggestions(input, pos);
-    // estimate caret overlay position
-    try {
-      const cs = getComputedStyle(el);
-      const div = document.createElement('div');
-      const marker = document.createElement('span');
-      div.style.position = 'absolute';
-      div.style.visibility = 'hidden';
-      div.style.whiteSpace = 'pre-wrap';
-      div.style.wordWrap = 'break-word';
-      const props = ['boxSizing','width','height','paddingTop','paddingRight','paddingBottom','paddingLeft','borderTopWidth','borderRightWidth','borderBottomWidth','borderLeftWidth','fontFamily','fontSize','lineHeight','letterSpacing','textTransform'] as const;
-      props.forEach((p) => { (div.style as any)[p] = (cs as any)[p]; });
-      div.textContent = input.substring(0, pos);
-      marker.textContent = '\u200b';
-      div.appendChild(marker);
-      el.parentElement?.appendChild(div);
-      const rect = marker.getBoundingClientRect();
-      const host = el.getBoundingClientRect();
-      setMentionPos({ left: rect.left - host.left + 4, top: rect.top - host.top + 18 });
-      el.parentElement?.removeChild(div);
-    } catch {}
   }, [input]);
 
   function updateMentionSuggestions(text: string, caret: number) {
@@ -818,7 +798,7 @@ export const ChatPage: React.FC = () => {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 min-h-0 overflow-y-auto p-1 sm:p-3 space-y-1 sm:space-y-2 pb-28 sm:pb-0">
+      <div className="flex-1 min-h-0 overflow-y-auto p-1 sm:p-3 space-y-1 sm:space-y-2 pb-12 sm:pb-0">
         {(() => {
           const nodes: React.ReactNode[] = [];
           for (let i = 0; i < messages.length; ) {
@@ -865,20 +845,41 @@ export const ChatPage: React.FC = () => {
         <div ref={endRef} />
       </div>
 
-      {/* Mention overlay */}
-      <div className="pointer-events-none fixed z-50" style={{ left: (mentionPos?.left ?? 16) + 'px', bottom: 'calc(80px + env(safe-area-inset-bottom))', right: 'auto' }} aria-hidden={!mentionOpen}>
-        <MentionSuggestions
-          visible={mentionOpen}
-          query={mentionQuery}
-          items={mentionItems}
-          onSelect={(it) => { acceptMentionSelection(it); }}
-          onClose={() => setMentionOpen(false)}
-        />
-      </div>
+      {/* Mention overlay - positioned right above composer */}
+      {mentionOpen && (
+        <div className="fixed z-[60] pointer-events-auto">
+          {/* Desktop positioning - right above desktop composer */}
+          <div className="hidden sm:block fixed bottom-[70px] left-2 right-2 sm:left-3 sm:right-3">
+            <div className="max-w-md mb-1">
+              <MentionSuggestions
+                visible={mentionOpen}
+                query={mentionQuery}
+                items={mentionItems}
+                onSelect={(it) => { acceptMentionSelection(it); }}
+                onClose={() => setMentionOpen(false)}
+                className="w-full"
+              />
+            </div>
+          </div>
+          {/* Mobile positioning - right above mobile composer */}
+          <div className="sm:hidden fixed bottom-[45px] left-2 right-2">
+            <div className="mb-1">
+              <MentionSuggestions
+                visible={mentionOpen}
+                query={mentionQuery}
+                items={mentionItems}
+                onSelect={(it) => { acceptMentionSelection(it); }}
+                onClose={() => setMentionOpen(false)}
+                className="w-full"
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Mobile floating actions button (replaces hidden header actions) */}
       <button
-        className="sm:hidden fixed right-2 bottom-[72px] z-40 inline-flex items-center justify-center w-10 h-10 rounded-full border border-border bg-muted/60 hover:bg-muted"
+        className="sm:hidden fixed right-2 bottom-[60px] z-40 inline-flex items-center justify-center w-10 h-10 rounded-full border border-border bg-muted/60 hover:bg-muted"
         aria-label="More actions"
         onClick={() => setActionsOpen(true)}
       >
@@ -886,7 +887,7 @@ export const ChatPage: React.FC = () => {
       </button>
 
       {/* Mobile composer (fixed) */}
-      <div className="sm:hidden fixed bottom-0 left-0 right-0 z-40 border-t border-border p-1 pb-[calc(env(safe-area-inset-bottom)+4px)] bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+      <div className="sm:hidden fixed bottom-0 left-0 right-0 z-40 border-t border-border p-0.5 pb-[calc(env(safe-area-inset-bottom)+4px)] bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
         <div className="flex items-end gap-2">
           <textarea
             ref={inputRef}

@@ -1,9 +1,5 @@
 /**
- * Web Automation Tunnel Server Components
- * 
- * This module exports the core server infrastructure for the web automation tunnel feature.
+ * CLI Server Component Exports (VS Code extension exports removed)
  */
 
-export { ServerManager } from './ServerManager';
-export { CommandHandler } from './CommandHandler';
 export * from './interfaces';

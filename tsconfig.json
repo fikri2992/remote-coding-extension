@@ -38,6 +38,7 @@
     "src/extension.ts",
     "src/integration-test.ts",
     "src/commands/**/*",
-    "src/server/**/*"
+    "src/server/**/*",
+    "src/cli/controller.ts"
   ]
 }

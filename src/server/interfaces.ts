@@ -1,4 +1,12 @@
-import { TunnelStatus } from './LocalTunnel';
+// TunnelStatus defined inline to avoid depending on LocalTunnel (which was VS Code-oriented)
+export interface TunnelStatus {
+    isRunning: boolean;
+    localUrl?: string;
+    publicUrl?: string;
+    process?: any;
+    startTime?: Date;
+    lastError?: string;
+}
 
 /**
  * Configuration interface for the web automation server

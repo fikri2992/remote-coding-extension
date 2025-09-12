@@ -55,6 +55,14 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
   const pendingAcpRef = useRef<Map<string, { resolve: (v: any) => void; reject: (e: any) => void; timer?: any }>>(new Map());
 
   useEffect(() => {
+    // Ensure debug logs are enabled by default, as requested
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem('KIRO_DEBUG_WS', '1');
+        window.localStorage.setItem('KIRO_DEBUG_TERMINAL_CLIENT', '1');
+      }
+    } catch {}
+
     const connectUrl = url || defaultUrl;
     const websocket = new ReconnectingWebSocket(connectUrl, [], {
       maxReconnectionDelay: 10000,

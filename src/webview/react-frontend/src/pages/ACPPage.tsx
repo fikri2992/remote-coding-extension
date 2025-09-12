@@ -6,6 +6,7 @@ import { AlertTriangle, Plug, Send, Trash2, RefreshCw, FolderOpen, FileText, Git
 import { MentionSuggestions } from '@/components/chat/MentionSuggestions';
 import { fuzzySearch } from '@/lib/fuzzy';
 import { SyntaxHighlighter } from '@/components/code/SyntaxHighlighter';
+import { useToast } from '@/components/ui/toast';
 
 // Minimal types aligned with backend ContentBlock shapes
 
@@ -39,6 +40,7 @@ interface SessionMeta {
 
 const ACPPage: React.FC = () => {
   const { addMessageListener, sendAcp, isConnected, sendJson } = useWebSocket() as any;
+  const { show } = useToast();
 
   // Connect form state
   const [agentCmd, setAgentCmd] = useState('');
@@ -500,7 +502,7 @@ const ACPPage: React.FC = () => {
       await wsFirst('authenticate', { methodId: selectedAuthMethod });
       await refreshAuthMethods();
     } catch (e: any) {
-      alert(e?.message || String(e));
+      show({ title: 'Authentication Error', description: e?.message || String(e), variant: 'destructive' });
     }
   }
 
@@ -529,7 +531,7 @@ const ACPPage: React.FC = () => {
       try { await handleNewSession(); } catch {}
     } catch (e: any) {
       try { console.error('[acp] handleConnect error', e); } catch {}
-      alert(e?.message || String(e));
+      show({ title: 'Connection Error', description: e?.message || String(e), variant: 'destructive' });
     } finally {
       setConnecting(false);
     }
@@ -553,9 +555,9 @@ const ACPPage: React.FC = () => {
     } catch (err: any) {
       if (err?.authRequired) {
         // show a minimal hint; full auth UI can be built later if needed
-        alert('Authentication required. Available methods: ' + (err?.authMethods?.map((m: any) => m.name).join(', ') || 'unknown'));
+        show({ title: 'Authentication Required', description: 'Available methods: ' + (err?.authMethods?.map((m: any) => m.name).join(', ') || 'unknown'), variant: 'info' });
       } else {
-        alert(err?.message || String(err));
+        show({ title: 'Session Error', description: err?.message || String(err), variant: 'destructive' });
       }
     }
   }
@@ -605,9 +607,9 @@ const ACPPage: React.FC = () => {
         } catch {}
       }
       if (err?.authRequired) {
-        alert('Authentication required. Available methods: ' + (err?.authMethods?.map((m: any) => m.name).join(', ') || 'unknown'));
+        show({ title: 'Authentication Required', description: 'Available methods: ' + (err?.authMethods?.map((m: any) => m.name).join(', ') || 'unknown'), variant: 'info' });
       } else {
-        alert(err?.message || String(err));
+        show({ title: 'Prompt Error', description: err?.message || String(err), variant: 'destructive' });
       }
     } finally {
       setSending(false);
@@ -618,7 +620,7 @@ const ACPPage: React.FC = () => {
     try {
       await wsFirst('cancel', { sessionId: sessionId || undefined });
     } catch (e: any) {
-      alert(e?.message || String(e));
+      show({ title: 'Cancel Error', description: e?.message || String(e), variant: 'destructive' });
     }
   }
 
@@ -627,7 +629,7 @@ const ACPPage: React.FC = () => {
     try {
       await wsFirst('permission', { requestId: permissionReq.requestId, outcome, optionId });
     } catch (e: any) {
-      alert(e?.message || String(e));
+      show({ title: 'Permission Error', description: e?.message || String(e), variant: 'destructive' });
     } finally {
       setPermissionReq(null);
     }
@@ -639,7 +641,7 @@ const ACPPage: React.FC = () => {
       setSessionId(id);
       await refreshSessions();
     } catch (e: any) {
-      alert(e?.message || String(e));
+      show({ title: 'Session Selection Error', description: e?.message || String(e), variant: 'destructive' });
     }
   }
 
@@ -649,7 +651,7 @@ const ACPPage: React.FC = () => {
       if (sessionId === id) setSessionId(null);
       await refreshSessions();
     } catch (e: any) {
-      alert(e?.message || String(e));
+      show({ title: 'Session Deletion Error', description: e?.message || String(e), variant: 'destructive' });
     }
   }
 
@@ -673,7 +675,7 @@ const ACPPage: React.FC = () => {
       // initial read
       await handleReadTerminal();
     } catch (e: any) {
-      alert(e?.message || String(e));
+      show({ title: 'Terminal Creation Error', description: e?.message || String(e), variant: 'destructive' });
     }
   }
 
@@ -694,7 +696,7 @@ const ACPPage: React.FC = () => {
     try {
       await wsFirst('terminal.kill', { terminalId: termId });
     } catch (e: any) {
-      alert(e?.message || String(e));
+      show({ title: 'Terminal Kill Error', description: e?.message || String(e), variant: 'destructive' });
     }
   }
 
@@ -707,7 +709,7 @@ const ACPPage: React.FC = () => {
       setTermExit(null);
       setTermTruncated(false);
     } catch (e: any) {
-      alert(e?.message || String(e));
+      show({ title: 'Terminal Release Error', description: e?.message || String(e), variant: 'destructive' });
     }
   }
 
@@ -717,7 +719,7 @@ const ACPPage: React.FC = () => {
       const resp = await wsFirst('terminal.waitForExit', { terminalId: termId });
       setTermExit(resp.exitStatus ?? null);
     } catch (e: any) {
-      alert(e?.message || String(e));
+      show({ title: 'Terminal Wait Error', description: e?.message || String(e), variant: 'destructive' });
     }
   }
 
@@ -726,7 +728,7 @@ const ACPPage: React.FC = () => {
       if (!selectedModelId) return;
       await wsFirst('model.select', { sessionId, modelId: selectedModelId });
     } catch (e: any) {
-      alert(e?.message || String(e));
+      show({ title: 'Model Selection Error', description: e?.message || String(e), variant: 'destructive' });
     }
   }
 
@@ -743,7 +745,7 @@ const ACPPage: React.FC = () => {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-    } catch (e) { alert('Export failed'); }
+    } catch (e) { show({ title: 'Export Failed', description: 'Failed to export session data', variant: 'destructive' }); }
   }
 
   async function handleImportLocal(file: File) {
@@ -752,9 +754,9 @@ const ACPPage: React.FC = () => {
       const obj = JSON.parse(text);
       if (Array.isArray(obj?.messages)) setMessages(obj.messages);
       if (Array.isArray(obj?.selectedContext)) setSelectedContext(obj.selectedContext);
-      alert('Imported conversation locally. (Not persisted to server)');
+      show({ title: 'Import Successful', description: 'Imported conversation locally. (Not persisted to server)', variant: 'success' });
     } catch (e: any) {
-      alert(e?.message || 'Import failed');
+      show({ title: 'Import Failed', description: e?.message || 'Import failed', variant: 'destructive' });
     }
   }
 
@@ -825,8 +827,8 @@ const ACPPage: React.FC = () => {
                         const pth = String(path || '');
                         const newText = String(part.diff?.newText || part.newText || '');
                         await wsFirst('diff.apply', { path: pth, newText });
-                        alert('Applied diff to ' + (pth || '(unknown)'));
-                      } catch (e: any) { alert(e?.message || String(e)); }
+                        show({ title: 'Diff Applied', description: 'Applied diff to ' + (pth || '(unknown)'), variant: 'success' });
+                      } catch (e: any) { show({ title: 'Diff Apply Error', description: e?.message || String(e), variant: 'destructive' }); }
                     }}
                   >Apply</button>
                 </div>
@@ -1031,7 +1033,7 @@ const ACPPage: React.FC = () => {
         <div className="flex flex-wrap gap-2">
           {threads.map((t) => (
             <div key={t.id} className={cn('px-2 py-1 rounded border text-xs flex items-center gap-2', t.id === selectedThreadId ? 'bg-primary/10 border-primary' : 'border-border')}>
-              <button onClick={async () => { try { const res = await wsFirst<any>('thread.get', { sessionId, threadId: t.id }); const msgs: any[] = Array.isArray(res?.messages) ? res.messages : []; const now = Date.now(); const converted: any[] = []; for (const msg of msgs) { if (msg?.role && Array.isArray(msg?.content)) { converted.push({ id: `${now}-${converted.length}`, role: msg.role, parts: msg.content, ts: now }); } } if (converted.length) setMessages(converted as any); } catch (e: any) { alert(e?.message || 'Failed to open thread'); } }} className="underline">{(t.title || t.id).slice(0, 24)}</button>
+              <button onClick={async () => { try { const res = await wsFirst<any>('thread.get', { sessionId, threadId: t.id }); const msgs: any[] = Array.isArray(res?.messages) ? res.messages : []; const now = Date.now(); const converted: any[] = []; for (const msg of msgs) { if (msg?.role && Array.isArray(msg?.content)) { converted.push({ id: `${now}-${converted.length}`, role: msg.role, parts: msg.content, ts: now }); } } if (converted.length) setMessages(converted as any); } catch (e: any) { show({ title: 'Thread Error', description: e?.message || 'Failed to open thread', variant: 'destructive' }); } }} className="underline">{(t.title || t.id).slice(0, 24)}</button>
             </div>
           ))}
           {threads.length === 0 && (
@@ -1315,9 +1317,9 @@ const ACPPage: React.FC = () => {
                               const pth = (typeof c.path === 'string' && c.path) || (typeof c.file === 'string' && c.file) || (typeof c.filepath === 'string' && c.filepath) || (typeof c.uri === 'string' && (c.uri.startsWith('file://') ? c.uri.replace(/^file:\/\//, '') : c.uri)) || '';
                               const body = { path: pth, newText: String(c.diff?.newText || c.newText || '') };
                               await wsFirst('diff.apply', body);
-                              alert('Applied diff to ' + (pth || '(unknown path)'));
+                              show({ title: 'Diff Applied', description: 'Applied diff to ' + (pth || '(unknown path)'), variant: 'success' });
                             } catch (e: any) {
-                              alert(e?.message || String(e));
+                              show({ title: 'Diff Apply Error', description: e?.message || String(e), variant: 'destructive' });
                             }
                           }}
                         >Apply</button>

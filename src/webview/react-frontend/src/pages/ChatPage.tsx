@@ -3,7 +3,7 @@ import { useWebSocket } from '@/components/WebSocketProvider';
 import { Button } from '@/components/ui/button';
 import useConfirm from '@/lib/hooks/useConfirm';
 import { cn } from '@/lib/utils';
-import { Send, CircleDot } from 'lucide-react';
+import { Send, CircleDot, MoreHorizontal, X } from 'lucide-react';
 import { MentionSuggestions } from '@/components/chat/MentionSuggestions';
 import MessageBubble from '@/components/chat/MessageBubble';
 import ToolCallsGroup from '@/components/chat/ToolCallsGroup';
@@ -14,6 +14,7 @@ import TextAttachmentBlock from '@/components/chat/TextAttachmentBlock';
 import ContextChip from '@/components/chat/ContextChip';
 import ModeChip from '@/components/chat/ModeChip';
 import ModelPickerSheet from '@/components/chat/ModelPickerSheet';
+import { useToast } from '@/components/ui/toast';
 
 // ContentBlock shape aligned with ACP
 type ContentBlock =
@@ -39,6 +40,7 @@ type ContextItem = { id: string; type: 'file'; path: string; label: string; size
 
 export const ChatPage: React.FC = () => {
   const { addMessageListener, sendAcp, isConnected, sendJson, connect } = useWebSocket() as any;
+  const { show } = useToast();
 
   // Auto-connect/session state
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -52,6 +54,7 @@ export const ChatPage: React.FC = () => {
   const [modelSheetOpen, setModelSheetOpen] = useState(false);
   const [modeSheetOpen, setModeSheetOpen] = useState(false);
   const [sessionSheetOpen, setSessionSheetOpen] = useState(false);
+  const [actionsOpen, setActionsOpen] = useState(false);
   const [confirm, ConfirmUI] = useConfirm();
   // Group open persisted per thread
   // Track the selected thread independently of agent session id
@@ -114,6 +117,7 @@ export const ChatPage: React.FC = () => {
   const [fsResults, setFsResults] = useState<Array<{ name: string; path: string; type: 'file' | 'directory'; size?: number }>>([]);
   const [gitChangedFiles, setGitChangedFiles] = useState<string[]>([]);
   const [threads, setThreads] = useState<Array<{ id: string; title?: string; createdAt: string; updatedAt: string }>>([]);
+  const [threadName, setThreadName] = useState<string>('Default Chat');
 
   const canPrompt = useMemo(() => input.trim().length > 0 && !sending, [input, sending]);
 
@@ -178,6 +182,13 @@ export const ChatPage: React.FC = () => {
             const sel = await wsFirst<any>('session.selectThread', { threadId: restored });
             const sid = (sel?.sessionId || sel?.session_id || sel?.data?.sessionId || sel?.data?.session_id || null) as string | null;
             if (sid) setSessionId(sid);
+            // Capture modes if backend provides them
+            const m = (sel?.modes || sel?.data?.modes) as any;
+            if (m) {
+              setModes(m);
+              const cm = (m as any).current_mode_id || (m as any).currentModeId;
+              if (cm) setCurrentModeId(cm);
+            }
           } catch {}
           try { await loadThreadHistory(restored); } catch {}
         } else {
@@ -189,6 +200,13 @@ export const ChatPage: React.FC = () => {
               setSessionId(sid);
               try { setActiveThreadId(sid); localStorage.setItem('chat:activeThreadId', sid); } catch {}
               try { await loadThreadHistory(sid); } catch {}
+            }
+            // Also restore modes if available from state()
+            const m = (st?.modes as any) || null;
+            if (m) {
+              setModes(m);
+              const cm = (m as any).current_mode_id || (m as any).currentModeId;
+              if (cm) setCurrentModeId(cm);
             }
           } catch {}
           // As an offline-friendly fallback, try local last-session id
@@ -367,6 +385,7 @@ export const ChatPage: React.FC = () => {
     const text = input.trim(); setInput(''); setSending(true);
     try {
       const prompt: ContentBlock[] = [{ type: 'text', text } as any];
+      try { if (!threadName || threadName === 'Default Chat') setThreadName((text || '').slice(0, 10) + '...'); } catch {}
       // Attach selected context
       for (const ctx of selectedContext) {
         const opened = await openFileText(ctx.path);
@@ -394,17 +413,17 @@ export const ChatPage: React.FC = () => {
         }
       }
     } catch (err: any) {
-      alert(err?.message || String(err));
+      show({ title: 'Prompt Error', description: err?.message || String(err), variant: 'destructive' });
     } finally { setSending(false); }
   }
 
   async function handleCancel() {
-    try { await wsFirst('cancel', { sessionId: sessionId || undefined }); } catch (e: any) { alert(e?.message || String(e)); }
+    try { await wsFirst('cancel', { sessionId: sessionId || undefined }); } catch (e: any) { show({ title: 'Cancel Error', description: e?.message || String(e), variant: 'destructive' }); }
   }
 
   async function handlePermission(outcome: 'selected' | 'cancelled', optionId?: string) {
     if (!permissionReq) return;
-    try { await wsFirst('permission', { requestId: permissionReq.requestId, outcome, optionId }); } catch (e: any) { alert(e?.message || String(e)); } finally { setPermissionReq(null); }
+    try { await wsFirst('permission', { requestId: permissionReq.requestId, outcome, optionId }); } catch (e: any) { show({ title: 'Permission Error', description: e?.message || String(e), variant: 'destructive' }); } finally { setPermissionReq(null); }
   }
 
   async function refreshModels() {
@@ -419,12 +438,12 @@ export const ChatPage: React.FC = () => {
 
   async function handleSelectModel(modelId: string) {
     if (!sessionId) return;
-    try { await wsFirst('model.select', { sessionId, modelId }); setCurrentModelId(modelId); setModelSheetOpen(false); } catch (e: any) { alert(e?.message || String(e)); }
+    try { await wsFirst('model.select', { sessionId, modelId }); setCurrentModelId(modelId); setModelSheetOpen(false); } catch (e: any) { show({ title: 'Model Selection Error', description: e?.message || String(e), variant: 'destructive' }); }
   }
 
   async function handleSelectMode(modeId: string) {
     if (!sessionId) return;
-    try { await wsFirst('session.setMode', { sessionId, modeId }); setCurrentModeId(modeId); setModeSheetOpen(false); } catch (e: any) { alert(e?.message || String(e)); }
+    try { await wsFirst('session.setMode', { sessionId, modeId }); setCurrentModeId(modeId); setModeSheetOpen(false); } catch (e: any) { show({ title: 'Mode Selection Error', description: e?.message || String(e), variant: 'destructive' }); }
   }
 
   // Sessions picker helpers
@@ -474,10 +493,10 @@ export const ChatPage: React.FC = () => {
           setSessionSheetOpen(false);
           return;
         } catch (e2: any) {
-          alert(e2?.message || String(e2));
+          show({ title: 'Session Selection Error', description: e2?.message || String(e2), variant: 'destructive' });
         }
       } else {
-        alert(e?.message || String(e));
+        show({ title: 'Session Selection Error', description: e?.message || String(e), variant: 'destructive' });
       }
     }
   }
@@ -509,7 +528,7 @@ export const ChatPage: React.FC = () => {
         }
       }
       await refreshThreads();
-    } catch (e: any) { alert(e?.message || String(e)); }
+    } catch (e: any) { show({ title: 'Session Deletion Error', description: e?.message || String(e), variant: 'destructive' }); }
   }
 
   async function handleNewSession() {
@@ -525,10 +544,11 @@ export const ChatPage: React.FC = () => {
         setSessionId(sid);
         try { setActiveThreadId(sid); localStorage.setItem('chat:activeThreadId', sid); } catch {}
         setMessages([]);
+        setThreadName('Default Chat');
       }
       await refreshThreads();
       setSessionSheetOpen(false);
-    } catch (e: any) { alert(e?.message || String(e)); }
+    } catch (e: any) { show({ title: 'New Session Error', description: e?.message || String(e), variant: 'destructive' }); }
   }
 
   // Render helpers
@@ -540,7 +560,7 @@ export const ChatPage: React.FC = () => {
           if (part.type === 'text') return <Markdown key={i} className="prose prose-invert max-w-none text-sm leading-relaxed" text={String(part.text || '')} />;
           if (part.type === 'resource_link') { const uri = String(part.uri || ''); const name = uri.split('/').pop() || uri; return (<div key={i} className="text-xs"><a className="underline" href={uri} target="_blank" rel="noreferrer">@{name}</a></div>); }
           if (part.type === 'resource' && 'text' in (part.resource || {})) { const uri = String((part.resource as any).uri || ''); const name = uri ? (uri.split('/').pop() || uri) : 'context'; return (<TextAttachmentBlock key={i} label={name} text={String((part.resource as any).text || '')} initiallyCollapsed />); }
-          if (part.type === 'diff' && (part.newText || part.diff?.newText)) { const path = part.path || part.file || part.filepath || part.uri || ''; const text = String(part.diff?.newText || part.newText || ''); return (<DiffBlock key={i} path={path || '(unknown path)'} diffText={text} initiallyCollapsed onApply={async () => { try { const pth = String(path || ''); await wsFirst('diff.apply', { path: pth, newText: text }); alert('Applied diff to ' + (pth || '(unknown)')); } catch (e: any) { alert(e?.message || String(e)); } }} />); }
+          if (part.type === 'diff' && (part.newText || part.diff?.newText)) { const path = part.path || part.file || part.filepath || part.uri || ''; const text = String(part.diff?.newText || part.newText || ''); return (<DiffBlock key={i} path={path || '(unknown path)'} diffText={text} initiallyCollapsed onApply={async () => { try { const pth = String(path || ''); await wsFirst('diff.apply', { path: pth, newText: text }); show({ title: 'Diff Applied', description: 'Applied diff to ' + (pth || '(unknown)'), variant: 'success' }); } catch (e: any) { show({ title: 'Diff Apply Error', description: e?.message || String(e), variant: 'destructive' }); } }} />); }
           if (part.type === 'terminal') { const out = typeof part.output === 'string' ? part.output : ''; if (out) return <TerminalBlock key={i} output={out} terminalId={String(part.terminalId || part.id || '') || undefined} initiallyCollapsed />; const tid = part.terminalId || part.id; return <div key={i} className="text-xs text-muted-foreground">[terminal]{tid ? ` (${tid})` : ''}</div>; }
           if (part.type === 'image') { try { const url = `data:${part.mimeType};base64,${part.data}`; return <img key={i} src={url} alt="image" className="max-w-full rounded border border-border" />; } catch { return <div key={i} className="text-xs text-muted-foreground">[image]</div>; } }
           if (part.type === 'audio') { try { const url = `data:${part.mimeType};base64,${part.data}`; return (<audio key={i} controls className="w-full"><source src={url} type={String(part.mimeType || 'audio/mpeg')} /></audio>); } catch { return <div key={i} className="text-xs text-muted-foreground">[audio]</div>; } }
@@ -666,16 +686,20 @@ export const ChatPage: React.FC = () => {
         break;
       }
       case 'mode_updated': {
-        const mId = update.modeId || update.mode_id; if (mId) add('system', [{ type: 'text', text: `Mode: ${mId}` } as any]); break;
+        // Suppress noisy mode-change system bubble; state is tracked elsewhere
+        break;
       }
       case 'current_mode_update': {
-        const mId = update.current_mode_id || update.modeId || update.mode_id; if (mId) add('system', [{ type: 'text', text: `Mode: ${mId}` } as any]); break;
+        // Suppress noisy mode-change system bubble; state is tracked elsewhere
+        break;
       }
       case 'plan': {
-        const plan = update.plan; const text = (Array.isArray(plan?.entries) ? plan.entries.map((e: any) => `• ${e.name || e.id || e.title || ''}`).join('\n') : JSON.stringify(plan || {})); add('system', [{ type: 'text', text } as any]); break;
+        // Hide initialization/plan announcements (e.g., init, pt-comments-review, security-review)
+        break;
       }
       case 'available_commands_update': {
-        const items = update.availableCommands || update.available_commands || update.commands || []; const text = Array.isArray(items) ? items.map((e: any) => `• ${e.name || e.id || ''}`).join('\n') : ''; add('system', [{ type: 'text', text } as any]); break;
+        // Hide available commands list from chat transcript
+        break;
       }
       default: {
         const maybeText = update?.content?.text || update?.text; if (typeof maybeText === 'string' && maybeText.trim()) add('system', [{ type: 'text', text: String(maybeText) } as any]); break;
@@ -688,6 +712,41 @@ export const ChatPage: React.FC = () => {
     try {
       const thread = await wsFirst<any>('thread.get', { id: sid });
       const updatesArr: any[] = Array.isArray(thread?.updates) ? thread.updates : [];
+      // Derive and set a human-readable thread name
+      try {
+        let name = (typeof thread?.title === 'string' && thread.title.trim()) ? thread.title.trim() : '';
+        if (!name) {
+          const pickText = (u: any): string | null => {
+            try {
+              if (!u) return null;
+              const t = u?.type || u?.updateType;
+              if (t === 'user_message') {
+                const c = u.content;
+                const list = Array.isArray(c) ? c : (c ? [c] : []);
+                for (const it of list) {
+                  if (!it) continue;
+                  if (typeof it === 'string' && it.trim()) return it.trim();
+                  if (typeof it?.text === 'string' && it.text.trim()) return it.text.trim();
+                }
+              } else if (t === 'message') {
+                const role = (u.role || u.message?.role || '').toLowerCase();
+                if (role === 'user') {
+                  const c = u.content || u.message?.content;
+                  const list = Array.isArray(c) ? c : (c ? [c] : []);
+                  for (const it of list) {
+                    if (!it) continue;
+                    if (typeof it === 'string' && it.trim()) return it.trim();
+                    if (typeof it?.text === 'string' && it.text.trim()) return it.text.trim();
+                  }
+                }
+              }
+            } catch {}
+            return null;
+          };
+          for (const u of updatesArr) { const txt = pickText(u); if (txt) { name = txt.slice(0, 10) + '...'; break; } }
+        }
+        setThreadName(name || 'Default Chat');
+      } catch { setThreadName('Default Chat'); }
       // Hide legacy synthetic markers like "Thread continued"
       const filtered = updatesArr.filter((raw: any) => {
         try {
@@ -719,27 +778,47 @@ export const ChatPage: React.FC = () => {
   }
 
   return (
-    <div className="flex flex-col h-[100vh] overflow-hidden">
-      {/* Header (minimal) */}
-      <div className="border-b border-border p-2 flex items-center justify-between gap-2 flex-none">
-        <div className="flex items-center gap-2">
-          <div className="text-sm font-medium">Chat</div>
-          <ModeChip modeId={currentModeId} hidden={!modes} onClick={() => setModeSheetOpen(true)} />
-          <button className="text-xs px-2 py-1 rounded-full border border-border bg-muted/40 hover:bg-muted" onClick={() => { setSessionSheetOpen(true); refreshThreads().catch(()=>{}); refreshModels().catch(()=>{}); wsFirst('session.state', {}).catch(()=>{}); }}>
-            Sessions
-          </button>
-          {/* Removed collapse-all chip per request */}
-          {!!models.length && (
-            <button className="text-xs px-2 py-1 rounded-full border border-border bg-muted/40 hover:bg-muted" onClick={() => setModelSheetOpen(true)}>
-              {currentModelId ? `Model: ${currentModelId}` : 'Model'}
-            </button>
-          )}
+    <div className="flex flex-col h-[100svh] md:h-[100vh] overflow-hidden">
+      {/* Header (hidden on mobile to save space; global app header remains) */}
+      <div className="hidden sm:flex border-b border-border p-2 items-center justify-between gap-2 flex-none">
+        {/* Left: thread name (keep minimal on mobile) */}
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="text-xs sm:text-sm font-medium truncate">{threadName || 'Default Chat'}</div>
         </div>
-        <div className="text-xs text-muted-foreground">{sessionId ? `Session: ${sessionId.slice(0,8)}…` : connecting ? 'Connecting…' : 'Idle'}{activeThreadId && sessionId !== activeThreadId ? ` • Thread: ${activeThreadId.slice(0,8)}…` : ''}</div>
+        {/* Right: controls */}
+        <div className="flex items-center gap-2">
+          {/* Full controls on sm+ */}
+          <div className="hidden sm:flex items-center gap-2">
+            <ModeChip modeId={currentModeId} hidden={!modes} onClick={() => setModeSheetOpen(true)} />
+            <button
+              className="text-xs px-2 py-1 rounded-full border border-border bg-muted/40 hover:bg-muted"
+              onClick={() => { setSessionSheetOpen(true); refreshThreads().catch(()=>{}); refreshModels().catch(()=>{}); wsFirst('session.state', {}).catch(()=>{}); }}
+            >
+              Sessions
+            </button>
+            {!!models.length && (
+              <button
+                className="text-xs px-2 py-1 rounded-full border border-border bg-muted/40 hover:bg-muted"
+                onClick={() => setModelSheetOpen(true)}
+              >
+                {currentModelId ? `Model: ${currentModelId}` : 'Model'}
+              </button>
+            )}
+            <div className="text-xs text-muted-foreground">{connecting ? 'Connecting…' : (isConnected ? 'Connected' : 'Idle')}</div>
+          </div>
+          {/* Mobile: overflow menu */}
+          <button
+            className="sm:hidden inline-flex items-center justify-center w-8 h-8 rounded-full border border-border bg-muted/40 hover:bg-muted"
+            aria-label="More actions"
+            onClick={() => setActionsOpen(true)}
+          >
+            <MoreHorizontal className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-2">
+      <div className="flex-1 min-h-0 overflow-y-auto p-1 sm:p-3 space-y-1 sm:space-y-2 pb-28 sm:pb-0">
         {(() => {
           const nodes: React.ReactNode[] = [];
           for (let i = 0; i < messages.length; ) {
@@ -787,7 +866,7 @@ export const ChatPage: React.FC = () => {
       </div>
 
       {/* Mention overlay */}
-      <div className="pointer-events-none fixed z-50" style={{ left: (mentionPos?.left ?? 16) + 'px', bottom: '96px', right: 'auto' }} aria-hidden={!mentionOpen}>
+      <div className="pointer-events-none fixed z-50" style={{ left: (mentionPos?.left ?? 16) + 'px', bottom: 'calc(80px + env(safe-area-inset-bottom))', right: 'auto' }} aria-hidden={!mentionOpen}>
         <MentionSuggestions
           visible={mentionOpen}
           query={mentionQuery}
@@ -797,8 +876,40 @@ export const ChatPage: React.FC = () => {
         />
       </div>
 
-      {/* Composer - pinned to bottom by flex layout (non-growing) */}
-      <div className="border-t border-border p-3 flex-none">
+      {/* Mobile floating actions button (replaces hidden header actions) */}
+      <button
+        className="sm:hidden fixed right-2 bottom-[72px] z-40 inline-flex items-center justify-center w-10 h-10 rounded-full border border-border bg-muted/60 hover:bg-muted"
+        aria-label="More actions"
+        onClick={() => setActionsOpen(true)}
+      >
+        <MoreHorizontal className="w-5 h-5" />
+      </button>
+
+      {/* Mobile composer (fixed) */}
+      <div className="sm:hidden fixed bottom-0 left-0 right-0 z-40 border-t border-border p-1 pb-[calc(env(safe-area-inset-bottom)+4px)] bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+        <div className="flex items-end gap-2">
+          <textarea
+            ref={inputRef}
+            className="flex-1 min-h-[32px] max-h-28 resize-none rounded-lg border border-input bg-background text-foreground px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring"
+            placeholder={'Type a message…'}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onFocus={() => { try { endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }); } catch {} }}
+            rows={1}
+          />
+          <Button size="sm" disabled={!canPrompt} onClick={handleSend} className="inline-flex items-center justify-center w-9 h-9">
+            <Send className="h-4 w-4" />
+          </Button>
+          {sending && (
+            <Button size="sm" variant="secondary" onClick={handleCancel} aria-label="Cancel" className="inline-flex items-center justify-center w-9 h-9">
+              <X className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Composer - desktop/tablet */}
+      <div className="hidden sm:block border-t border-border p-2 sm:p-3 pb-[env(safe-area-inset-bottom)] flex-none">
         {!sessionId && (
           <div className="mb-2 text-xs text-amber-600 bg-amber-600/10 border border-amber-600/30 rounded px-2 py-1">
             No active session. Start typing and Send to create one, or pick an existing session via the Sessions button.
@@ -815,17 +926,23 @@ export const ChatPage: React.FC = () => {
         <div className="flex items-end gap-2">
           <textarea
             ref={inputRef}
-            className="flex-1 min-h-[44px] max-h-40 resize-none rounded-lg border border-input bg-background text-foreground px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring"
+            className="flex-1 min-h-[40px] max-h-32 resize-none rounded-lg border border-input bg-background text-foreground px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring"
             placeholder={'Type a message…'}
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            rows={2}
+            onFocus={() => { try { endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }); } catch {} }}
+            rows={1}
           />
-          <Button disabled={!canPrompt} onClick={handleSend} className="inline-flex items-center gap-2">
+          <Button size="sm" disabled={!canPrompt} onClick={handleSend} className="inline-flex items-center gap-2">
             <Send className="h-4 w-4" />
-            Send
+            <span className="hidden sm:inline">Send</span>
           </Button>
-          <Button variant="secondary" onClick={handleCancel}>Cancel</Button>
+          {sending && (
+            <Button size="sm" variant="secondary" onClick={handleCancel} aria-label="Cancel">
+              <X className="h-4 w-4 sm:hidden" />
+              <span className="hidden sm:inline">Cancel</span>
+            </Button>
+          )}
         </div>
       </div>
 
@@ -872,11 +989,7 @@ export const ChatPage: React.FC = () => {
             <div className="mb-4 flex gap-2 pr-2">
               <Button onClick={handleNewSession}>New Session</Button>
               <Button variant="secondary" onClick={() => refreshThreads()}>Refresh</Button>
-              {!!(modes && (modes.available_modes || modes.availableModes)?.length) && (
-                <Button variant="secondary" onClick={() => setModeSheetOpen(true)}>
-                  {currentModeId ? `Mode: ${currentModeId}` : 'Modes'}
-                </Button>
-              )}
+              {/* Hide Modes control within session picker */}
               {!!models.length && (
                 <Button variant="secondary" onClick={() => setModelSheetOpen(true)}>
                   {currentModelId ? `Model: ${currentModelId}` : 'Models'}
@@ -884,28 +997,7 @@ export const ChatPage: React.FC = () => {
               )}
             </div>
             <div className="space-y-3 max-h-[50vh] overflow-auto">
-              {/* Modes inline (like sessions) */}
-              {modes && (modes.available_modes || modes.availableModes)?.length ? (
-                <div className="space-y-1">
-                  <div className="text-xs font-semibold opacity-70 px-1">Modes</div>
-                  {(modes.available_modes || modes.availableModes || []).map((m: any) => (
-                    <div
-                      key={m.id}
-                      className={cn(
-                        'flex items-center gap-3 rounded px-3 py-2 border',
-                        currentModeId === m.id ? 'border-primary bg-primary/10' : 'border-input hover:bg-muted'
-                      )}
-                    >
-                      <button
-                        className={cn('text-left text-sm flex-1', currentModeId === m.id ? 'font-semibold' : 'font-normal')}
-                        onClick={() => handleSelectMode(m.id)}
-                      >
-                        {m.name || m.id}
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              ) : null}
+              {/* Modes list intentionally not shown in session picker */}
 
               {/* Models inline (like sessions) */}
               {models.length ? (
@@ -947,20 +1039,47 @@ export const ChatPage: React.FC = () => {
                     {active && (
                       <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary rounded-l" aria-hidden />
                     )}
-                    <button
-                      className={cn('text-left text-sm flex-1 inline-flex items-start gap-2', active ? 'font-semibold' : 'font-normal')}
-                      onClick={() => handleSelectSession(t.id)}
-                    >
-                      {active && <CircleDot className="w-4 h-4 mt-[2px] text-primary" />}
-                      <div className="min-w-0">
-                        <div className="truncate">{t.title || t.id}</div>
-                        <div className="text-[11px] opacity-70">{t.updatedAt || t.createdAt}</div>
-                      </div>
-                    </button>
+                    <ThreadListItem
+                      key={t.id}
+                      active={active}
+                      id={t.id}
+                      title={t.title}
+                      timestamp={t.updatedAt || t.createdAt}
+                      onSelect={handleSelectSession}
+                      onRenamed={(id, name) => { try { setThreads(prev => prev.map(x => x.id === id ? { ...x, title: name } : x)); } catch {}; if ((activeThreadId || sessionId) === id) setThreadName(name || 'Default Chat'); }}
+                      request={wsFirst}
+                    />
                     <Button variant="secondary" size="sm" onClick={() => handleDeleteSession(t.id)}>Delete</Button>
                   </div>
                 );
               })}
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Mobile overflow actions sheet */}
+      {actionsOpen && (
+        <div className="fixed inset-0 z-50 flex items-end sm:hidden">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setActionsOpen(false)} />
+          <div className="relative bg-card border border-border rounded-t-lg w-full p-3 space-y-2">
+            <div className="flex items-center justify-between mb-1">
+              <div className="text-sm font-semibold">Chat Actions</div>
+              <Button size="sm" variant="secondary" onClick={() => setActionsOpen(false)}>Close</Button>
+            </div>
+            <div className="flex flex-col gap-2">
+              {modes && (
+                <Button variant="secondary" onClick={() => { setModeSheetOpen(true); setActionsOpen(false); }}>
+                  {currentModelId ? `Mode: ${currentModelId}` : 'Mode'}
+                </Button>
+              )}
+              <Button onClick={() => { setSessionSheetOpen(true); refreshThreads().catch(()=>{}); refreshModels().catch(()=>{}); wsFirst('session.state', {}).catch(()=>{}); setActionsOpen(false); }}>
+                Sessions
+              </Button>
+              {!!models.length && (
+                <Button variant="secondary" onClick={() => { setModelSheetOpen(true); setActionsOpen(false); }}>
+                  {currentModelId ? `Model: ${currentModelId}` : 'Models'}
+                </Button>
+              )}
             </div>
           </div>
         </div>
@@ -984,6 +1103,71 @@ export const ChatPage: React.FC = () => {
         </div>
       )}
     </div>
+  );
+};
+
+const ThreadListItem: React.FC<{
+  id: string;
+  title?: string;
+  timestamp: string;
+  active?: boolean;
+  onSelect: (id: string) => void;
+  onRenamed: (id: string, name: string) => void;
+  request: <T=any>(op: string, payload: any) => Promise<T>;
+}> = ({ id, title, timestamp, active, onSelect, onRenamed, request }) => {
+  const [editing, setEditing] = React.useState(false);
+  const [value, setValue] = React.useState<string>(title || 'Default Chat');
+  const lastTapRef = React.useRef<{ id: string; ts: number } | null>(null);
+
+  React.useEffect(() => { setValue(title || 'Default Chat'); }, [title]);
+
+  const commit = async () => {
+    const name = (value || '').trim() || 'Default Chat';
+    try { await request('thread.rename', { id, title: name }); onRenamed(id, name); } catch {}
+    setEditing(false);
+  };
+
+  const handleTouch = () => {
+    const now = Date.now();
+    const last = lastTapRef.current;
+    if (last && last.id === id && (now - last.ts) < 300) {
+      setEditing(true);
+    }
+    lastTapRef.current = { id, ts: now };
+  };
+
+  if (editing) {
+    return (
+      <div className={cn('flex-1 inline-flex items-start gap-2')}
+           onDoubleClick={(e) => e.stopPropagation()}
+           onTouchEnd={(e) => e.stopPropagation()}>
+        {active && <CircleDot className="w-4 h-4 mt-[2px] text-primary" />}
+        <input
+          className={cn('flex-1 bg-transparent outline-none text-sm border-b border-input focus:border-primary')}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          autoFocus
+          onBlur={commit}
+          onKeyDown={(e) => { if (e.key === 'Enter') commit(); else if (e.key === 'Escape') setEditing(false); }}
+        />
+        <div className="text-[11px] opacity-70 ml-2 mt-[2px]">{timestamp}</div>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      className={cn('text-left text-sm flex-1 inline-flex items-start gap-2', active ? 'font-semibold' : 'font-normal')}
+      onClick={() => onSelect(id)}
+      onDoubleClick={() => setEditing(true)}
+      onTouchEnd={handleTouch}
+    >
+      {active && <CircleDot className="w-4 h-4 mt-[2px] text-primary" />}
+      <div className="min-w-0">
+        <div className="truncate">{title || 'Default Chat'}</div>
+        <div className="text-[11px] opacity-70">{timestamp}</div>
+      </div>
+    </button>
   );
 };
 

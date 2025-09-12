@@ -427,6 +427,8 @@ export class CliServer {
                   return { success: true, data: await this.acpController.listThreads() };
                 case 'thread.get':
                   return { success: true, data: await this.acpController.getThread(payload.id) };
+                case 'thread.rename':
+                  return { success: true, data: await (this.acpController as any).renameThread(payload) };
                 default:
                   return { error: `Unknown ACP operation: ${operation}` };
               }

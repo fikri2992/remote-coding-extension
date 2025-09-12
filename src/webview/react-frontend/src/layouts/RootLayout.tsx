@@ -174,7 +174,7 @@ const LayoutContent: React.FC = () => {
         </div>
       </div>
       {/* Floating Debug Overlay */}
-      <DebugOverlay initialOpen={false} />
+      {/* <DebugOverlay initialOpen={false} /> */}
     </div>
   );
 };

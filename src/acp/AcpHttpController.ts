@@ -4,20 +4,24 @@ import { z } from 'zod';
 import { ACPConnection, AgentCommand } from './ACPConnection';
 import SessionsStore from './SessionsStore';
 import ThreadsStore from './ThreadsStore';
+import ModesStore from './ModesStore';
 import type { PromptRequest, SessionUpdate } from './types';
 import { AcpEventBus } from './AcpEventBus';
 
 export class AcpHttpController {
   private conn: ACPConnection | null = null;
   private lastSessionId: string | null = null;
+  private lastModes: any | null = null;
   private sessions: SessionsStore;
   private threads: ThreadsStore;
+  private modesStore!: ModesStore;
 
   constructor(
     private dataRoot: string = path.join(process.cwd(), '.on-the-go', 'acp')
   ) {
     this.sessions = new SessionsStore(path.join(this.dataRoot, 'sessions.json'));
     this.threads = new ThreadsStore(path.join(this.dataRoot, 'threads'));
+    this.modesStore = new ModesStore(path.join(this.dataRoot, 'modes'));
   }
 
   // Zod Schemas
@@ -49,7 +53,15 @@ export class AcpHttpController {
   async init(): Promise<void> {
     await this.sessions.init();
     await this.threads.init();
+    await this.modesStore.init();
     this.lastSessionId = this.sessions.getLast();
+    try {
+      const sid = this.lastSessionId;
+      if (sid) {
+        const rec = await this.modesStore.get(sid);
+        if (rec) this.lastModes = { available_modes: rec.available_modes || [], current_mode_id: rec.current_mode_id };
+      }
+    } catch {}
   }
 
   // --- Connect & Auth ---
@@ -86,6 +98,21 @@ export class AcpHttpController {
           console.warn('[ACP] threads.append error', e?.message || e);
         });
       }
+      // Track mode changes to keep current_mode_id available for UI state restores
+      try {
+        const t = (update as any)?.type || (update as any)?.updateType;
+        if (t === 'current_mode_update' && (update as any)?.current_mode_id) {
+          const mId = (update as any).current_mode_id;
+          if (this.lastModes && typeof this.lastModes === 'object') (this.lastModes as any).current_mode_id = mId;
+          else this.lastModes = { current_mode_id: mId, available_modes: [] };
+        } else if (t === 'mode_updated' && (((update as any)?.modeId) || ((update as any)?.mode_id))) {
+          const mId = (update as any).modeId || (update as any).mode_id;
+          if (this.lastModes && typeof this.lastModes === 'object') (this.lastModes as any).current_mode_id = mId;
+          else this.lastModes = { current_mode_id: mId, available_modes: [] };
+        } else if ((update as any)?.modes) {
+          this.lastModes = (update as any).modes;
+        }
+      } catch {}
     });
     this.conn.on('agent_stderr', (line: string) => {
       AcpEventBus.emit('agent_stderr', { type: 'agent_stderr', line });
@@ -160,6 +187,8 @@ export class AcpHttpController {
       this.lastSessionId = sessionId;
       try { await this.sessions.add(sessionId); } catch {}
       const modes = (resp as any).modes;
+      try { this.lastModes = modes || null; } catch {}
+      try { if (modes) await this.modesStore.setSnapshot(sessionId, modes); } catch {}
       return { sessionId, modes } as any;
     } catch (err: any) {
       throw this.authMapError(err);
@@ -174,6 +203,8 @@ export class AcpHttpController {
     if (!sessionId) throw new Error('no sessionId');
     if (!modeId) throw new Error('modeId required');
     await this.conn.setMode(sessionId, modeId);
+    try { if (this.lastModes && typeof this.lastModes === 'object') (this.lastModes as any).current_mode_id = modeId; } catch {}
+    try { await this.modesStore.setCurrent(sessionId, modeId); } catch {}
     return { ok: true };
   }
 
@@ -207,17 +238,18 @@ export class AcpHttpController {
       const code = typeof err?.code === 'number' ? err.code : undefined;
       const notFound = /Session not found/i.test(msg) || (code === -32603 && /Session not found/i.test(String(err?.data?.details || '')));
       if (notFound) {
-        try {
-          const resp = await this.conn.newSession({ cwd: process.cwd(), mcpServers: [] });
-          const newSid: string = (resp as any).sessionId || (resp as any).session_id;
-          if (newSid) {
-            this.lastSessionId = newSid;
-            try { await this.sessions.add(newSid); } catch {}
-            // Notify UI about recovery so it can update selected session
-            try { AcpEventBus.emit('session_recovered', { type: 'session_recovered', oldSessionId: sessionId, newSessionId: newSid, reason: 'not_found' }); } catch {}
-            // Retry prompt on the new session
-            sessionId = newSid;
-            req = { sessionId: newSid, prompt } as PromptRequest;
+      try {
+        const resp = await this.conn.newSession({ cwd: process.cwd(), mcpServers: [] });
+        const newSid: string = (resp as any).sessionId || (resp as any).session_id;
+        if (newSid) {
+          this.lastSessionId = newSid;
+          try { await this.sessions.add(newSid); } catch {}
+          try { const modes = (resp as any).modes; if (modes) { this.lastModes = modes; await this.modesStore.setSnapshot(newSid, modes); } } catch {}
+          // Notify UI about recovery so it can update selected session
+          try { AcpEventBus.emit('session_recovered', { type: 'session_recovered', oldSessionId: sessionId, newSessionId: newSid, reason: 'not_found' }); } catch {}
+          // Retry prompt on the new session
+          sessionId = newSid;
+          req = { sessionId: newSid, prompt } as PromptRequest;
             try { await this.threads.append(newSid, { type: 'user_message', content: prompt }); } catch {}
             const retry = await this.conn.prompt(req);
             try { await this.sessions.touch(newSid); } catch {}
@@ -243,18 +275,19 @@ export class AcpHttpController {
   }
 
   // Expose minimal state for UI
-  state(): { connected: boolean; sessionId: string | null } {
-    return { connected: !!this.conn, sessionId: this.lastSessionId };
+  state(): { connected: boolean; sessionId: string | null; modes?: any } {
+    return { connected: !!this.conn, sessionId: this.lastSessionId, ...(this.lastModes ? { modes: this.lastModes } : {}) } as any;
   }
 
   // Associate a thread for continuation and ensure session is active
-  async selectThread(body: any): Promise<{ ok: true; sessionId: string }> {
+  async selectThread(body: any): Promise<{ ok: true; sessionId: string; modes?: any }> {
     const threadId = String(body?.threadId || body?.id || '');
     if (!threadId) throw new Error('threadId required');
     const sid = await this.ensureActiveSession();
     try { await this.sessions.touch(sid); } catch {}
     // No longer append a synthetic marker; selection should be transparent to users
-    return { ok: true, sessionId: sid };
+    try { const rec = await this.modesStore.get(sid); if (rec) this.lastModes = { available_modes: rec.available_modes || [], current_mode_id: rec.current_mode_id }; } catch {}
+    return { ok: true, sessionId: sid, ...(this.lastModes ? { modes: this.lastModes } : {}) } as any;
   }
 
   // Graceful disconnect from agent
@@ -339,12 +372,13 @@ export class AcpHttpController {
   // --- Sessions persistence ---
   listSessions() { return { sessions: this.sessions.list(), lastSessionId: this.sessions.getLast() }; }
   lastSession() { return { sessionId: this.sessions.getLast() }; }
-  async selectSession(body: any) { const sessionId = String(body?.sessionId || ''); if (!sessionId) throw new Error('sessionId required'); await this.sessions.select(sessionId); this.lastSessionId = sessionId; return { ok: true, sessionId }; }
-  async deleteSession(body: any) { const sessionId = String(body?.sessionId || ''); if (!sessionId) throw new Error('sessionId required'); await this.sessions.delete(sessionId); this.lastSessionId = this.sessions.getLast(); return { ok: true, lastSessionId: this.lastSessionId }; }
+  async selectSession(body: any) { const sessionId = String(body?.sessionId || ''); if (!sessionId) throw new Error('sessionId required'); await this.sessions.select(sessionId); this.lastSessionId = sessionId; try { const rec = await this.modesStore.get(sessionId); if (rec) this.lastModes = { available_modes: rec.available_modes || [], current_mode_id: rec.current_mode_id }; } catch {} return { ok: true, sessionId }; }
+  async deleteSession(body: any) { const sessionId = String(body?.sessionId || ''); if (!sessionId) throw new Error('sessionId required'); await this.sessions.delete(sessionId); this.lastSessionId = this.sessions.getLast(); if (this.lastSessionId) { try { const rec = await this.modesStore.get(this.lastSessionId); if (rec) this.lastModes = { available_modes: rec.available_modes || [], current_mode_id: rec.current_mode_id }; } catch {} } else { this.lastModes = null; } return { ok: true, lastSessionId: this.lastSessionId }; }
 
   // --- Threads persistence ---
   async listThreads() { const threads = await this.threads.list(); return { threads }; }
   async getThread(id: string) { const thread = await this.threads.get(id); if (!thread) throw new Error('not found'); return thread; }
+  async renameThread(body: any) { const id = String(body?.id || body?.threadId || ''); const title = String(body?.title || '').trim(); if (!id) throw new Error('id required'); await this.threads.setTitle(id, title || 'Default Chat'); return { ok: true }; }
 
   // --- helpers ---
   private validateConnectBody(body: any) {

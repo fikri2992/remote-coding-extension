@@ -128,6 +128,23 @@ export const ChatPage: React.FC = () => {
   const sendingRef = useRef(sending);
   useEffect(() => { sendingRef.current = sending; }, [sending]);
 
+  // When sending completes, if there are no active tool calls, ensure typing indicator is cleared.
+  useEffect(() => {
+    if (!sending) {
+      const hasActive = Object.values(activeToolCallsRef.current).some(Boolean);
+      if (!hasActive) {
+        setIsTyping(false);
+      } else {
+        // Re-check after a short delay in case trailing tool updates arrive
+        try { if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current); } catch {}
+        typingTimeoutRef.current = setTimeout(() => {
+          const stillActive = Object.values(activeToolCallsRef.current).some(Boolean);
+          if (!stillActive && !sendingRef.current) setIsTyping(false);
+        }, 1500);
+      }
+    }
+  }, [sending]);
+
   const canPrompt = useMemo(() => input.trim().length > 0 && !sending, [input, sending]);
 
   const wsFirst = async <T = any,>(op: string, payload: any): Promise<T> => await sendAcp(op, payload);
@@ -157,10 +174,12 @@ export const ChatPage: React.FC = () => {
             const id = (tc?.id || (update as any)?.toolCallId || (update as any)?.id) as string | undefined;
             const st = String(tc?.status || (update as any)?.status || '').toLowerCase();
             if (id) {
-              if (!st || /(start|running|in_progress|progress|execut)/.test(st)) {
+              const isRunning = (!st || /(start|started|starting|running|in_progress|progress|execut|queued|pending)/.test(st));
+              const isDone = /(succeed|succeeded|success|ok|done|complete|completed|finish|finished|failed|error|cancel|canceled|cancelled|timeout|stopped|idle)/.test(st);
+              if (isRunning) {
                 activeToolCallsRef.current[id] = true;
                 keepTyping = true;
-              } else if (/(succeed|done|complete|finish|failed|error|cancel)/.test(st)) {
+              } else if (isDone) {
                 delete activeToolCallsRef.current[id];
               }
             }
@@ -896,6 +915,9 @@ export const ChatPage: React.FC = () => {
         return true;
       });
       setMessages([]);
+      // Reset typing state and active tool-call tracking when switching threads
+      try { setIsTyping(false); } catch {}
+      try { activeToolCallsRef.current = {}; } catch {}
       try { setActiveThreadId(sid); localStorage.setItem('chat:activeThreadId', sid); } catch {}
       for (const raw of filtered) {
         try {

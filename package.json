@@ -1,12 +1,12 @@
 {
-  "name": "kiro-remote",
-  "description": "Kiro Remote CLI that runs a local web server + WebSocket backend with ACP integration.",
+  "name": "web-agent-client",
+  "description": "Web Agent Client CLI that runs a local web server + WebSocket backend with ACP integration.",
   "version": "0.0.1",
   "workspaces": [
     "claude-code-acp"
   ],
   "bin": {
-    "kiro-remote": "./out/cli/index.js"
+    "web-agent-client": "./out/cli/index.js"
   },
   "scripts": {
     "compile": "tsc -p ./",

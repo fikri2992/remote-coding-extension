@@ -162,6 +162,16 @@ export class CliServer {
       this.acpController = new AcpHttpController();
       await this.acpController.init();
 
+      // Option B — Autostart the ACP agent at server startup
+      // Proactively connect so the agent is pre-warmed before any client appears.
+      // Keep non-fatal: if credentials are missing or any error occurs, continue startup.
+      try {
+        await this.acpController.connect({});
+        console.log('🤖 ACP agent autostarted (pre-warmed)');
+      } catch (e: any) {
+        console.warn('[ACP] Autostart failed (non-fatal):', e?.message || String(e));
+      }
+
       // Register terminal service with WebSocket server
       if (this.webSocketServer) {
         (this.webSocketServer as any).registerService('terminal', {
@@ -432,11 +442,16 @@ export class CliServer {
                 default:
                   return { error: `Unknown ACP operation: ${operation}` };
               }
-            } catch (error) {
-              return {
-                success: false,
-                error: error instanceof Error ? error.message : 'Unknown error'
+            } catch (error: any) {
+              // Preserve structured error details for the client (e.g., authRequired, authMethods, code)
+              const errObj = error instanceof Error ? error : new Error(String(error?.message || error));
+              const payload = {
+                message: errObj.message,
+                code: (error && typeof error.code === 'number') ? error.code : undefined,
+                authRequired: (error && typeof error.authRequired === 'boolean') ? error.authRequired : undefined,
+                authMethods: (error && Array.isArray(error.authMethods)) ? error.authMethods : undefined,
               };
+              return { success: false, error: payload } as any;
             }
           },
           onClientDisconnect: (_clientId: string) => {

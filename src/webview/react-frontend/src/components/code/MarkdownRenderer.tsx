@@ -27,7 +27,40 @@ export const MarkdownRenderer: React.FC<{ content: string; className?: string }>
   const remarkGfm = gfm
   return (
     <div className={className}>
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          code({ inline, className, children, ...props }: any) {
+            if (inline) {
+              return (
+                <code
+                  className={
+                    'px-1.5 py-0.5 bg-muted/50 border border-border rounded text-[0.85em] font-mono break-words whitespace-pre-wrap'
+                  }
+                  style={{
+                    overflowWrap: 'anywhere',
+                    wordBreak: 'break-word',
+                    whiteSpace: 'break-spaces',
+                    maxWidth: '100%',
+                    display: 'inline-block',
+                  }}
+                  {...props}
+                >
+                  {children}
+                </code>
+              )
+            }
+            // Fenced code block
+            return (
+              <pre className="bg-muted/40 border border-border rounded-lg p-3 overflow-auto text-xs leading-snug font-mono max-h-[520px]">
+                <code className={className} {...props}>{children}</code>
+              </pre>
+            )
+          },
+        }}
+      >
+        {content}
+      </ReactMarkdown>
     </div>
   )
 }

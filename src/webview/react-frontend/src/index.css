@@ -105,6 +105,14 @@
       scroll-behavior: auto !important;
     }
   }
+  /* Ensure inline code wraps on small screens (but keep fenced blocks scrollable)
+     Applies to any inline <code> not inside a <pre> */
+  :not(pre) > code {
+    white-space: break-spaces; /* preserve spaces and allow wrapping */
+    overflow-wrap: anywhere;   /* allow breaks in long tokens */
+    word-break: break-word;    /* legacy support */
+    max-width: 100%;
+  }
 }
 
 @layer utilities {

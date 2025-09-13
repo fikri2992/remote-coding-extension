@@ -609,8 +609,13 @@ export class WebSocketServer {
                 if (resp && typeof resp === 'object') {
                   const r: any = resp;
                   if (r && r.success === false) {
-                    const errMsg = typeof r.error === 'string' ? r.error : (r.error?.message || 'acp error');
-                    respond(false, new Error(errMsg));
+                    // Preserve structured error payload when available (code, auth info, etc.)
+                    if (r.error && typeof r.error === 'object') {
+                      respond(false, r.error);
+                    } else {
+                      const errMsg = typeof r.error === 'string' ? r.error : (r.error?.message || 'acp error');
+                      respond(false, new Error(errMsg));
+                    }
                     return;
                   }
                   if (r && r.success === true && Object.prototype.hasOwnProperty.call(r, 'data')) {

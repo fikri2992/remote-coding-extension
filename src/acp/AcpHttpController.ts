@@ -257,7 +257,20 @@ export class AcpHttpController {
           }
         } catch {}
       }
-      throw this.authMapError(err);
+      // Map and persist a system warning for auth errors so it survives reloads
+      const mapped = this.authMapError(err);
+      try {
+        if ((mapped as any)?.authRequired) {
+          const warn = {
+            type: 'message',
+            role: 'system',
+            content: [ { type: 'text', text: 'Authentication required. Open the ACP tab to authenticate, then retry your message.' } ],
+          } as any;
+          await this.threads.append(sessionId, warn);
+          try { this.sessions.touch(sessionId); } catch {}
+        }
+      } catch {}
+      throw mapped;
     }
   }
 

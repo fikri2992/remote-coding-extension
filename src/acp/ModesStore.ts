@@ -32,11 +32,12 @@ export default class ModesStore {
 
   async setSnapshot(sessionId: string, modes: any): Promise<void> {
     const now = new Date().toISOString();
+    const cm = (modes?.current_mode_id ?? modes?.currentModeId) as string | undefined;
     const rec: ModesRecord = {
       sessionId,
       available_modes: (modes?.available_modes || modes?.availableModes || modes?.modes || []) as Array<{ id: string; name?: string }>,
-      current_mode_id: (modes?.current_mode_id || modes?.currentModeId || undefined) as string | undefined,
       updatedAt: now,
+      ...(cm !== undefined ? { current_mode_id: cm } : {}),
     };
     await fs.writeFile(this.filePath(sessionId), JSON.stringify(rec, null, 2), 'utf8');
   }
@@ -49,4 +50,3 @@ export default class ModesStore {
     await fs.writeFile(this.filePath(sessionId), JSON.stringify(rec, null, 2), 'utf8');
   }
 }
-

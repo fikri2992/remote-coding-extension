@@ -16,14 +16,32 @@ function escapeHtml(input: string): string {
 }
 
 function renderInline(md: string): string {
-  // inline code
-  let out = md.replace(/`([^`]+)`/g, (_m, p1) => `<code class="px-1.5 py-0.5 bg-muted/50 border border-border rounded text-[0.85em] font-mono">${escapeHtml(p1)}</code>`);
+  // Protect inline code spans with placeholders so later bold/italic parsing doesn't affect them
+  const codePlaceholders: string[] = [];
+  let tmp = md.replace(/`([^`]+)`/g, (_m, p1) => {
+    const idx = codePlaceholders.length;
+    const html = `<code class="px-1.5 py-0.5 bg-muted/50 border border-border rounded text-[0.85em] font-mono break-words whitespace-pre-wrap" style="overflow-wrap:anywhere;word-break:break-word;white-space:break-spaces;max-width:100%;display:inline-block">${escapeHtml(p1)}</code>`;
+    codePlaceholders.push(html);
+    return `\u0000CODE${idx}\u0000`;
+  });
+
   // links
-  out = out.replace(/\[([^\]]+)\]\((https?:[^\s)]+)\)/g, (_m, label, url) => {
+  tmp = tmp.replace(/\[([^\]]+)\]\((https?:[^\s)]+)\)/g, (_m, label, url) => {
     const safeUrl = escapeHtml(url);
     const safeLabel = escapeHtml(label);
     return `<a href="${safeUrl}" target="_blank" rel="noreferrer" class="underline decoration-2 underline-offset-2 hover:opacity-90">${safeLabel}</a>`;
   });
+
+  // strong (bold) with **...** or __...__
+  tmp = tmp.replace(/\*\*([^*]+)\*\*/g, (_m, p1) => `<strong class="font-semibold">${p1}</strong>`);
+  tmp = tmp.replace(/__([^_]+)__/g, (_m, p1) => `<strong class="font-semibold">${p1}</strong>`);
+
+  // emphasis (italic) with *...* or _..._
+  tmp = tmp.replace(/(?<!\*)\*([^*\n]+)\*(?!\*)/g, (_m, p1) => `<em class="italic">${p1}</em>`);
+  tmp = tmp.replace(/(^|[^_])_([^_\n]+)_([^_]|$)/g, (_m, a, p1, b) => `${a}<em class="italic">${p1}</em>${b}`);
+
+  // Restore code placeholders
+  let out = tmp.replace(/\u0000CODE(\d+)\u0000/g, (_m, i) => codePlaceholders[Number(i)] || '');
   return out;
 }
 
@@ -42,7 +60,9 @@ function renderBlocks(md: string): string {
       if (!inCode) {
         flushList();
         codeLang = line.trim().slice(3).trim();
-        html.push(`<pre class="bg-muted/40 border border-border rounded-lg p-3 overflow-auto text-xs leading-snug font-mono max-h-[520px]"><code>`);
+        const langSafe = escapeHtml(codeLang);
+        const codeClass = codeLang ? ` class="language-${langSafe}"` : '';
+        html.push(`<pre class="bg-muted/40 border border-border rounded-lg p-3 overflow-auto text-xs leading-snug font-mono max-h-[520px]" data-lang="${langSafe}"><code${codeClass}>`);
         inCode = true;
       } else {
         html.push('</code></pre>');

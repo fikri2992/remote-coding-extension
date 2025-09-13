@@ -121,6 +121,13 @@ export const ChatPage: React.FC = () => {
   const [threads, setThreads] = useState<Array<{ id: string; title?: string; createdAt: string; updatedAt: string }>>([]);
   const [threadName, setThreadName] = useState<string>('Default Chat');
 
+  // Typing indicator and tool-call activity tracking
+  const [isTyping, setIsTyping] = useState(false);
+  const activeToolCallsRef = useRef<Record<string, boolean>>({});
+  const typingTimeoutRef = useRef<any>(null);
+  const sendingRef = useRef(sending);
+  useEffect(() => { sendingRef.current = sending; }, [sending]);
+
   const canPrompt = useMemo(() => input.trim().length > 0 && !sending, [input, sending]);
 
   const wsFirst = async <T = any,>(op: string, payload: any): Promise<T> => await sendAcp(op, payload);
@@ -136,6 +143,38 @@ export const ChatPage: React.FC = () => {
         const update = normalizeUpdateShape(msg.update);
         setUpdates((prev: any) => [...prev, update]);
         try { mapUpdateToMessages(update, setMessages); } catch {}
+        // Update typing indicator based on streaming/agent activity
+        try {
+          const ut = (update as any)?.type;
+          const tc = (update as any)?.tool_call;
+          let keepTyping = false;
+          // Assistant is producing content/thoughts
+          if (ut === 'agent_message_chunk' || ut === 'agent_thought_chunk' || ut === 'agent_message' || ut === 'assistant_message') {
+            keepTyping = true;
+          }
+          // Tool call lifecycle
+          if (ut === 'tool_call' || ut === 'tool_call_update') {
+            const id = (tc?.id || (update as any)?.toolCallId || (update as any)?.id) as string | undefined;
+            const st = String(tc?.status || (update as any)?.status || '').toLowerCase();
+            if (id) {
+              if (!st || /(start|running|in_progress|progress|execut)/.test(st)) {
+                activeToolCallsRef.current[id] = true;
+                keepTyping = true;
+              } else if (/(succeed|done|complete|finish|failed|error|cancel)/.test(st)) {
+                delete activeToolCallsRef.current[id];
+              }
+            }
+          }
+          if (keepTyping) setIsTyping(true);
+          // Debounce hiding the indicator once activity quiets down and no active tools remain
+          try { if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current); } catch {}
+          typingTimeoutRef.current = setTimeout(() => {
+            const hasActive = Object.values(activeToolCallsRef.current).some(Boolean);
+            if (!hasActive && !sendingRef.current) {
+              setIsTyping(false);
+            }
+          }, 1200);
+        } catch {}
         // track current mode id updates
         if ((update as any).type === 'current_mode_update' && (update as any).current_mode_id) {
           setCurrentModeId((update as any).current_mode_id);
@@ -161,7 +200,10 @@ export const ChatPage: React.FC = () => {
         setPermissionReq({ requestId: msg.requestId, request: msg.request });
       }
     });
-    return unsub;
+    return () => {
+      try { unsub(); } catch {}
+      try { if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current); } catch {}
+    };
   }, [addMessageListener]);
 
   // Restore once after WebSocket connects
@@ -372,7 +414,7 @@ export const ChatPage: React.FC = () => {
   // Prompt send
   async function handleSend() {
     if (!canPrompt) return;
-    const text = input.trim(); setInput(''); setSending(true);
+    const text = input.trim(); setInput(''); setSending(true); setIsTyping(true);
     try {
       const prompt: ContentBlock[] = [{ type: 'text', text } as any];
       try { if (!threadName || threadName === 'Default Chat') setThreadName((text || '').slice(0, 10) + '...'); } catch {}
@@ -393,22 +435,47 @@ export const ChatPage: React.FC = () => {
         if (resp && typeof resp === 'object' && resp.success === false) {
           throw new Error(String(resp.error || 'prompt failed'));
         }
+        // Clear selected context chips after a successful send
+        try { setSelectedContext([]); } catch {}
       } catch (e: any) {
         const msg = String(e?.message || e || '');
         if (/not connected/i.test(msg) || /ACP service not available/i.test(msg)) {
           try { await wsFirst('connect', {}); } catch {}
           await wsFirst('prompt', { prompt });
+          // Clear selected context chips after a successful resend
+          try { setSelectedContext([]); } catch {}
         } else {
           throw e;
         }
       }
     } catch (err: any) {
-      show({ title: 'Prompt Error', description: err?.message || String(err), variant: 'destructive' });
+      const msg = err?.message || String(err || '');
+      if (err?.authRequired || /Authentication required/i.test(msg)) {
+        const methods = (err?.authMethods || []) as any[];
+        const methodsList = Array.isArray(methods) && methods.length ? methods.map((m: any) => m.name || m.id || 'unknown').join(', ') : 'unknown';
+        show({ title: 'Authentication Required', description: 'Available methods: ' + methodsList, variant: 'info' });
+        const now = Date.now();
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `auth-${now}-${prev.length}`,
+            role: 'system',
+            parts: [
+              { type: 'text', text: 'Authentication required. Open the ACP page, authenticate, then retry your message.' } as any,
+            ],
+            ts: now,
+          },
+        ]);
+      } else {
+        show({ title: 'Prompt Error', description: msg, variant: 'destructive' });
+      }
+      try { setIsTyping(false); } catch {}
     } finally { setSending(false); }
   }
 
   async function handleCancel() {
     try { await wsFirst('cancel', { sessionId: sessionId || undefined }); } catch (e: any) { show({ title: 'Cancel Error', description: e?.message || String(e), variant: 'destructive' }); }
+    try { setIsTyping(false); } catch {}
   }
 
   async function handlePermission(outcome: 'selected' | 'cancelled', optionId?: string) {
@@ -938,6 +1005,18 @@ export const ChatPage: React.FC = () => {
           }
           return nodes;
         })()}
+        {isTyping && (
+          <MessageBubble role="assistant">
+            <div className="flex items-center gap-1 py-1">
+              <span className="sr-only">Assistant is typing…</span>
+              <span className="inline-flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-muted-foreground/60 animate-bounce" style={{ animationDelay: '-0.3s' }} />
+                <span className="w-2 h-2 rounded-full bg-muted-foreground/60 animate-bounce" style={{ animationDelay: '-0.15s' }} />
+                <span className="w-2 h-2 rounded-full bg-muted-foreground/60 animate-bounce" />
+              </span>
+            </div>
+          </MessageBubble>
+        )}
         <div ref={endRef} />
       </div>
 
@@ -1085,7 +1164,7 @@ export const ChatPage: React.FC = () => {
             </div>
             <div className="mb-4 flex gap-2 pr-2">
               <Button onClick={handleNewSession}>New Session</Button>
-              <Button variant="secondary" onClick={() => refreshThreads()}>Refresh</Button>
+              <Button variant="secondary" className="ml-2" onClick={() => refreshThreads()}>Refresh</Button>
               {/* Hide Modes control within session picker */}
               {!!models.length && (
                 <Button variant="secondary" onClick={() => setModelSheetOpen(true)}>

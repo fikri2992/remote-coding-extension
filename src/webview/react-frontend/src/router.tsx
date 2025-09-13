@@ -8,6 +8,7 @@ import GitPage from './pages/GitPage.tsx';
 import TerminalPage from './pages/TerminalPage.tsx';
 import ChatTerminalPage from './pages/ChatTerminalPage.tsx';
 import ChatPage from './pages/ChatPage.tsx';
+import HomePage from './pages/HomePage.tsx';
 import SettingsPage from './pages/SettingsPage.tsx';
 import { TunnelManagerPage } from './pages/TunnelManagerPage.tsx';
 import ACPPage from './pages/ACPPage.tsx';
@@ -75,6 +76,13 @@ const acpRoute = createRoute({
   component: ACPPage,
 });
 
+// Standalone homepage route for testing (not linked in menu)
+const homepageRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/homepage',
+  component: HomePage,
+});
+
 // File viewer route with search param (?path=/...)
 const fileViewRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -103,6 +111,7 @@ const routeTree = rootRoute.addChildren([
   chatRoute,
   settingsRoute,
   acpRoute,
+  homepageRoute,
 ]);
 
 // Create the router

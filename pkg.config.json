@@ -1,7 +1,7 @@
 {
-  "name": "kiro-remote",
+  "name": "web-agent-client",
   "version": "1.0.0",
-  "description": "Kiro Remote CLI Server",
+  "description": "Web Agent Client CLI Server",
   "main": "./out/cli/index.js",
   "bin": "./out/cli/index.js",
   "pkg": {

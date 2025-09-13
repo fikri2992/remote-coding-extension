@@ -130,7 +130,17 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
               } catch {}
               entry.resolve(result);
             }
-            else entry.reject(Object.assign(new Error(data?.error?.message || 'acp error'), { code: data?.error?.code, meta: data?.error?.meta }));
+            else {
+              const errMsg = data?.error?.message || 'acp error';
+              const e: any = new Error(errMsg);
+              if (typeof data?.error?.code === 'number') e.code = data.error.code;
+              if (data?.error && typeof data.error === 'object') {
+                if ('authRequired' in data.error) e.authRequired = !!(data.error as any).authRequired;
+                if ('authMethods' in data.error) e.authMethods = (data.error as any).authMethods;
+                if ('meta' in data.error) e.meta = (data.error as any).meta;
+              }
+              entry.reject(e);
+            }
           }
         }
 

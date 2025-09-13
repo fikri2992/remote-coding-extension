@@ -10,7 +10,6 @@ import ToolCallsGroup from '@/components/chat/ToolCallsGroup';
 import Markdown from '@/components/chat/Markdown';
 import DiffBlock from '@/components/chat/DiffBlock';
 import TerminalBlock from '@/components/chat/TerminalBlock';
-import TextAttachmentBlock from '@/components/chat/TextAttachmentBlock';
 import ContextChip from '@/components/chat/ContextChip';
 import ModeChip from '@/components/chat/ModeChip';
 import ModelPickerSheet from '@/components/chat/ModelPickerSheet';
@@ -634,8 +633,9 @@ export const ChatPage: React.FC = () => {
         {parts.map((part, i) => {
           if (!part) return null;
           if (part.type === 'text') return <Markdown key={i} className="prose prose-invert max-w-none text-sm leading-relaxed" text={String(part.text || '')} />;
-          if (part.type === 'resource_link') { const uri = String(part.uri || ''); const name = uri.split('/').pop() || uri; return (<div key={i} className="text-xs"><a className="underline" href={uri} target="_blank" rel="noreferrer">@{name}</a></div>); }
-          if (part.type === 'resource' && 'text' in (part.resource || {})) { const uri = String((part.resource as any).uri || ''); const name = uri ? (uri.split('/').pop() || uri) : 'context'; return (<TextAttachmentBlock key={i} label={name} text={String((part.resource as any).text || '')} initiallyCollapsed />); }
+          // Hide file/context attachments in the transcript to keep it minimal
+          if (part.type === 'resource_link') { return null; }
+          if (part.type === 'resource' && 'text' in (part.resource || {})) { return null; }
           if (part.type === 'diff' && (part.newText || part.diff?.newText)) { const path = part.path || part.file || part.filepath || part.uri || ''; const text = String(part.diff?.newText || part.newText || ''); return (<DiffBlock key={i} path={path || '(unknown path)'} diffText={text} initiallyCollapsed onApply={async () => { try { const pth = String(path || ''); await wsFirst('diff.apply', { path: pth, newText: text }); show({ title: 'Diff Applied', description: 'Applied diff to ' + (pth || '(unknown)'), variant: 'success' }); } catch (e: any) { show({ title: 'Diff Apply Error', description: e?.message || String(e), variant: 'destructive' }); } }} />); }
           if (part.type === 'terminal') { const out = typeof part.output === 'string' ? part.output : ''; if (out) return <TerminalBlock key={i} output={out} terminalId={String(part.terminalId || part.id || '') || undefined} initiallyCollapsed />; const tid = part.terminalId || part.id; return <div key={i} className="text-xs text-muted-foreground">[terminal]{tid ? ` (${tid})` : ''}</div>; }
           if (part.type === 'image') { try { const url = `data:${part.mimeType};base64,${part.data}`; return <img key={i} src={url} alt="image" className="max-w-full rounded border border-border" />; } catch { return <div key={i} className="text-xs text-muted-foreground">[image]</div>; } }

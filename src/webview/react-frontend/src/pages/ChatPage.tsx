@@ -103,7 +103,7 @@ export const ChatPage: React.FC = () => {
 
   // Messages & updates
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [updates, setUpdates] = useState<SessionUpdate[]>([]);
+  const [, setUpdates] = useState<SessionUpdate[]>([]);
   const endRef = useRef<HTMLDivElement | null>(null);
   // Cached tool-call metadata by id, used to backfill missing fields on later updates
   const toolCallsByIdRef = useRef<Record<string, { kind?: string; name?: string; title?: string }>>({});

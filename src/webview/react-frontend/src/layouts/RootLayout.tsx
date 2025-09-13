@@ -8,7 +8,6 @@ import { useWebSocket } from '../components/WebSocketProvider';
 import { useTheme } from '../components/theme/ThemeProvider';
 import { useFileCacheWithWatcher } from '../lib/hooks/useFileCacheWithWatcher';
 import { cn } from '../lib/utils';
-import DebugOverlay from '../components/DebugOverlay';
 
 const LayoutContent: React.FC = () => {
   const { isConnected, connectionCount, lastActivity, addMessageListener } = useWebSocket();

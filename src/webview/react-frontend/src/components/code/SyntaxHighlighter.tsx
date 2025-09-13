@@ -1,6 +1,47 @@
 import React from 'react'
 import { cn } from '../../lib/utils'
 
+// Basic HTML escaper to prevent HTML injection in code/diff rendering
+const escapeHtml = (s: string): string =>
+  s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+
+// Safely apply syntax highlight patterns WITHOUT re-highlighting inside the
+// markup we inject. We do this by working on an array of segments where only
+// plain segments are processed by later patterns.
+type HighlightPattern = { pattern: RegExp; className: string }
+const applyHighlights = (escaped: string, patterns: HighlightPattern[]) => {
+  type Seg = { text: string; classes?: string[] }
+  let segs: Seg[] = [{ text: escaped }]
+  patterns.forEach((p, idx) => {
+    // Ensure global flag so we can iterate with RegExp.exec
+    const base = p.pattern
+    const flags = base.flags.includes('g') ? base.flags : base.flags + 'g'
+    const re = new RegExp(base.source, flags)
+    const next: Seg[] = []
+    for (const seg of segs) {
+      if (seg.classes) { next.push(seg); continue }
+      const text = seg.text
+      let last = 0
+      re.lastIndex = 0
+      let m: RegExpExecArray | null
+      while ((m = re.exec(text)) !== null) {
+        const start = m.index
+        const end = start + m[0].length
+        if (start > last) next.push({ text: text.slice(last, start) })
+        next.push({ text: m[0], classes: [ `syntax-${idx}`, p.className ] })
+        last = end
+        if (m[0].length === 0) re.lastIndex++ // avoid infinite loops
+      }
+      if (last < text.length) next.push({ text: text.slice(last) })
+    }
+    segs = next
+  })
+  return segs.map(seg => seg.classes ? `<span class="${seg.classes.join(' ')}">${seg.text}</span>` : seg.text).join('')
+}
+
 // Language detection based on file extension or content
 const detectLanguage = (filename: string, _content?: string): string => {
   const ext = filename.split('.').pop()?.toLowerCase()
@@ -125,16 +166,10 @@ export const SyntaxHighlighter: React.FC<SyntaxHighlighterProps> = ({
   
   // Apply syntax highlighting
   const highlightedCode = React.useMemo(() => {
-    let highlighted = code
-    
-    // Apply patterns in reverse order to avoid conflicts
-    patterns.forEach((pattern, index) => {
-      highlighted = highlighted.replace(pattern.pattern, (match) => {
-        return `<span class="syntax-${index} ${pattern.className}">${match}</span>`
-      })
-    })
-    
-    return highlighted
+    // Escape HTML first so raw tags render as text, not DOM nodes
+    const escaped = escapeHtml(code)
+    // Apply patterns safely without touching injected markup
+    return applyHighlights(escaped, patterns)
   }, [code, patterns])
   
   const lines = highlightedCode.split('\n')
@@ -198,6 +233,7 @@ interface DiffLineProps {
   fontSize?: 'sm' | 'base' | 'lg'
   theme?: 'default' | 'neo'
   htmlOverride?: string
+  wrap?: boolean
 }
 
 export const DiffLine: React.FC<DiffLineProps> = ({
@@ -207,7 +243,8 @@ export const DiffLine: React.FC<DiffLineProps> = ({
   newNo,
   filename = '',
   fontSize = 'base',
-  htmlOverride
+  htmlOverride,
+  wrap
 }) => {
   const content = line.slice(1) // Remove +/- prefix for syntax highlighting
   const prefix = line.charAt(0)
@@ -231,21 +268,18 @@ export const DiffLine: React.FC<DiffLineProps> = ({
   const patterns = syntaxPatterns[detectedLang as keyof typeof syntaxPatterns] || []
   
   const highlightedContent = React.useMemo(() => {
-    if (type === 'meta' || type === 'hunk') return content
+    // Always start from an escaped base to avoid rendering raw HTML
+    const safeBase = escapeHtml(content)
+    if (type === 'meta' || type === 'hunk') return safeBase
     if (htmlOverride) return htmlOverride
     
-    let highlighted = content
-    patterns.forEach((pattern, index) => {
-      highlighted = highlighted.replace(pattern.pattern, (match) => {
-        return `<span class="syntax-${index} ${pattern.className}">${match}</span>`
-      })
-    })
-    return highlighted
+    // Apply patterns safely without re-highlighting inside injected markup
+    return applyHighlights(safeBase, patterns)
   }, [content, patterns, type, htmlOverride])
 
   return (
     <div className={cn(
-      'grid grid-cols-[3rem_3rem_1fr] items-start gap-x-2 px-2 py-1 transition-colors min-w-full',
+      'grid grid-cols-[4rem_4rem_1fr] items-start gap-x-2 px-2 py-1 transition-colors min-w-full',
       typeClasses[type],
       fontSize === 'sm' ? 'min-h-[20px]' : fontSize === 'base' ? 'min-h-[24px]' : 'min-h-[28px]'
     )}>
@@ -262,9 +296,9 @@ export const DiffLine: React.FC<DiffLineProps> = ({
         {newNo ?? ''}
       </div>
       <div className={cn(
-        'font-mono leading-relaxed flex items-start min-w-0',
+        'font-mono leading-relaxed flex items-start',
         fontSizeClass
-      )}>
+      )} style={wrap ? undefined : { minWidth: 'max-content', tabSize: 2 }}>
         {(type === 'add' || type === 'del') && (
           <span className={cn(
             'inline-block w-4 flex-shrink-0',
@@ -274,7 +308,7 @@ export const DiffLine: React.FC<DiffLineProps> = ({
           </span>
         )}
         <span
-          className="flex-1 min-w-0 whitespace-pre"
+          className={cn('flex-1', wrap ? 'whitespace-pre-wrap break-words' : 'whitespace-pre')}
           dangerouslySetInnerHTML={{ __html: highlightedContent || '&nbsp;' }}
         />
       </div>

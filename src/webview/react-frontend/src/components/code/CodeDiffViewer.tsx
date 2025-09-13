@@ -3,6 +3,13 @@ import { DiffLine } from './SyntaxHighlighter'
 // @ts-ignore - fast-diff has no bundled types in some versions
 import * as FastDiff from 'fast-diff'
 
+// Basic HTML escaper to ensure diff text isn't interpreted as HTML
+const escapeHtml = (s: string): string =>
+  (s || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+
 type RowType = 'meta' | 'hunk' | 'add' | 'del' | 'ctx'
 interface DiffRow {
   type: RowType
@@ -109,19 +116,19 @@ export const CodeDiffViewer = React.forwardRef<CodeDiffViewerHandle, CodeDiffVie
     } catch {
       return { left: oldText, right: newText }
     }
-    const wrapSeg = (txt: string, cls: string) => `<span class="${cls}">${txt.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span>`
+    const wrapSeg = (txt: string, cls: string) => `<span class="${cls}">${escapeHtml(txt)}</span>`
     const leftParts: string[] = []
     const rightParts: string[] = []
     for (const [op, text] of tuples) {
       const isSpaceOnly = /^\s+$/.test(text)
       if (ignoreWS && isSpaceOnly) {
-        leftParts.push(text)
-        rightParts.push(text)
+        leftParts.push(escapeHtml(text))
+        rightParts.push(escapeHtml(text))
         continue
       }
       if (op === 0) { // equal
-        leftParts.push(text)
-        rightParts.push(text)
+        leftParts.push(escapeHtml(text))
+        rightParts.push(escapeHtml(text))
       } else if (op === -1) { // deletion
         leftParts.push(wrapSeg(text, 'wdiff-del bg-rose-500/20'))
       } else if (op === 1) { // insertion
@@ -147,7 +154,7 @@ export const CodeDiffViewer = React.forwardRef<CodeDiffViewerHandle, CodeDiffVie
             htmlOverride = html.left
           }
           result.push(
-            <DiffLine key={`del-${i}-${d.oldNo}-${d.newNo}`} line={d.text} type={'del'} oldNo={d.oldNo} newNo={d.newNo} filename={file} fontSize={fontSize} theme="default" htmlOverride={htmlOverride} />
+            <DiffLine key={`del-${i}-${d.oldNo}-${d.newNo}`} line={d.text} type={'del'} oldNo={d.oldNo} newNo={d.newNo} filename={file} fontSize={fontSize} theme="default" htmlOverride={htmlOverride} wrap={wrap} />
           )
         }
         if (a) {
@@ -157,7 +164,7 @@ export const CodeDiffViewer = React.forwardRef<CodeDiffViewerHandle, CodeDiffVie
             htmlOverride = html.right
           }
           result.push(
-            <DiffLine key={`add-${i}-${a.oldNo}-${a.newNo}`} line={a.text} type={'add'} oldNo={a.oldNo} newNo={a.newNo} filename={file} fontSize={fontSize} theme="default" htmlOverride={htmlOverride} />
+            <DiffLine key={`add-${i}-${a.oldNo}-${a.newNo}`} line={a.text} type={'add'} oldNo={a.oldNo} newNo={a.newNo} filename={file} fontSize={fontSize} theme="default" htmlOverride={htmlOverride} wrap={wrap} />
           )
         }
       }
@@ -170,7 +177,7 @@ export const CodeDiffViewer = React.forwardRef<CodeDiffViewerHandle, CodeDiffVie
       // boundary: flush then push ctx/meta/hunk
       if (pendingDel.length || pendingAdd.length) flush()
       result.push(
-        <DiffLine key={`row-${idx}`} line={r.text} type={r.type as any} oldNo={r.oldNo} newNo={r.newNo} filename={file} fontSize={fontSize} theme="default" />
+        <DiffLine key={`row-${idx}`} line={r.text} type={r.type as any} oldNo={r.oldNo} newNo={r.newNo} filename={file} fontSize={fontSize} theme="default" wrap={wrap} />
       )
     })
     if (pendingDel.length || pendingAdd.length) flush()
@@ -214,17 +221,17 @@ export const CodeDiffViewer = React.forwardRef<CodeDiffViewerHandle, CodeDiffVie
           const leftCls = it.left?.type === 'del' ? 'bg-rose-50 dark:bg-rose-950/30' : it.left?.type === 'ctx' ? '' : 'bg-muted/20'
           const rightCls = it.right?.type === 'add' ? 'bg-emerald-50 dark:bg-emerald-950/30' : it.right?.type === 'ctx' ? '' : 'bg-muted/20'
           return (
-            <div key={idx} className="grid grid-cols-[3rem_1fr_3rem_1fr] items-start gap-x-2 px-2 py-1">
+            <div key={idx} className="grid grid-cols-[4rem_1fr_4rem_1fr] items-start gap-x-2 px-2 py-1">
               <div className="text-right pr-1 text-muted-foreground select-none font-mono text-xs">{it.left?.oldNo ?? ''}</div>
-              <div className={"font-mono text-xs px-2 py-0.5 rounded-sm border border-transparent " + leftCls}>
+              <div className={"font-mono text-xs px-2 py-0.5 rounded-sm border border-transparent whitespace-pre " + leftCls} style={{ minWidth: 'max-content' }}>
                 {it.left ? (
-                  <span dangerouslySetInnerHTML={{ __html: (it.left.type === 'del' && it.leftHtml) ? it.leftHtml : it.left.text.slice(1) || '&nbsp;' }} />
+                  <span style={{ whiteSpace: 'pre' }} dangerouslySetInnerHTML={{ __html: (it.left.type === 'del' && it.leftHtml) ? it.leftHtml : (escapeHtml(it.left.text.slice(1)) || '&nbsp;') }} />
                 ) : <span>&nbsp;</span>}
               </div>
               <div className="text-right pr-1 text-muted-foreground select-none font-mono text-xs">{it.right?.newNo ?? ''}</div>
-              <div className={"font-mono text-xs px-2 py-0.5 rounded-sm border border-transparent " + rightCls}>
+              <div className={"font-mono text-xs px-2 py-0.5 rounded-sm border border-transparent whitespace-pre " + rightCls} style={{ minWidth: 'max-content' }}>
                 {it.right ? (
-                  <span dangerouslySetInnerHTML={{ __html: (it.right.type === 'add' && it.rightHtml) ? it.rightHtml : it.right.text.slice(1) || '&nbsp;' }} />
+                  <span style={{ whiteSpace: 'pre' }} dangerouslySetInnerHTML={{ __html: (it.right.type === 'add' && it.rightHtml) ? it.rightHtml : (escapeHtml(it.right.text.slice(1)) || '&nbsp;') }} />
                 ) : <span>&nbsp;</span>}
               </div>
             </div>
@@ -269,7 +276,7 @@ export const CodeDiffViewer = React.forwardRef<CodeDiffViewerHandle, CodeDiffVie
       <div className="w-full" style={{ minWidth: 'max-content' }}>
         {/* Global header for SxS */}
         {_mode === 'side-by-side' && (
-          <div className="sticky top-0 z-10 grid grid-cols-[3rem_1fr_3rem_1fr] gap-x-2 px-2 py-1 text-xs text-muted-foreground bg-muted/40 border-b border-border">
+          <div className="sticky top-0 z-10 grid grid-cols-[4rem_1fr_4rem_1fr] gap-x-2 px-2 py-1 text-xs text-muted-foreground bg-muted/40 border-b border-border">
             <div className="text-right pr-1">Old</div>
             <div>Before</div>
             <div className="text-right pr-1">New</div>

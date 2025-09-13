@@ -136,11 +136,11 @@ const ACPPage: React.FC = () => {
   const [termTruncated, setTermTruncated] = useState<boolean>(false);
   const [termExit, setTermExit] = useState<{ exitCode?: number; signal?: string } | null>(null);
 
-  // Auto-scroll updates
+  // Auto-scroll new messages
   useEffect(() => {
     const el = endRef.current;
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  }, [updates]);
+  }, [messages]);
 
   // WS subscriptions
   useEffect(() => {

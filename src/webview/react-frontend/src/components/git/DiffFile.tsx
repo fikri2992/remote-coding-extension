@@ -97,7 +97,7 @@ export const DiffFile: React.FC<{ chunk: DiffChunk; loading?: boolean; onExpand?
         aria-expanded={open}
       >
         <div className="min-w-0 flex-1">
-          <div className="text-sm sm:text-base font-medium truncate neo:font-bold">{chunk.file}</div>
+          <div className="text-sm sm:text-base font-medium neo:font-bold whitespace-pre-wrap break-words leading-snug" title={chunk.file}>{chunk.file}</div>
           <div className="text-xs text-muted-foreground mt-1 capitalize inline-flex items-center gap-2">
             <span className={`px-2 py-1 rounded text-xs ${typeColor} neo:rounded-none neo:border-2 neo:border-border`}>{chunk.type}</span>
           </div>
@@ -224,7 +224,7 @@ export const DiffFile: React.FC<{ chunk: DiffChunk; loading?: boolean; onExpand?
                 {rows.length > 0 && (
                   <div className="px-3 py-2 bg-muted/20 border-t border-border text-xs text-muted-foreground flex items-center justify-between neo:border-t-[2px]">
                     <span>{rows.length} lines • {chunk.additions} additions • {chunk.deletions} deletions</span>
-                    <span className="font-mono">{chunk.file}</span>
+                    <span className="font-mono whitespace-pre-wrap break-words text-right" title={chunk.file}>{chunk.file}</span>
                   </div>
                 )}
               </div>

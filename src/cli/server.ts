@@ -429,6 +429,12 @@ export class CliServer {
                   return { success: true, data: this.acpController.terminalRelease(payload) };
                 case 'terminal.waitForExit':
                   return { success: true, data: await this.acpController.terminalWaitForExit(payload) };
+                case 'terminal.commands.list':
+                  return { success: true, data: await this.acpController.listTerminalCommands() };
+                case 'terminal.commands.remove':
+                  return { success: true, data: await this.acpController.removeTerminalCommand(payload) };
+                case 'terminal.commands.clear':
+                  return { success: true, data: await this.acpController.clearTerminalCommands() };
                 case 'diff.apply':
                   return { success: true, data: await this.acpController.applyDiff(payload) };
                 case 'session.last':
@@ -473,6 +479,7 @@ export class CliServer {
             bus.AcpEventBus.on('permission_request', forward);
             bus.AcpEventBus.on('terminal_output', forward);
             bus.AcpEventBus.on('terminal_exit', forward);
+            bus.AcpEventBus.on('terminal_command_update', forward);
             bus.AcpEventBus.on('session_update', forward);
             try { bus.AcpEventBus.on('session_recovered', forward); } catch {}
             console.log('🔗 ACP event bus bridged to WebSocket broadcast');

@@ -12,6 +12,7 @@ import HomePage from './pages/HomePage.tsx';
 import SettingsPage from './pages/SettingsPage.tsx';
 import { TunnelManagerPage } from './pages/TunnelManagerPage.tsx';
 import ACPPage from './pages/ACPPage.tsx';
+import TerminalCommandsPage from './pages/TerminalCommandsPage.tsx';
 
 import RootLayout from './layouts/RootLayout.tsx';
 
@@ -50,6 +51,12 @@ const terminalRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/terminal',
   component: TerminalPage,
+});
+
+const terminalCommandsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/terminal-commands',
+  component: TerminalCommandsPage,
 });
 
 const chatTerminalRoute = createRoute({
@@ -107,6 +114,7 @@ const routeTree = rootRoute.addChildren([
   fileViewRoute,
   gitRoute,
   terminalRoute,
+  terminalCommandsRoute,
   chatTerminalRoute,
   chatRoute,
   settingsRoute,

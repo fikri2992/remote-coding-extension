@@ -7,6 +7,7 @@ import ThreadsStore from './ThreadsStore';
 import ModesStore from './ModesStore';
 import type { PromptRequest, SessionUpdate } from './types';
 import { AcpEventBus } from './AcpEventBus';
+import TerminalCommandsStore from './TerminalCommandsStore';
 
 export class AcpHttpController {
   private conn: ACPConnection | null = null;
@@ -15,6 +16,7 @@ export class AcpHttpController {
   private sessions: SessionsStore;
   private threads: ThreadsStore;
   private modesStore!: ModesStore;
+  private terminalCommands!: TerminalCommandsStore;
 
   constructor(
     private dataRoot: string = path.join(process.cwd(), '.on-the-go', 'acp')
@@ -22,6 +24,7 @@ export class AcpHttpController {
     this.sessions = new SessionsStore(path.join(this.dataRoot, 'sessions.json'));
     this.threads = new ThreadsStore(path.join(this.dataRoot, 'threads'));
     this.modesStore = new ModesStore(path.join(this.dataRoot, 'modes'));
+    this.terminalCommands = new TerminalCommandsStore(path.join(this.dataRoot, 'terminal-commands.json'));
   }
 
   // Zod Schemas
@@ -54,6 +57,7 @@ export class AcpHttpController {
     await this.sessions.init();
     await this.threads.init();
     await this.modesStore.init();
+    await this.terminalCommands.init();
     this.lastSessionId = this.sessions.getLast();
     try {
       const sid = this.lastSessionId;
@@ -125,6 +129,16 @@ export class AcpHttpController {
     });
     this.conn.on('terminal_exit', ({ terminalId, exitStatus }) => {
       AcpEventBus.emit('terminal_exit', { type: 'terminal_exit', terminalId, exitStatus });
+      // Persist command status and broadcast update
+      try {
+        const payload: any = { status: 'exited' as const };
+        if (exitStatus && typeof exitStatus === 'object') {
+          if (typeof exitStatus.exitCode === 'number') (payload as any).exitCode = exitStatus.exitCode;
+          if (exitStatus.signal) (payload as any).signal = String(exitStatus.signal);
+        }
+        this.terminalCommands.update(String(terminalId), payload).catch(() => {});
+        this.terminalCommands['list'] && AcpEventBus.emit('terminal_command_update', { type: 'terminal_command_update', record: { ...(payload || {}), terminalId } });
+      } catch {}
     });
     this.conn.on('initialized', (init: any) => {
       AcpEventBus.emit('agent_initialized', { type: 'agent_initialized', init });
@@ -352,7 +366,25 @@ export class AcpHttpController {
     if (env && env.length) payload.env = env;
     if (cwd) payload.cwd = cwd;
     if (typeof outputByteLimit === 'number') payload.outputByteLimit = outputByteLimit;
-    return this.conn.createTerminal(payload);
+    const res = this.conn.createTerminal(payload);
+    try {
+      const terminalId = String((res as any)?.terminalId || '');
+      if (terminalId) {
+        const record = {
+          id: terminalId,
+          terminalId,
+          command: payload.command,
+          args: payload.args || [],
+          cwd: payload.cwd,
+          status: 'running' as const,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        };
+        this.terminalCommands.upsert(record as any).catch(() => {});
+        try { AcpEventBus.emit('terminal_command_update', { type: 'terminal_command_update', record }); } catch {}
+      }
+    } catch {}
+    return res;
   }
   terminalOutput(body: any) {
     if (!this.conn) throw new Error('not connected');
@@ -364,14 +396,20 @@ export class AcpHttpController {
     if (!this.conn) throw new Error('not connected');
     const parsed = AcpHttpController.TerminalIdSchema.safeParse(body ?? {});
     if (!parsed.success) throw new Error('terminalId required');
-    this.conn.killTerminalById(parsed.data.terminalId);
+    const tid = parsed.data.terminalId;
+    this.conn.killTerminalById(tid);
+    try { this.terminalCommands.update(String(tid), { status: 'killed' as const }).catch(() => {}); } catch {}
+    try { AcpEventBus.emit('terminal_command_update', { type: 'terminal_command_update', record: { terminalId: tid, status: 'killed' } }); } catch {}
     return { ok: true };
   }
   terminalRelease(body: any) {
     if (!this.conn) throw new Error('not connected');
     const parsed = AcpHttpController.TerminalIdSchema.safeParse(body ?? {});
     if (!parsed.success) throw new Error('terminalId required');
-    this.conn.releaseTerminalById(parsed.data.terminalId);
+    const tid = parsed.data.terminalId;
+    this.conn.releaseTerminalById(tid);
+    try { this.terminalCommands.update(String(tid), { status: 'released' as const }).catch(() => {}); } catch {}
+    try { AcpEventBus.emit('terminal_command_update', { type: 'terminal_command_update', record: { terminalId: tid, status: 'released' } }); } catch {}
     return { ok: true };
   }
   async terminalWaitForExit(body: any) {
@@ -380,6 +418,23 @@ export class AcpHttpController {
     if (!parsed.success) throw new Error('terminalId required');
     const exitStatus = await this.conn.waitTerminalExit(parsed.data.terminalId);
     return { exitStatus };
+  }
+
+  // --- Terminal Commands Persistence API ---
+  listTerminalCommands() {
+    return { items: this.terminalCommands.list() } as any;
+  }
+  async removeTerminalCommand(body: any) {
+    const parsed = AcpHttpController.TerminalIdSchema.safeParse(body ?? {});
+    if (!parsed.success) throw new Error('terminalId required');
+    await this.terminalCommands.remove(String(parsed.data.terminalId));
+    try { AcpEventBus.emit('terminal_command_update', { type: 'terminal_command_update', record: { terminalId: parsed.data.terminalId, removed: true } }); } catch {}
+    return { ok: true } as any;
+  }
+  async clearTerminalCommands() {
+    await this.terminalCommands.clear();
+    try { AcpEventBus.emit('terminal_command_update', { type: 'terminal_command_update', cleared: true }); } catch {}
+    return { ok: true } as any;
   }
 
   // --- Sessions persistence ---

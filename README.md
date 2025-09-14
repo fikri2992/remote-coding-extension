@@ -1,6 +1,6 @@
-# Web Agent Client CLI
+# Coding on the Go CLI
 
-Web Agent Client is a CLI tool that runs a local web server and WebSocket backend for remote coding workflows, with ACP (Agent Client Protocol) integration.
+Coding on the Go (COTG) is a CLI tool that runs a local web server and WebSocket backend for remote coding workflows, with ACP (Agent Client Protocol) integration.
 
 ## Requirements
 
@@ -20,26 +20,27 @@ Web Agent Client is a CLI tool that runs a local web server and WebSocket backen
 Using npm (global):
 
 ```bash
-npm install -g web-agent-client
+npm install -g coding-on-the-go
 ```
 
 Using npx (no global install):
 
 ```bash
-npx web-agent-client start -p 3900
+# Use npx with the package name and execute the binary
+npx -y -p coding-on-the-go cotg-cli start -p 3900
 ```
 
 ## Quick Start
 
 ```bash
 # Start the server (builds frontend on first run)
-web-agent-client start -p 3900
+cotg-cli start -p 3900
 
 # Check status
-web-agent-client status
+cotg-cli status
 
 # Stop the server
-web-agent-client stop
+cotg-cli stop
 ```
 
 Then open http://localhost:3900 in your browser.
@@ -48,14 +49,14 @@ Then open http://localhost:3900 in your browser.
 
 Top-level commands:
 
-- `web-agent-client start [-p <port>] [--skip-build]` – build frontend (unless skipped) and start server
-- `web-agent-client status` – print server status
-- `web-agent-client stop` – stop server and clean up process files
-- `web-agent-client init` – scaffold CLI config in `.on-the-go/config.json` and run environment checks
+- `cotg-cli start [-p <port>] [--skip-build]` – build frontend (unless skipped) and start server
+- `cotg-cli status` – print server status
+- `cotg-cli stop` – stop server and clean up process files
+- `cotg-cli init` – scaffold CLI config in `.on-the-go/config.json` and run environment checks
 
 Command groups:
 
-- `web-agent-client fs` – File system operations
+- `cotg-cli fs` – File system operations
   - `tree [path] [--depth N] [--json]`
   - `read <path> [--encoding utf8] [--max-bytes 1024]`
   - `create <path> [--type file|directory] [--content <text>]`
@@ -66,7 +67,7 @@ Command groups:
   - `config [--json] [--save <path>]`
   - `watcher-stats`
 
-- `web-agent-client git` – Git operations
+- `cotg-cli git` – Git operations
   - `status [--json] [--workspace <path>]`
   - `log [--count N] [--json] [--workspace <path>]`
   - `diff [file] [--json] [--workspace <path>]`
@@ -79,7 +80,7 @@ Command groups:
   - `find-repos [path] [--json]`
   - `config [--json]`
 
-- `web-agent-client terminal` – Terminal operations
+- `cotg-cli terminal` – Terminal operations
   - `session [--cols 80] [--rows 24] [--cwd <path>] [--persistent] [--engine auto|line|pipe]`
   - `exec <command> [--cwd <path>] [--timeout <ms>]`
   - `config [--json]`
@@ -88,14 +89,14 @@ Command groups:
   - `test-safety <command>`
   - `interactive [--cols 80] [--rows 24] [--cwd <path>] [--engine auto|line|pipe]`
 
-Note: there is also `web-agent-client server` which behaves like `start` with similar options.
+Note: there is also `cotg-cli server` which behaves like `start` with similar options.
 
 ## Development
 
 ```bash
 # Clone and bootstrap
 git clone <repo>
-cd web-agent-client
+cd coding-on-the-go
 npm run install:all
 
 # Develop

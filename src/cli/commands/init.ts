@@ -54,7 +54,7 @@ export const initCommand = new Command('init')
 
         const readme = `# .on-the-go Folder
 
-This folder contains configuration and data for Kiro Remote CLI.
+This folder contains configuration and data for Coding on the Go (COTG) CLI.
 
 ## Structure
 
@@ -72,7 +72,7 @@ The \`config.json\` file contains settings for:
 
 ## Usage
 
-Run \`kiro-remote start\` to launch the server with this configuration.
+Run \`cotg-cli start\` to launch the server with this configuration.
 
 Created: ${new Date().toISOString()}
 `;
@@ -100,7 +100,7 @@ Created: ${new Date().toISOString()}
       }
 
       console.log('\n🎉 Setup complete. Next steps:');
-      console.log('   • Start the server:   kiro-remote start');
+      console.log('   • Start the server:   cotg-cli start');
       console.log('   • Open the app at:    http://localhost:3900');
       console.log('   • Use the ACP tab to manage agent sessions and auth if needed.');
 

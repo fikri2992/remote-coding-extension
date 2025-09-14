@@ -55,6 +55,7 @@ export const ChatPage: React.FC = () => {
   const [sending, setSending] = useState(false);
   const [sessionLoading, setSessionLoading] = useState(false);
   const [threadLoading, setThreadLoading] = useState(false);
+  const [sessionSelectPending, setSessionSelectPending] = useState(false);
   // Modes/Models
   const [modes, setModes] = useState<any | null>(null);
   const [currentModeId, setCurrentModeId] = useState<string | null>(null);
@@ -73,125 +74,6 @@ export const ChatPage: React.FC = () => {
 
   // Track previous agent ID to detect switches
   const prevAgentIdRef = useRef<'claude' | 'gemini' | null>(null);
-
-  // Save current agent state before switching
-  const saveAgentState = useCallback(() => {
-    if (!prevAgentIdRef.current) return;
-
-    const prevAgent = prevAgentIdRef.current;
-    try {
-      // Save current state to localStorage for previous agent
-      const stateToSave = {
-        sessionId,
-        currentModeId,
-        currentModelId,
-        models,
-        modes,
-        activeThreadId,
-        threadName,
-        input,
-        selectedContext,
-        messages: messages.slice(-50), // Save last 50 messages to prevent localStorage overflow
-        toolsGroupOpen,
-        openToolMap
-      };
-      localStorage.setItem(`chat:state:${prevAgent}`, JSON.stringify(stateToSave));
-    } catch (e) {
-      console.warn(`Failed to save state for ${prevAgent}:`, e);
-    }
-  }, []); // Empty deps - we'll access current values directly
-
-  // Restore agent-specific state
-  const restoreAgentState = useCallback(() => {
-    try {
-      const savedState = localStorage.getItem(`chat:state:${agentId}`);
-      if (savedState) {
-        const state = JSON.parse(savedState);
-
-        // Restore state with fallbacks
-        const restoredSessionId = state.sessionId || null;
-        setSessionId(restoredSessionId);
-        setCurrentModeId(state.currentModeId || null);
-        setCurrentModelId(state.currentModelId || null);
-        setModels(state.models || []);
-        setModes(state.modes || null);
-        setActiveThreadId(state.activeThreadId || null);
-        setThreadName(state.threadName || 'Default Chat');
-        setInput(state.input || '');
-        setSelectedContext(state.selectedContext || []);
-        setMessages(state.messages || []);
-        setToolsGroupOpen(state.toolsGroupOpen || false);
-        setOpenToolMap(state.openToolMap || {});
-
-        // If we have a restored session ID and WebSocket is connected, select the session
-        if (restoredSessionId && isConnected) {
-          setTimeout(async () => {
-            try {
-              // Use sendAcp directly instead of wsFirst to avoid dependency issues
-              await sendAcp('session.select', { sessionId: restoredSessionId }, { timeoutMs: 5000 });
-            } catch (e) {
-              console.warn(`Failed to select session for ${agentId}:`, e);
-            }
-          }, 100);
-        }
-
-        // Keep the saved state in localStorage so it persists for future switches
-      } else {
-        // No saved state, initialize with defaults
-        setSessionId(null);
-        setCurrentModeId(null);
-        setCurrentModelId(null);
-        setModels([]);
-        setModes(null);
-        setActiveThreadId(null);
-        setThreadName('Default Chat');
-        setInput('');
-        setSelectedContext([]);
-        setMessages([]);
-        setToolsGroupOpen(false);
-        setOpenToolMap({});
-      }
-    } catch (e) {
-      console.warn(`Failed to restore state for ${agentId}:`, e);
-      // Fallback to default state
-      setSessionId(null);
-      setCurrentModeId(null);
-      setCurrentModelId(null);
-      setModels([]);
-      setModes(null);
-      setActiveThreadId(null);
-      setThreadName('Default Chat');
-      setInput('');
-      setSelectedContext([]);
-      setMessages([]);
-      setToolsGroupOpen(false);
-      setOpenToolMap({});
-    }
-  }, [agentId, isConnected, sendAcp]);
-
-  // Detect agent switches and handle state preservation/restoration
-  useEffect(() => {
-    if (prevAgentIdRef.current && prevAgentIdRef.current !== agentId) {
-      // Agent switch detected
-      saveAgentState();
-      restoreAgentState();
-
-      // Reset some transient state that shouldn't persist
-      setIsTyping(false);
-      activeToolCallsRef.current = {};
-      setConnecting(false);
-      setSending(false);
-      setPermissionReq(null);
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
-        typingTimeoutRef.current = null;
-      }
-
-      // Reset restore flag to trigger WebSocket reconnection for new agent
-      didRestoreRef.current = false;
-    }
-    prevAgentIdRef.current = agentId;
-  }, [agentId]); // Simplified dependencies
 
   // Persist group open preference per agent+thread
   useEffect(() => {
@@ -259,6 +141,150 @@ export const ChatPage: React.FC = () => {
   const sendingRef = useRef(sending);
   useEffect(() => { sendingRef.current = sending; }, [sending]);
 
+  // Save current agent state before switching
+  const saveAgentState = useCallback(() => {
+    if (!prevAgentIdRef.current) return;
+
+    const prevAgent = prevAgentIdRef.current;
+    try {
+      // Save current state to localStorage for previous agent
+      const stateToSave = {
+        sessionId,
+        currentModeId,
+        currentModelId,
+        models,
+        modes,
+        activeThreadId,
+        threadName,
+        input,
+        selectedContext,
+        messages: messages.slice(-50), // Save last 50 messages to prevent localStorage overflow
+        toolsGroupOpen,
+        openToolMap,
+        sessionSelectPending
+      };
+      localStorage.setItem(`chat:state:${prevAgent}`, JSON.stringify(stateToSave));
+      console.log(`[State] Saved state for ${prevAgent}:`, { sessionId, activeThreadId, messagesCount: messages.length });
+    } catch (e) {
+      console.warn(`Failed to save state for ${prevAgent}:`, e);
+    }
+  }, [sessionId, currentModeId, currentModelId, models, modes, activeThreadId, threadName, input, selectedContext, messages, toolsGroupOpen, openToolMap, sessionSelectPending]);
+
+  // Restore agent-specific state
+  const restoreAgentState = useCallback(() => {
+    try {
+      const savedState = localStorage.getItem(`chat:state:${agentId}`);
+      if (savedState) {
+        const state = JSON.parse(savedState);
+        console.log(`[State] Restoring state for ${agentId}:`, { sessionId: state.sessionId, activeThreadId: state.activeThreadId, messagesCount: state.messages?.length || 0 });
+
+        // Restore state with fallbacks
+        const restoredSessionId = state.sessionId || null;
+        setSessionId(restoredSessionId);
+        setCurrentModeId(state.currentModeId || null);
+        setCurrentModelId(state.currentModelId || null);
+        setModels(state.models || []);
+        setModes(state.modes || null);
+        setActiveThreadId(state.activeThreadId || null);
+        setThreadName(state.threadName || 'Default Chat');
+        setInput(state.input || '');
+        setSelectedContext(state.selectedContext || []);
+        setMessages(state.messages || []);
+        setToolsGroupOpen(state.toolsGroupOpen || false);
+        setOpenToolMap(state.openToolMap || {});
+        setSessionSelectPending(state.sessionSelectPending || false);
+
+        // If we have a restored session ID and WebSocket is connected, select the session
+        if (restoredSessionId && isConnected) {
+          setSessionSelectPending(true);
+          setTimeout(async () => {
+            try {
+              // Use sendAcp directly instead of wsFirst to avoid dependency issues
+              await sendAcp('session.select', { sessionId: restoredSessionId }, { timeoutMs: 5000 });
+              console.log(`[State] Successfully selected session for ${agentId}:`, restoredSessionId);
+            } catch (e) {
+              console.warn(`Failed to select session for ${agentId}:`, e);
+            } finally {
+              setSessionSelectPending(false);
+            }
+          }, 100);
+        }
+
+        // Keep the saved state in localStorage so it persists for future switches
+      } else {
+        console.log(`[State] No saved state found for ${agentId}, initializing with defaults`);
+        // No saved state, initialize with defaults
+        setSessionId(null);
+        setCurrentModeId(null);
+        setCurrentModelId(null);
+        setModels([]);
+        setModes(null);
+        setActiveThreadId(null);
+        setThreadName('Default Chat');
+        setInput('');
+        setSelectedContext([]);
+        setMessages([]);
+        setToolsGroupOpen(false);
+        setOpenToolMap({});
+        setSessionSelectPending(false);
+      }
+    } catch (e) {
+      console.warn(`Failed to restore state for ${agentId}:`, e);
+      // Fallback to default state
+      setSessionId(null);
+      setCurrentModeId(null);
+      setCurrentModelId(null);
+      setModels([]);
+      setModes(null);
+      setActiveThreadId(null);
+      setThreadName('Default Chat');
+      setInput('');
+      setSelectedContext([]);
+      setMessages([]);
+      setToolsGroupOpen(false);
+      setOpenToolMap({});
+      setSessionSelectPending(false);
+    }
+  }, [agentId, isConnected, sendAcp]);
+
+  // Detect agent switches and handle state preservation/restoration
+  useEffect(() => {
+    if (prevAgentIdRef.current && prevAgentIdRef.current !== agentId) {
+      const prevAgent = prevAgentIdRef.current;
+      console.log(`[State] Agent switch detected: ${prevAgent} → ${agentId}`);
+
+      // Agent switch detected
+      try {
+        saveAgentState();
+        console.log(`[State] Successfully saved state for ${prevAgent}`);
+      } catch (e) {
+        console.error(`[State] Failed to save state for ${prevAgent}:`, e);
+      }
+
+      try {
+        restoreAgentState();
+        console.log(`[State] Successfully restored state for ${agentId}`);
+      } catch (e) {
+        console.error(`[State] Failed to restore state for ${agentId}:`, e);
+      }
+
+      // Reset some transient state that shouldn't persist
+      setIsTyping(false);
+      activeToolCallsRef.current = {};
+      setConnecting(false);
+      setSending(false);
+      setPermissionReq(null);
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+        typingTimeoutRef.current = null;
+      }
+
+      // Reset restore flag to trigger WebSocket reconnection for new agent
+      didRestoreRef.current = false;
+    }
+    prevAgentIdRef.current = agentId;
+  }, [agentId, saveAgentState, restoreAgentState]);
+
   // Derived availability badges
   const availableModeCount = useMemo(() => {
     try {
@@ -305,7 +331,7 @@ export const ChatPage: React.FC = () => {
     }
   }, [sending]);
 
-  const canPrompt = useMemo(() => input.trim().length > 0 && !sending, [input, sending]);
+  const canPrompt = useMemo(() => input.trim().length > 0 && !sending && !sessionSelectPending, [input, sending, sessionSelectPending]);
 
   // Restore unsent input per agent and persist while typing
   useEffect(() => {
@@ -618,6 +644,7 @@ export const ChatPage: React.FC = () => {
   async function handleSend() {
     if (!canPrompt) return;
     const text = input.trim(); setInput(''); setSending(true); setIsTyping(true);
+    console.log(`[Send] Starting prompt with sessionId:`, sessionId, `for agent:`, agentId);
     try {
       const prompt: ContentBlock[] = [{ type: 'text', text } as any];
       try { if (!threadName || threadName === 'Default Chat') setThreadName((text || '').slice(0, 10) + '...'); } catch {}
@@ -634,17 +661,19 @@ export const ChatPage: React.FC = () => {
         setMessages((prev) => [...prev, { id: `local-${now}-${prev.length}`, role: 'user', parts: prompt, ts: now } as any]);
       } catch {}
       try {
-        const resp: any = await wsFirst('prompt', { prompt });
+        const resp: any = await wsFirst('prompt', { sessionId, prompt });
+        console.log(`[Send] Prompt response:`, resp);
         if (resp && typeof resp === 'object' && resp.success === false) {
           throw new Error(String(resp.error || 'prompt failed'));
         }
+        console.log(`[Send] Prompt successful, sessionId remains:`, sessionId);
         // Clear selected context chips after a successful send
         try { setSelectedContext([]); } catch {}
       } catch (e: any) {
         const msg = String(e?.message || e || '');
         if (/not connected/i.test(msg) || /ACP service not available/i.test(msg)) {
           try { await wsFirst('connect', {}); } catch {}
-          await wsFirst('prompt', { prompt });
+          await wsFirst('prompt', { sessionId, prompt });
           // Clear selected context chips after a successful resend
           try { setSelectedContext([]); } catch {}
         } else {
@@ -1338,6 +1367,15 @@ export const ChatPage: React.FC = () => {
         <MoreHorizontal className="w-5 h-5" />
       </button>
 
+      {/* Mobile session status indicator */}
+      {sessionSelectPending && (
+        <div className="sm:hidden fixed bottom-[110px] left-2 right-2 z-30">
+          <div className="text-xs text-blue-600 bg-blue-600/10 border border-blue-600/30 rounded px-2 py-1">
+            Restoring session... Please wait before sending messages.
+          </div>
+        </div>
+      )}
+
       {/* Mobile composer (fixed) */}
       <div className="sm:hidden fixed bottom-0 left-0 right-0 z-40 border-t border-border p-0.5 pb-[calc(env(safe-area-inset-bottom)+4px)] bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
         <div className="flex items-end gap-2">
@@ -1366,6 +1404,11 @@ export const ChatPage: React.FC = () => {
         {!sessionId && (
           <div className="mb-2 text-xs text-amber-600 bg-amber-600/10 border border-amber-600/30 rounded px-2 py-1">
             No active session. Start typing and Send to create one, or pick an existing session via the Sessions button.
+          </div>
+        )}
+        {sessionSelectPending && (
+          <div className="mb-2 text-xs text-blue-600 bg-blue-600/10 border border-blue-600/30 rounded px-2 py-1">
+            Restoring session... Please wait before sending messages.
           </div>
         )}
         {/* Context chips */}

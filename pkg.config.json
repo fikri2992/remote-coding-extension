@@ -1,7 +1,7 @@
 {
-  "name": "web-agent-client",
+  "name": "cotg-cli",
   "version": "1.0.0",
-  "description": "Web Agent Client CLI Server",
+  "description": "Coding on the Go CLI Server",
   "main": "./out/cli/index.js",
   "bin": "./out/cli/index.js",
   "pkg": {

@@ -16,8 +16,8 @@ import { initCommand } from './commands/init';
 const VERSION = '0.0.1';
 
 // Create the main CLI program
-const program = new Command('web-agent-client')
-  .description('Web Agent Client CLI - Terminal, File System, Git, and Server Operations')
+const program = new Command('cotg-cli')
+  .description('Coding on the Go CLI - Terminal, File System, Git, and Server Operations')
   .version(VERSION);
 
 // Add filesystem command group

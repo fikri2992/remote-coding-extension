@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { GitStatusList, GitStatusItem } from '../components/git/GitStatusList';
-import { CommitComposer } from '../components/git/CommitComposer';
 import { useWebSocket } from '../components/WebSocketProvider';
 import { GitHistoryViewer } from '../components/git/GitHistoryViewer';
 import { DiffFile } from '../components/git/DiffFile';
@@ -455,11 +454,6 @@ const GitPage: React.FC = () => {
               </div>
             )}
 
-            {/* Commit composer */}
-            <div ref={composerAnchorRef} id="commit-composer" className="bg-card rounded-lg border border-border p-4 neo:rounded-none neo:border-[3px] neo:shadow-[4px_4px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[4px_4px_0_0_rgba(255,255,255,0.9)]">
-              <CommitComposer onCommit={onCommit} disabled={loading} />
-            </div>
-
             {/* Diff (working tree) */}
             {diffFiles && diffFiles.length > 0 && (
               <div className="bg-card rounded-lg border border-border p-4 neo:rounded-none neo:border-[3px] neo:shadow-[4px_4px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[4px_4px_0_0_rgba(255,255,255,0.9)]">
@@ -516,19 +510,8 @@ const GitPage: React.FC = () => {
       {/* Bottom sticky actions - only show on status tab */}
       {activeTab === 'status' && (
         <div className="sticky bottom-0 inset-x-0 border-t border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/75 neo:border-t-[3px]">
-          <div className="p-4 grid grid-cols-3 gap-3">
+          <div className="p-4 grid grid-cols-1 gap-3">
             <button className="h-12 rounded-lg border border-border text-sm active:bg-muted hover:bg-muted neo:rounded-none neo:border-[3px] neo:shadow-[4px_4px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[4px_4px_0_0_rgba(255,255,255,0.9)]" onClick={() => request('pull')} disabled={loading || historyLoading || commitDiffLoading}>Pull</button>
-            <button
-              className="h-12 rounded-lg bg-primary text-primary-foreground text-sm active:opacity-90 disabled:opacity-50 neo:rounded-none neo:border-[3px] neo:border-border neo:shadow-[4px_4px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[4px_4px_0_0_rgba(255,255,255,0.9)]"
-              onClick={() => {
-                if (activeTab !== 'status') setActiveTab('status')
-                requestAnimationFrame(() => {
-                  composerAnchorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                })
-              }}
-              disabled={loading || historyLoading || commitDiffLoading}
-            >Commit</button>
-            <button className="h-12 rounded-lg border border-border text-sm active:bg-muted hover:bg-muted neo:rounded-none neo:border-[3px] neo:shadow-[4px_4px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[4px_4px_0_0_rgba(255,255,255,0.9)]" onClick={() => request('push')} disabled={loading || historyLoading || commitDiffLoading}>Push</button>
           </div>
         </div>
       )}

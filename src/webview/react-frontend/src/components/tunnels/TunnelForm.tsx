@@ -1,12 +1,15 @@
-import React, { useState } from 'react'
-import { CreateTunnelRequest } from '../types/tunnel'
+import React, { useEffect, useState } from 'react'
+import { CreateTunnelRequest } from '../../types/tunnel'
 import { Play, Loader2, Info } from 'lucide-react'
-import { cn } from '../lib/utils'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from './ui/card'
-import { Input } from './ui/input'
-import { Label } from './ui/label'
-import { RadioGroup, RadioGroupItem } from './ui/radio-group'
-import { Alert, AlertDescription, AlertTitle } from './ui/alert'
+import { cn } from '../../lib/utils'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '../ui/card'
+import { Input } from '../ui/input'
+import { Label } from '../ui/label'
+import { RadioGroup, RadioGroupItem } from '../ui/radio-group'
+import { Alert, AlertDescription, AlertTitle } from '../ui/alert'
+import { Button } from '../ui/button'
+import { TokenManagerDialog } from './TokenManagerDialog'
+import { useTunnelTokens } from '../../lib/hooks/useTunnelTokens'
 
 interface TunnelFormProps {
   onCreateTunnel: (request: CreateTunnelRequest) => void
@@ -17,6 +20,18 @@ interface TunnelFormProps {
 export const TunnelForm: React.FC<TunnelFormProps> = ({ onCreateTunnel, loading = false, disabled = false }) => {
   const [formData, setFormData] = useState<CreateTunnelRequest>({ localPort: 3000, type: 'quick', name: '', token: '' })
   const [errors, setErrors] = useState<Partial<Record<keyof CreateTunnelRequest, string>>>({})
+  const { tokens } = useTunnelTokens()
+  const [tokenDialogOpen, setTokenDialogOpen] = useState(false)
+
+  useEffect(() => {
+    try {
+      const saved = (typeof window !== 'undefined' && window.localStorage.getItem('KIRO_LAST_TUNNEL_PORT')) || ''
+      const n = parseInt(saved, 10)
+      if (!Number.isNaN(n) && n >= 1 && n <= 65535) {
+        setFormData(prev => ({ ...prev, localPort: n }))
+      }
+    } catch {}
+  }, [])
 
   const validateForm = (): boolean => {
     const newErrors: Partial<Record<keyof CreateTunnelRequest, string>> = {}
@@ -31,7 +46,10 @@ export const TunnelForm: React.FC<TunnelFormProps> = ({ onCreateTunnel, loading 
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (validateForm()) onCreateTunnel(formData)
+    if (validateForm()) {
+      try { if (typeof window !== 'undefined') window.localStorage.setItem('KIRO_LAST_TUNNEL_PORT', String(formData.localPort)) } catch {}
+      onCreateTunnel(formData)
+    }
   }
 
   const handleInputChange = (field: keyof CreateTunnelRequest, value: string | number) => {
@@ -94,7 +112,14 @@ export const TunnelForm: React.FC<TunnelFormProps> = ({ onCreateTunnel, loading 
                 {errors.name && <p className="text-sm text-red-600">{errors.name}</p>}
               </div>
               <div className="space-y-2 sm:col-span-2">
-                <Label htmlFor="token">Tunnel Token</Label>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="token">Tunnel Token</Label>
+                  <div className="flex items-center gap-2">
+                    <Button type="button" size="sm" variant="secondary" onClick={() => setTokenDialogOpen(true)}>
+                      {tokens.length > 0 ? `Use Saved (${tokens.length})` : 'Add Token'}
+                    </Button>
+                  </div>
+                </div>
                 <textarea
                   id="token"
                   value={formData.token || ''}
@@ -108,7 +133,16 @@ export const TunnelForm: React.FC<TunnelFormProps> = ({ onCreateTunnel, loading 
             </div>
           )}
 
-          <CardFooter className="p-0 flex justify-end">
+          <TokenManagerDialog
+            open={tokenDialogOpen}
+            onClose={() => setTokenDialogOpen(false)}
+            onSelectToken={(t) => {
+              setFormData(prev => ({ ...prev, token: t.value }))
+              setTokenDialogOpen(false)
+            }}
+          />
+
+          <CardFooter className="p-0 hidden sm:flex justify-end">
             <button
               type="submit"
               disabled={disabled || loading}
@@ -116,6 +150,7 @@ export const TunnelForm: React.FC<TunnelFormProps> = ({ onCreateTunnel, loading 
                 'inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700',
                 disabled || loading ? 'opacity-60 cursor-not-allowed hover:bg-blue-600' : ''
               )}
+              aria-label="Create Tunnel"
             >
               {loading ? (
                 <>
@@ -130,6 +165,33 @@ export const TunnelForm: React.FC<TunnelFormProps> = ({ onCreateTunnel, loading 
               )}
             </button>
           </CardFooter>
+
+          <div className="sm:hidden">
+            <div className="fixed inset-x-0 bottom-4 px-4 pointer-events-none">
+              <button
+                type="submit"
+                disabled={disabled || loading}
+                className={cn(
+                  'pointer-events-auto w-full inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-3 text-base font-semibold text-white shadow-lg transition-colors hover:bg-blue-700',
+                  'neo:rounded-none neo:border-[3px] neo:border-border neo:shadow-[6px_6px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[6px_6px_0_0_rgba(255,255,255,0.9)]',
+                  disabled || loading ? 'opacity-60 cursor-not-allowed hover:bg-blue-600' : ''
+                )}
+                aria-label="Create Tunnel"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" strokeWidth={2.5} />
+                    Creating...
+                  </>
+                ) : (
+                  <>
+                    <Play className="w-5 h-5" strokeWidth={2.5} />
+                    Create Tunnel
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
         </form>
 
         <Alert variant="info" className="mt-6">

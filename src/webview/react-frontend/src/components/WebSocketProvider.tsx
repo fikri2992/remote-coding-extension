@@ -13,6 +13,8 @@ interface WebSocketContextType {
   addMessageListener: (handler: (data: any) => void) => () => void;
   // ACP request/response helper
   sendAcp: (op: string, payload?: any, opts?: { timeoutMs?: number }) => Promise<any>;
+  // Generic request/response for non-ACP services (e.g., type: 'tunnels')
+  sendRpc: (type: string, op: string, payload?: any, opts?: { timeoutMs?: number }) => Promise<any>;
 }
 
 const WebSocketContext = createContext<WebSocketContextType | undefined>(undefined);
@@ -53,6 +55,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
   const supportsAcpRef = useRef<boolean>(false);
   const [supportsAcpRequests, setSupportsAcpRequests] = useState<boolean>(false);
   const pendingAcpRef = useRef<Map<string, { resolve: (v: any) => void; reject: (e: any) => void; timer?: any }>>(new Map());
+  const pendingRpcRef = useRef<Map<string, { resolve: (v: any) => void; reject: (e: any) => void; timer?: any }>>(new Map());
 
   useEffect(() => {
     // Ensure debug logs are enabled by default, as requested
@@ -141,6 +144,29 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
               }
               entry.reject(e);
             }
+          }
+        }
+
+        // Resolve generic RPC responses for non-ACP services
+        if (data && data.type && data.id && data.type !== 'acp_response') {
+          const key = `${data.type}:${data.id}`;
+          const entry = pendingRpcRef.current.get(key);
+          if (entry) {
+            pendingRpcRef.current.delete(key);
+            if (entry.timer) { try { clearTimeout(entry.timer); } catch {} }
+            if (data.ok) {
+              let result = data.result;
+              try {
+                if (result && typeof result === 'object' && 'data' in result && (('success' in result) || ('ok' in result))) {
+                  result = (result as any).data;
+                }
+              } catch {}
+              entry.resolve(result);
+            } else {
+              const errMsg = (typeof data.error === 'string') ? data.error : (data.error?.message || 'rpc error');
+              entry.reject(new Error(errMsg));
+            }
+            // Do not early return; still notify listeners below
           }
         }
 
@@ -267,6 +293,27 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
     sendJson,
     addMessageListener,
     sendAcp,
+    sendRpc: (type: string, op: string, payload?: any, opts?: { timeoutMs?: number }) => {
+      return new Promise((resolve, reject) => {
+        try {
+          if (!ws || ws.readyState !== WebSocket.OPEN) {
+            return reject(new Error('WebSocket not connected'));
+          }
+          const id = `rpc_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
+          const msg = { type, id, op, payload: payload || {} };
+          const timeoutMs = Math.max(1000, Math.min(60000, opts?.timeoutMs ?? 15000));
+          const key = `${type}:${id}`;
+          const timer = setTimeout(() => {
+            pendingRpcRef.current.delete(key);
+            reject(new Error(`${type} timeout for op=${op}`));
+          }, timeoutMs);
+          pendingRpcRef.current.set(key, { resolve, reject, timer });
+          sendJson(msg);
+        } catch (e) {
+          reject(e);
+        }
+      });
+    },
   };
 
   return (

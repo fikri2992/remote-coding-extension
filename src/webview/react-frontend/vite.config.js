@@ -24,7 +24,6 @@ export default defineConfig({
                     proxy.on('error', function (err) {
                         if ((err === null || err === void 0 ? void 0 : err.code) === 'ECONNREFUSED')
                             return;
-                        // eslint-disable-next-line no-console
                         console.warn('[vite-proxy] ws error:', (err === null || err === void 0 ? void 0 : err.message) || String(err));
                     });
                 },

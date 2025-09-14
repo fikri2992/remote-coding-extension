@@ -7,14 +7,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as url from 'url';
 import { ServerConfig } from './interfaces';
-import {
-    createTunnel as cfCreateTunnel,
-    getActiveTunnels as cfGetActiveTunnels,
-    getTunnelsSummary as cfGetTunnelsSummary,
-    stopTunnelById as cfStopTunnelById,
-    stopAllTunnels as cfStopAllTunnels,
-    ensureCloudflared as cfEnsure
-} from './CloudflaredManager';
+// Static file server only; all app RPCs are over WebSocket
 import { ErrorHandler, ErrorCategory, ErrorSeverity } from './ErrorHandler';
 
 export class HttpServer {
@@ -129,11 +122,7 @@ export class HttpServer {
 
             let pathname = parsedUrl.pathname || '/';
 
-            // No HTTP JSON API; all app RPCs are over WebSocket
-            if (pathname.startsWith('/api/')) {
-                this.sendErrorResponse(res, 404, 'API disabled. Use WebSocket endpoint /ws');
-                return;
-            }
+            // No REST JSON API; only static assets and WebSocket upgrades handled elsewhere
 
             // Validate request method (static assets only support GET/HEAD)
             if (!['GET', 'HEAD'].includes(req.method || '')) {
@@ -184,14 +173,7 @@ export class HttpServer {
         }
     }
 
-    // No HTTP JSON API: all application RPCs use WebSocket services.
-    private async handleApiRequest(_req: http.IncomingMessage, res: http.ServerResponse, _pathname: string, _query: any): Promise<void> {
-        if (!res.headersSent) {
-            res.setHeader('Content-Type', 'application/json; charset=utf-8');
-        }
-        res.writeHead(404);
-        res.end(JSON.stringify({ success: false, error: 'API disabled. Use WebSocket endpoint /ws' }));
-    }
+    // No REST JSON API methods
 
     /**
      * Serve static files with enhanced error handling
@@ -366,8 +348,10 @@ export class HttpServer {
         const allowedOrigins = [
             'http://localhost:3000',
             'http://localhost:3900',
+            'http://localhost:5173',
             'http://127.0.0.1:3000',
             'http://127.0.0.1:3900',
+            'http://127.0.0.1:5173',
             'http://localhost:3901',
             'http://127.0.0.1:3901'
         ];
@@ -375,7 +359,7 @@ export class HttpServer {
         if (origin && allowedOrigins.includes(origin)) {
             res.setHeader('Access-Control-Allow-Origin', origin);
         } else {
-            // Default to allowing localhost for development
+            // Default to allowing backend origin for dev
             res.setHeader('Access-Control-Allow-Origin', 'http://localhost:3900');
         }
 

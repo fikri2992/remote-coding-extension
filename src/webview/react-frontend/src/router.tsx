@@ -11,6 +11,7 @@ import ChatPage from './pages/ChatPage.tsx';
 import HomePage from './pages/HomePage.tsx';
 import SettingsPage from './pages/SettingsPage.tsx';
 import { TunnelManagerPage } from './pages/TunnelManagerPage.tsx';
+import { TunnelDetailsPage } from './pages/TunnelDetailsPage.tsx';
 import ACPPage from './pages/ACPPage.tsx';
 import TerminalCommandsPage from './pages/TerminalCommandsPage.tsx';
 
@@ -103,6 +104,12 @@ const tunnelsRoute = createRoute({
   component: TunnelManagerPage,
 });
 
+const tunnelDetailsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/tunnels/$id',
+  component: TunnelDetailsPage,
+});
+
 
 
 // Create the route tree
@@ -110,6 +117,7 @@ const routeTree = rootRoute.addChildren([
   indexRoute,
   serverRoute,
   tunnelsRoute,
+  tunnelDetailsRoute,
   filesRoute,
   fileViewRoute,
   gitRoute,

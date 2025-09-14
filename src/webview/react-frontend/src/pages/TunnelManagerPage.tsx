@@ -1,29 +1,17 @@
-import React, { useState, useEffect } from 'react';
-import { TunnelForm } from '../components/TunnelForm';
-import { TunnelList } from '../components/TunnelList';
-import { TunnelActions } from '../components/TunnelActions';
+import React, { useState, useEffect, useRef } from 'react';
+import { TunnelForm } from '../components/tunnels/TunnelForm';
+import { TunnelList } from '../components/tunnels/TunnelList';
+import { TunnelActions } from '../components/tunnels/TunnelActions';
 import { TunnelInfo, CreateTunnelRequest } from '../types/tunnel';
 import { AlertCircle, CheckCircle, Info } from 'lucide-react';
 import { useToast } from '../components/ui/toast';
 import useConfirm from '../lib/hooks/useConfirm';
+import { usePullToRefresh } from '../lib/hooks/usePullToRefresh';
+import { useWebSocket } from '../components/WebSocketProvider';
 
-// VS Code API with fallback for development
-declare const acquireVsCodeApi: () => any;
-const isVSCode = typeof acquireVsCodeApi !== 'undefined';
-const vscode = isVSCode ? acquireVsCodeApi() : null;
+// VS Code transport removed; WebSocket is the single transport
 
-async function apiRequest(path: string, options?: RequestInit): Promise<any> {
-  const url = path.startsWith('http') ? path : `${window.location.origin}${path}`;
-  const res = await fetch(url, {
-    method: 'GET',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'same-origin',
-    ...options
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
-  return data;
-}
+// All non-VSCode operations will go over WebSocket ACP via useWebSocket()
 
 export const TunnelManagerPage: React.FC = () => {
   const [tunnels, setTunnels] = useState<TunnelInfo[]>([]);
@@ -36,79 +24,36 @@ export const TunnelManagerPage: React.FC = () => {
   } | null>(null);
   const { show } = useToast();
   const [confirm, ConfirmUI] = useConfirm();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const ws = (() => { try { return useWebSocket(); } catch { return null as any; } })();
 
-  // Handle messages from extension
-  useEffect(() => {
-    if (!isVSCode) return;
-    const handleMessage = (event: MessageEvent) => {
-      const message = event.data;
-      const type = message.type || message.command;
-      switch (type) {
-        case 'tunnelCreated':
-          if (message.tunnel) {
-            setTunnels(prev => [...prev, message.tunnel]);
-            setNotification({ type: 'success', message: `Tunnel created successfully! Access at ${message.tunnel.url}` });
-            show({ variant: 'success', title: 'Tunnel created', description: message.tunnel.url });
-          }
-          break;
-        case 'tunnelStopped':
-          if (message.tunnelId) {
-            setTunnels(prev => prev.filter(t => t.id !== message.tunnelId));
-            setNotification({ type: 'success', message: 'Tunnel stopped successfully.' });
-            show({ variant: 'default', title: 'Tunnel stopped' });
-          }
-          break;
-        case 'tunnelError':
-          setNotification({ type: 'error', message: message.error || 'An error occurred with the tunnel.' });
-          show({ variant: 'destructive', title: 'Tunnel error', description: message.error });
-          break;
-        case 'tunnelsUpdated':
-          if (Array.isArray(message.tunnels)) setTunnels(message.tunnels);
-          break;
-        case 'tunnelStatus':
-        case 'tunnelStatusUpdate':
-          if (message.tunnel) {
-            setTunnels(prev => {
-              const exists = prev.find(t => t.id === message.tunnel.id);
-              if (exists) return prev.map(t => (t.id === message.tunnel.id ? message.tunnel : t));
-              return [...prev, message.tunnel];
-            });
-          }
-          break;
-      }
-    };
-
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
-  }, []);
+  // VS Code message handling removed
 
   // Load initial tunnel data
   useEffect(() => {
     (async () => {
-      if (isVSCode) {
-        vscode!.postMessage({ type: 'getTunnels' });
-        vscode!.postMessage({ type: 'getTunnelStatus' });
-      } else {
-        try {
-          const list = await apiRequest('/api/tunnels');
-          if (Array.isArray(list.tunnels)) setTunnels(list.tunnels);
-        } catch (e) { /* ignore */ }
-      }
+      setRefreshing(true);
+      try {
+        if (ws) {
+          const resp = await ws.sendRpc('tunnels', 'list');
+          const tunnelsResp = resp?.tunnels || resp?.data?.tunnels || resp;
+          if (Array.isArray(tunnelsResp)) setTunnels(tunnelsResp as TunnelInfo[]);
+        }
+      } catch (e) { /* ignore */ }
+      finally { setRefreshing(false); }
     })();
-  }, []);
+  }, [ws]);
 
   const handleCreateTunnel = async (request: CreateTunnelRequest) => {
     setCreatingTunnel(true);
     try {
-      if (isVSCode) {
-        vscode!.postMessage({ type: 'createTunnel', request });
-      } else {
-        const res = await apiRequest('/api/tunnels/create', { method: 'POST', body: JSON.stringify(request) });
-        if (res?.tunnel) {
-          setTunnels(prev => [...prev, res.tunnel as TunnelInfo]);
-          setNotification({ type: 'success', message: `Tunnel created successfully! Access at ${res.tunnel.url}` });
-          show({ variant: 'success', title: 'Tunnel created', description: res.tunnel.url });
-        }
+      if (!ws) throw new Error('WebSocket not connected');
+      const res = await ws.sendRpc('tunnels', 'create', request);
+      const tunnel = res?.tunnel || res?.data || res;
+      if (tunnel && tunnel.url) {
+        setTunnels(prev => [...prev, tunnel as TunnelInfo]);
+        setNotification({ type: 'success', message: `Tunnel created successfully! Access at ${tunnel.url}` });
+        show({ variant: 'success', title: 'Tunnel created', description: tunnel.url });
       }
     } catch (e: any) {
       setNotification({ type: 'error', message: e?.message || 'Failed to create tunnel' });
@@ -129,12 +74,10 @@ export const TunnelManagerPage: React.FC = () => {
     });
     if (!ok) return;
     try {
-      if (isVSCode) {
-        vscode!.postMessage({ type: 'stopTunnel', tunnelId });
-      } else {
-        await apiRequest('/api/tunnels/stop', { method: 'POST', body: JSON.stringify({ id: tunnelId }) });
-        setTunnels(prev => prev.filter(t => t.id !== tunnelId));
-      }
+      if (!ws) throw new Error('WebSocket not connected');
+      await ws.sendRpc('tunnels', 'stop', { id: tunnelId });
+      // rely on broadcast; optimistically update
+      setTunnels(prev => prev.filter(t => t.id !== tunnelId));
     } catch (e: any) {
       setNotification({ type: 'error', message: e?.message || 'Failed to stop tunnel' });
       show({ variant: 'destructive', title: 'Stop failed', description: e?.message });
@@ -155,12 +98,9 @@ export const TunnelManagerPage: React.FC = () => {
     }
     setLoading(true);
     try {
-      if (isVSCode) {
-        vscode!.postMessage({ type: 'stopAllTunnels' });
-      } else {
-        await apiRequest('/api/tunnels/stopAll', { method: 'POST' });
-        setTunnels([]);
-      }
+      if (!ws) throw new Error('WebSocket not connected');
+      await ws.sendRpc('tunnels', 'stopAll');
+      setTunnels([]);
     } catch (e: any) {
       setNotification({ type: 'error', message: e?.message || 'Failed to stop tunnels' });
       show({ variant: 'destructive', title: 'Stop all failed', description: e?.message });
@@ -169,15 +109,34 @@ export const TunnelManagerPage: React.FC = () => {
     }
   };
 
+  const handleRestartTunnel = async (tunnelId: string) => {
+    try {
+      if (!ws) throw new Error('WebSocket not connected');
+      await ws.sendRpc('tunnels', 'restart', { id: tunnelId });
+      show({ variant: 'default', title: 'Restart requested' });
+    } catch (e: any) {
+      setNotification({ type: 'error', message: e?.message || 'Failed to restart tunnel' });
+      show({ variant: 'destructive', title: 'Restart failed', description: e?.message });
+    }
+  };
+
+  const handleStartQuickTunnel = () => {
+    let port = 3000;
+    try {
+      const saved = (typeof window !== 'undefined' && window.localStorage.getItem('KIRO_LAST_TUNNEL_PORT')) || '';
+      const n = parseInt(saved, 10);
+      if (!Number.isNaN(n) && n >= 1 && n <= 65535) port = n;
+    } catch {}
+    handleCreateTunnel({ type: 'quick', localPort: port });
+  };
+
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      if (isVSCode) {
-        vscode!.postMessage({ type: 'refreshTunnels' });
-      } else {
-        const list = await apiRequest('/api/tunnels');
-        if (Array.isArray(list.tunnels)) setTunnels(list.tunnels);
-      }
+      if (!ws) throw new Error('WebSocket not connected');
+      const res = await ws.sendRpc('tunnels', 'list');
+      const tunnelsResp = res?.tunnels || res?.data?.tunnels || res;
+      if (Array.isArray(tunnelsResp)) setTunnels(tunnelsResp as TunnelInfo[]);
     } catch (e: any) {
       setNotification({ type: 'error', message: e?.message || 'Failed to refresh tunnels' });
       show({ variant: 'destructive', title: 'Refresh failed', description: e?.message });
@@ -185,6 +144,41 @@ export const TunnelManagerPage: React.FC = () => {
       setRefreshing(false);
     }
   };
+
+  // Enable pull-to-refresh on mobile
+  usePullToRefresh(containerRef as any, handleRefresh, 70);
+
+  // Listen to WebSocket tunnel events
+  useEffect(() => {
+    if (!ws) return;
+    const unsub = ws.addMessageListener((msg: any) => {
+      const type = msg?.type;
+      switch (type) {
+        case 'tunnelCreated':
+          if (msg.tunnel) {
+            setTunnels(prev => [...prev, msg.tunnel]);
+            setNotification({ type: 'success', message: `Tunnel created successfully! Access at ${msg.tunnel.url}` });
+            show({ variant: 'success', title: 'Tunnel created', description: msg.tunnel.url });
+          }
+          break;
+        case 'tunnelStopped':
+          if (msg.tunnelId) {
+            setTunnels(prev => prev.filter(t => t.id !== msg.tunnelId));
+            setNotification({ type: 'success', message: 'Tunnel stopped successfully.' });
+            show({ variant: 'default', title: 'Tunnel stopped' });
+          }
+          break;
+        case 'tunnelsUpdated':
+          if (Array.isArray(msg.tunnels)) setTunnels(msg.tunnels);
+          break;
+        case 'tunnelError':
+          setNotification({ type: 'error', message: msg.error || 'An error occurred with the tunnel.' });
+          show({ variant: 'destructive', title: 'Tunnel error', description: msg.error });
+          break;
+      }
+    });
+    return () => { try { unsub?.(); } catch {} };
+  }, [ws]);
 
   // Auto-hide notifications
   useEffect(() => {
@@ -195,7 +189,7 @@ export const TunnelManagerPage: React.FC = () => {
   }, [notification]);
 
   return (
-    <div className="space-y-6">
+    <div ref={containerRef} className="space-y-6 overflow-y-auto pb-24 sm:pb-0">
       {/* Notification */}
       {notification && (
         <div className={`p-4 rounded-lg flex items-center gap-3 ${
@@ -232,6 +226,8 @@ export const TunnelManagerPage: React.FC = () => {
       <TunnelList
         tunnels={tunnels}
         onStopTunnel={handleStopTunnel}
+        onRestartTunnel={handleRestartTunnel}
+        onStartQuickTunnel={handleStartQuickTunnel}
         loading={refreshing}
       />
 

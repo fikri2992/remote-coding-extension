@@ -1,55 +1,55 @@
-import React from 'react';
-import { TunnelInfo } from '../types/tunnel';
-import { StopCircle, ExternalLink, Clock, Activity, Copy, QrCode } from 'lucide-react';
-import { cn } from '../lib/utils';
-import { Card, CardContent } from './ui/card';
-import { Badge } from './ui/badge';
-import { Button } from './ui/button';
-import { Tooltip } from './ui/tooltip';
-import { QRCodeModal } from './QRCodeModal';
-import { useToast } from './ui/toast';
+import React from 'react'
+import { Link } from '@tanstack/react-router'
+import { TunnelInfo } from '../../types/tunnel'
+import { StopCircle, ExternalLink, Activity, Copy, QrCode, Share2 } from 'lucide-react'
+import { cn } from '../../lib/utils'
+import { Card, CardContent } from '../ui/card'
+import { Button } from '../ui/button'
+import { Tooltip } from '../ui/tooltip'
+import { QRCodeModal } from '../QRCodeModal'
+import { useToast } from '../ui/toast'
+import { TunnelStatusPill } from './TunnelStatusPill'
 
 interface TunnelListProps {
   tunnels: TunnelInfo[];
   onStopTunnel: (tunnelId: string) => void;
   loading?: boolean;
+  onRestartTunnel?: (tunnelId: string) => void;
+  onStartQuickTunnel?: () => void;
 }
 
 export const TunnelList: React.FC<TunnelListProps> = ({
   tunnels,
   onStopTunnel,
-  loading = false
+  loading = false,
+  onRestartTunnel,
+  onStartQuickTunnel,
 }) => {
-  const { show } = useToast();
-  const [qr, setQr] = React.useState<{ open: boolean; url: string }>({ open: false, url: '' });
-  const getStatusColor = (status: TunnelInfo['status']) => {
-    switch (status) {
-      case 'running':
-        return 'bg-green-100 text-green-800';
-      case 'starting':
-        return 'bg-blue-100 text-blue-800';
-      case 'stopping':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'stopped':
-        return 'bg-gray-100 text-gray-800';
-      case 'error':
-        return 'bg-red-100 text-red-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
+  const { show } = useToast()
+  const [qr, setQr] = React.useState<{ open: boolean; url: string }>({ open: false, url: '' })
 
-  const getStatusIcon = (status: TunnelInfo['status']) => {
-    switch (status) {
-      case 'running':
-        return <Activity className="w-4 h-4" strokeWidth={2.5} />;
-      case 'starting':
-      case 'stopping':
-        return <Clock className="w-4 h-4" strokeWidth={2.5} />;
-      default:
-        return null;
+  const copy = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      show({ variant: 'info', title: 'Copied', description: 'URL copied to clipboard' })
+    } catch {
+      show({ variant: 'destructive', title: 'Copy failed' })
     }
-  };
+  }
+
+  const share = async (url: string) => {
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: 'Kiro Tunnel', url })
+        show({ variant: 'default', title: 'Shared', description: 'Link shared' })
+      } else {
+        await copy(url)
+      }
+    } catch (e: any) {
+      if (e && e.name === 'AbortError') return
+      try { await copy(url) } catch {}
+    }
+  }
 
   if (loading) {
     return (
@@ -67,7 +67,7 @@ export const TunnelList: React.FC<TunnelListProps> = ({
           </div>
         ))}
       </div>
-    );
+    )
   }
 
   if (tunnels.length === 0) {
@@ -79,23 +79,37 @@ export const TunnelList: React.FC<TunnelListProps> = ({
           </div>
           <h3 className="text-lg font-medium text-gray-900 mb-2">No Active Tunnels</h3>
           <p className="text-gray-600">Create your first tunnel to get started with remote access.</p>
+          {onStartQuickTunnel && (
+            <div className="mt-4">
+              <Button onClick={onStartQuickTunnel} className="px-4 py-2">Start Quick Tunnel</Button>
+            </div>
+          )}
         </CardContent>
       </Card>
-    );
+    )
   }
 
-  const copy = async (text: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      show({ variant: 'info', title: 'Copied', description: 'URL copied to clipboard' });
-    } catch {
-      show({ variant: 'destructive', title: 'Copy failed' });
+  const sorted = React.useMemo(() => {
+    const order: Record<TunnelInfo['status'], number> = {
+      running: 0,
+      starting: 1,
+      error: 2,
+      stopping: 3,
+      stopped: 4,
     }
-  };
+    return [...tunnels].sort((a, b) => {
+      const sa = order[a.status] ?? 99
+      const sb = order[b.status] ?? 99
+      if (sa !== sb) return sa - sb
+      const ta = new Date(a.createdAt as any).getTime()
+      const tb = new Date(b.createdAt as any).getTime()
+      return tb - ta
+    })
+  }, [tunnels])
 
   return (
     <div className="space-y-4">
-      {tunnels.map((tunnel) => (
+      {sorted.map((tunnel) => (
         <Card key={tunnel.id} className="hover:shadow-md transition-shadow">
           <CardContent className="p-6">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -104,7 +118,7 @@ export const TunnelList: React.FC<TunnelListProps> = ({
                   <h3 className="truncate text-lg font-semibold text-gray-900">
                     {tunnel.name || `Tunnel ${tunnel.id.slice(-4)}`}
                   </h3>
-                  <Badge className={cn(getStatusColor(tunnel.status))}>{getStatusIcon(tunnel.status)}{tunnel.status}</Badge>
+                  <TunnelStatusPill status={tunnel.status} />
                 </div>
 
                 <div className="space-y-2 text-sm text-gray-600">
@@ -132,9 +146,17 @@ export const TunnelList: React.FC<TunnelListProps> = ({
               </div>
 
               <div className="sm:ml-4 flex items-center gap-2">
+                <Link to="/tunnels/$id" params={{ id: tunnel.id }} className="text-sm underline text-blue-600 hover:text-blue-800">
+                  Details
+                </Link>
                 <Tooltip content="Copy URL">
-                  <Button variant="secondary" size="icon" onClick={() => copy(tunnel.url)}>
+                  <Button variant="secondary" size="icon" onClick={() => copy(tunnel.url)} aria-label="Copy URL">
                     <Copy className="w-4 h-4" strokeWidth={2.5} />
+                  </Button>
+                </Tooltip>
+                <Tooltip content="Share">
+                  <Button variant="secondary" size="icon" onClick={() => share(tunnel.url)} aria-label="Share URL">
+                    <Share2 className="w-4 h-4" strokeWidth={2.5} />
                   </Button>
                 </Tooltip>
                 <Tooltip content="Show QR">
@@ -150,6 +172,16 @@ export const TunnelList: React.FC<TunnelListProps> = ({
                 >
                   <StopCircle className="w-4 h-4" strokeWidth={2.5} /> Stop
                 </Button>
+                {onRestartTunnel && (
+                  <Button
+                    onClick={() => onRestartTunnel(tunnel.id)}
+                    className="px-3 py-2 text-sm"
+                    variant="secondary"
+                    disabled={tunnel.status === 'starting' || tunnel.status === 'stopping'}
+                  >
+                    Restart
+                  </Button>
+                )}
               </div>
             </div>
           </CardContent>
@@ -157,5 +189,5 @@ export const TunnelList: React.FC<TunnelListProps> = ({
       ))}
       <QRCodeModal open={qr.open} onClose={() => setQr({ open: false, url: '' })} url={qr.url} />
     </div>
-  );
-};
+  )
+}

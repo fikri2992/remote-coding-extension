@@ -1,5 +1,5 @@
 import React from 'react';
-import { LucideIcon, Home, Server, File, GitBranch, Terminal, MessageCircle } from 'lucide-react';
+import { LucideIcon, Home, Server, File, GitBranch, Terminal, MessageCircle, Network } from 'lucide-react';
 import { Button } from './ui/button';
 import { cn } from '../lib/utils';
 
@@ -12,6 +12,7 @@ interface MenuItem {
 const menuItems: MenuItem[] = [
   { id: 'home', label: 'Home', icon: Home },
   { id: 'server', label: 'Server', icon: Server },
+  { id: 'tunnels', label: 'Tunnels', icon: Network },
   { id: 'files', label: 'Files', icon: File },
   { id: 'git', label: 'Git', icon: GitBranch },
   { id: 'terminal', label: 'Terminal', icon: Terminal },

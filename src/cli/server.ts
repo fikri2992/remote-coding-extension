@@ -342,7 +342,12 @@ export class CliServer {
                   const name = typeof body.name === 'string' ? body.name : undefined;
                   const token = typeof body.token === 'string' ? body.token : undefined;
                   const type: 'quick' | 'named' = name || token ? 'named' : 'quick';
-                  const tunnel = await cfCreateTunnel({ localPort, name, token, type });
+                  const req: any = { localPort, type, ...(name ? { name } : {}), ...(token ? { token } : {}) };
+                  const tunnel = await cfCreateTunnel(req);
+                  try {
+                    this.webSocketServer?.broadcastMessage({ type: 'tunnelCreated', tunnel });
+                    this.webSocketServer?.broadcastMessage({ type: 'tunnelsUpdated', tunnels: cfGetActiveTunnels() });
+                  } catch {}
                   return { success: true, data: tunnel };
                 }
                 case 'stop': {
@@ -352,11 +357,31 @@ export class CliServer {
                   if (id) ok = await cfStopTunnelById(id);
                   else if (pid && pid > 0) ok = await cfKillTree(pid);
                   else return { success: false, error: 'id or pid is required' };
+                  try {
+                    if (ok && id) this.webSocketServer?.broadcastMessage({ type: 'tunnelStopped', tunnelId: id });
+                    this.webSocketServer?.broadcastMessage({ type: 'tunnelsUpdated', tunnels: cfGetActiveTunnels() });
+                  } catch {}
                   return { success: true, data: { ok } };
                 }
                 case 'stopAll': {
                   const count = await cfStopAllTunnels();
+                  try { this.webSocketServer?.broadcastMessage({ type: 'tunnelsUpdated', tunnels: cfGetActiveTunnels() }); } catch {}
                   return { success: true, data: { stopped: count } };
+                }
+                case 'restart': {
+                  const id = typeof body.id === 'string' ? body.id : undefined;
+                  if (!id) return { success: false, error: 'id is required' };
+                  const current = cfGetActiveTunnels().find(t => t.id === id);
+                  if (!current) return { success: false, error: 'Tunnel not found' };
+                  try { await cfStopTunnelById(id); } catch {}
+                  try { this.webSocketServer?.broadcastMessage({ type: 'tunnelStopped', tunnelId: id }); } catch {}
+                  const req: any = { localPort: current.localPort, type: current.type, ...(current.name ? { name: current.name } : {}), ...(current.token ? { token: current.token } : {}) };
+                  const newTunnel = await cfCreateTunnel(req);
+                  try {
+                    this.webSocketServer?.broadcastMessage({ type: 'tunnelCreated', tunnel: newTunnel });
+                    this.webSocketServer?.broadcastMessage({ type: 'tunnelsUpdated', tunnels: cfGetActiveTunnels() });
+                  } catch {}
+                  return { success: true, data: newTunnel };
                 }
                 case 'install': {
                   const bin = await cfEnsure(undefined);

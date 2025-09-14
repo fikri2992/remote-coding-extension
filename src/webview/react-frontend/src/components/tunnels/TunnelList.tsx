@@ -1,7 +1,7 @@
 import React from 'react'
 import { Link } from '@tanstack/react-router'
 import { TunnelInfo } from '../../types/tunnel'
-import { StopCircle, ExternalLink, Activity, Copy, QrCode, Share2 } from 'lucide-react'
+import { StopCircle, ExternalLink, Activity, Copy, QrCode } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import { Card, CardContent } from '../ui/card'
 import { Button } from '../ui/button'
@@ -56,19 +56,7 @@ export const TunnelList: React.FC<TunnelListProps> = ({
     }
   }
 
-  const share = async (url: string) => {
-    try {
-      if (navigator.share) {
-        await navigator.share({ title: 'Kiro Tunnel', url })
-        show({ variant: 'default', title: 'Shared', description: 'Link shared' })
-      } else {
-        await copy(url)
-      }
-    } catch (e: any) {
-      if (e && e.name === 'AbortError') return
-      try { await copy(url) } catch {}
-    }
-  }
+  // Share disabled per request; keep only copy & QR
 
   if (loading) {
     return (
@@ -143,18 +131,13 @@ export const TunnelList: React.FC<TunnelListProps> = ({
                 </div>
               </div>
 
-              <div className="sm:ml-4 flex items-center gap-1">
+              <div className="sm:ml-4 flex items-center gap-3">
                 <Link to="/tunnels/$id" params={{ id: tunnel.id }} className="text-sm text-primary hover:underline">
                   Details
                 </Link>
                 <Tooltip content="Copy URL">
                   <Button variant="ghost" size="icon" onClick={() => copy(tunnel.url)} aria-label="Copy URL">
                     <Copy className="w-4 h-4" strokeWidth={2.5} />
-                  </Button>
-                </Tooltip>
-                <Tooltip content="Share">
-                  <Button variant="ghost" size="icon" onClick={() => share(tunnel.url)} aria-label="Share URL">
-                    <Share2 className="w-4 h-4" strokeWidth={2.5} />
                   </Button>
                 </Tooltip>
                 <Tooltip content="Show QR">

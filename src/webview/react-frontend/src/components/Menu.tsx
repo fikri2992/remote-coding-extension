@@ -1,5 +1,5 @@
 import React from 'react';
-import { LucideIcon, Home, Server, File, GitBranch, Terminal, MessageCircle, Network } from 'lucide-react';
+import { LucideIcon, Home, Server, File, GitBranch, Terminal, MessageCircle, Network, Gem } from 'lucide-react';
 import { Button } from './ui/button';
 import { cn } from '../lib/utils';
 
@@ -10,7 +10,8 @@ interface MenuItem {
 }
 
 const menuItems: MenuItem[] = [
-  { id: 'home', label: 'Home', icon: Home },
+  { id: 'home', label: 'Claude', icon: Home },
+  { id: 'gemini', label: 'Gemini', icon: Gem },
   { id: 'server', label: 'Server', icon: Server },
   { id: 'tunnels', label: 'Tunnels', icon: Network },
   { id: 'files', label: 'Files', icon: File },

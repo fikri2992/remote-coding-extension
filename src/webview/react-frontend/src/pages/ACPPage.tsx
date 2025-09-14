@@ -80,21 +80,97 @@ const ACPPage: React.FC = () => {
   const [selectedAuthMethod, setSelectedAuthMethod] = useState<string>('');
   const [stderrLog, setStderrLog] = useState<string[]>([]);
   const [eventLog, setEventLog] = useState<any[]>([]);
+  const [agents, setAgents] = useState<Array<{ id: string; title: string; framing: string; envKeys?: string[] }>>([]);
+  const [agentStatus, setAgentStatus] = useState<any>(null);
+  // Active agent selection and env inputs
+  const [activeAgentId, setActiveAgentId] = useState<string>('claude');
+  const [envMap, setEnvMap] = useState<Record<string, string>>({});
   async function wsFirst<T = any>(op: string, payload: any): Promise<T> {
-    // Strict WS-only pathway for ACP operations
-    return await sendAcp(op, payload);
+    // Always include agentId for multi-agent routing
+    return await sendAcp(op, { agentId: activeAgentId || provider, ...(payload || {}) });
   }
   
   // Persist connect prefs (without API keys)
-  const prefsKey = 'acp_connect_prefs_v1';
+  const provider = (typeof window !== 'undefined' && window.location.pathname === '/gemini') ? 'gemini' : 'claude';
+  const prefsKey = `acp_connect_prefs_v2_${provider}`;
   useEffect(() => {
+    // Initialize selection from route provider on mount
+    setActiveAgentId(provider);
+  }, []);
+  useEffect(() => {
+    let savedRaw: string | null = null;
     try {
-      const raw = localStorage.getItem(prefsKey);
-      if (raw) {
-        const p = JSON.parse(raw);
-        if (typeof p.agentCmd === 'string') setAgentCmd(p.agentCmd);
+      savedRaw = localStorage.getItem(prefsKey);
+      if (savedRaw) {
+        const p = JSON.parse(savedRaw);
+        let savedCmd = typeof p.agentCmd === 'string' ? p.agentCmd : '';
+        // Migration: for Gemini route, switch legacy --experimental-acp to 'acp' subcommand
+        try {
+          const path = (typeof window !== 'undefined' ? window.location.pathname : '') || '';
+          if (path === '/gemini' && /gemini-cli/i.test(savedCmd) && /--experimental-acp/i.test(savedCmd)) {
+            savedCmd = savedCmd.replace(/--experimental-acp/ig, 'acp');
+            try { localStorage.setItem(prefsKey, JSON.stringify({ ...p, agentCmd: savedCmd })); } catch {}
+          }
+        } catch {}
+        if (savedCmd) setAgentCmd(savedCmd);
         if (typeof p.cwd === 'string') setCwd(p.cwd);
         if (typeof p.proxyUrl === 'string') setProxyUrl(p.proxyUrl);
+      }
+    } catch {}
+    // Apply route-based presets (non-destructive: only if no saved agentCmd)
+    try {
+      const path = (typeof window !== 'undefined' ? window.location.pathname : '') || '';
+      const noSaved = !savedRaw || !JSON.parse(savedRaw || '{}')?.agentCmd;
+      if (noSaved) {
+        if (path === '/gemini') {
+          // Prefer npx to avoid global install assumptions
+          setAgentCmd('npx -y @google/gemini-cli --experimental-acp');
+        }
+      }
+    } catch {}
+  }, []);
+
+  // Load agents list and current status
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await (sendAcp as any)('agents.list', {});
+        const list = Array.isArray(res?.agents) ? res.agents : [];
+        setAgents(list);
+        // Ensure activeAgentId is valid
+        const ids = new Set(list.map((a: { id: any; }) => a.id));
+        if (!ids.has(activeAgentId)) {
+          if (ids.has(provider)) setActiveAgentId(provider);
+          else if (list[0]?.id) setActiveAgentId(list[0].id);
+        }
+      } catch {}
+      try {
+        const s = await (sendAcp as any)('agent.status', { agentId: activeAgentId || provider });
+        setAgentStatus(s);
+      } catch {}
+    })();
+  }, [provider]);
+
+  // When agent changes, refresh status and reset env inputs for its keys
+  useEffect(() => {
+    (async () => {
+      try { const s = await (sendAcp as any)('agent.status', { agentId: activeAgentId }); setAgentStatus(s); } catch {}
+      const agent = agents.find(a => a.id === activeAgentId);
+      const keys = (agent?.envKeys || []) as string[];
+      setEnvMap(prev => {
+        const next: Record<string, string> = {};
+        for (const k of keys) next[k] = prev[k] || '';
+        return next;
+      });
+    })();
+  }, [activeAgentId, agents]);
+
+  // When opening Gemini route, proactively disconnect any existing agent
+  useEffect(() => {
+    try {
+      const path = (typeof window !== 'undefined' ? window.location.pathname : '') || '';
+      if (path === '/gemini') {
+        wsFirst('disconnect', {}).catch(() => {});
       }
     } catch {}
   }, []);
@@ -144,7 +220,7 @@ const ACPPage: React.FC = () => {
 
   // WS subscriptions
   useEffect(() => {
-    const unsub = addMessageListener((msg: any) => {
+    const unsub = addMessageListener(async (msg: any) => {
       // Raw log (truncate)
       setEventLog((prev) => {
         const next = [...prev, msg];
@@ -154,6 +230,11 @@ const ACPPage: React.FC = () => {
       // Console visibility for key WS events
       if (msg.type === 'agent_connect' || msg.type === 'agent_initialized' || msg.type === 'rpc_debug' || msg.type === 'agent_exit') {
         try { console.log('[acp][ws]', msg.type, msg); } catch {}
+      }
+      // Filter to current agent if tagged
+      if (msg.agentId && msg.agentId !== (activeAgentId || provider)) return;
+      if (msg.type === 'agent_initialized' || msg.type === 'agent_exit') {
+        try { const s = await (sendAcp as any)('agent.status', { agentId: activeAgentId || provider }); setAgentStatus(s); } catch {}
       }
       if (msg.type === 'agent_initialized') {
         setInit(msg.init as InitializeResponse);
@@ -382,6 +463,7 @@ const ACPPage: React.FC = () => {
   }, [input]);
 
   const canConnect = useMemo(() => !connecting, [connecting]);
+  const canStartStop = useMemo(() => !!activeAgentId && isConnected, [activeAgentId, isConnected]);
   const canPrompt = useMemo(() => !!sessionId && input.trim().length > 0 && !sending, [sessionId, input, sending]);
 
   // Minimal generic WS RPC helper for non-ACP services
@@ -508,27 +590,37 @@ const ACPPage: React.FC = () => {
 
   async function handleConnect() {
     if (!canConnect) { try { console.log('[acp] handleConnect: ignored (already connecting)'); } catch {}; return; }
-    try { console.log('[acp] handleConnect: click', { agentCmd, cwd, proxyUrl, anthropicKeyPresent: !!anthropicKey }); } catch {}
+    try { console.log('[acp] handleConnect: click', { activeAgentId, agentCmd, cwd, proxyUrl, envKeys: Object.keys(envMap||{}).length }); } catch {}
     setConnecting(true);
     try {
       const env: Record<string, string> = {};
-      if (anthropicKey.trim()) env.ANTHROPIC_API_KEY = anthropicKey.trim();
+      for (const [k, v] of Object.entries(envMap)) { if (String(v || '').trim()) env[k] = String(v).trim(); }
       const body = {
         agentCmd,
         env: Object.keys(env).length ? env : undefined,
         cwd: cwd.trim() || undefined,
         proxy: proxyUrl.trim() || undefined,
+        // Force a fresh agent process to avoid any stale reuse
+        forceRestart: true,
       };
       try { console.log('[acp] /api/connect body', body); } catch {}
-      const resp = await wsFirst('connect', body);
+      const resp = await (sendAcp as any)('connect', { agentId: activeAgentId || provider, ...body }, { timeoutMs: 120000 });
       try { console.log('[acp] /api/connect resp', resp); } catch {}
       if (resp?.debug) {
         try { console.log('[acp] /api/connect resp.debug', resp.debug); } catch {}
       }
       setInit(resp.init);
-      await refreshAuthMethods();
-      // Auto-start a fresh session for a seamless flow
-      try { await handleNewSession(); } catch {}
+      try { await refreshAuthMethods(); } catch {}
+      // Auto-start a fresh session for a seamless flow, but don't fail overall on auth or race conditions
+      try { await handleNewSession(); } catch (err: any) {
+        const msg = err?.message || '';
+        if (err?.authRequired) {
+          show({ title: 'Authentication Required', description: 'Open the Authentication panel to authorize, then start a session.', variant: 'default' });
+        } else if (/not connected/i.test(msg)) {
+          // Agent may still be warming up; allow user to retry
+          show({ title: 'Agent Warming Up', description: 'Agent connected. Starting a session may take a moment. Try again shortly.', variant: 'default' });
+        }
+      }
     } catch (e: any) {
       try { console.error('[acp] handleConnect error', e); } catch {}
       show({ title: 'Connection Error', description: e?.message || String(e), variant: 'destructive' });
@@ -583,7 +675,33 @@ const ACPPage: React.FC = () => {
           }
         }
       }
-      await wsFirst('prompt', { sessionId, prompt });
+      try {
+        await wsFirst('prompt', { sessionId, prompt });
+      } catch (e: any) {
+        const msg = e?.message || '';
+        // Auto-recover if agent disconnected (e.g., gemini CLI exited after connect)
+        if (/not connected/i.test(msg)) {
+          try {
+            const env: Record<string, string> = {};
+            for (const [k, v] of Object.entries(envMap)) { if (String(v || '').trim()) env[k] = String(v).trim(); }
+            const body = {
+              agentCmd,
+              env: Object.keys(env).length ? env : undefined,
+              cwd: cwd.trim() || undefined,
+              proxy: proxyUrl.trim() || undefined,
+              forceRestart: true,
+            };
+            await (sendAcp as any)('connect', { agentId: activeAgentId || provider, ...body }, { timeoutMs: 120000 });
+            const resp = await wsFirst('session.new', { cwd: cwd.trim() || undefined });
+            if (resp?.sessionId) {
+              setSessionId(resp.sessionId);
+              await wsFirst('prompt', { sessionId: resp.sessionId, prompt });
+              return;
+            }
+          } catch {}
+        }
+        throw e;
+      }
     } catch (err: any) {
       const msg = err?.message || '';
       if (/Session not found/i.test(msg) || /no sessionId/i.test(msg)) {
@@ -1082,17 +1200,38 @@ const ACPPage: React.FC = () => {
       <div className="bg-card border border-border rounded-lg p-4 neo:rounded-none neo:border-[3px]">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-semibold">ACP Connect</h2>
-          <div className="text-xs text-muted-foreground">{init ? 'Initialized' : 'Not initialized'}</div>
+          <div className="text-xs text-muted-foreground">{agentStatus?.connected ? 'Agent: Connected' : 'Agent: Disconnected'}</div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
-            <label className="block text-xs text-muted-foreground mb-1">Agent Command (optional)</label>
-            <input className="w-full border border-input rounded px-2 py-1 text-sm" placeholder="auto: local claude-code-acp" value={agentCmd} onChange={(e) => setAgentCmd(e.target.value)} />
+            <label className="block text-xs text-muted-foreground mb-1">Agent</label>
+            <select
+              className="w-full border border-input rounded px-2 py-1 text-sm"
+              value={activeAgentId}
+              onChange={(e) => setActiveAgentId(e.target.value)}
+            >
+              {agents.map(a => (
+                <option key={a.id} value={a.id}>{a.title || a.id}</option>
+              ))}
+            </select>
+            <div className="mt-1 text-[11px] text-muted-foreground">Framing: {agents.find(a=>a.id===activeAgentId)?.framing || 'n/a'}</div>
           </div>
           <div>
-            <label className="block text-xs text-muted-foreground mb-1">Anthropic API Key</label>
-            <input className="w-full border border-input rounded px-2 py-1 text-sm" value={anthropicKey} onChange={(e) => setAnthropicKey(e.target.value)} placeholder="sk-ant-..." />
+            <label className="block text-xs text-muted-foreground mb-1">Agent Command (optional)</label>
+            <input className="w-full border border-input rounded px-2 py-1 text-sm" placeholder={(typeof window !== 'undefined' && window.location.pathname === '/gemini') ? 'e.g. npx -y @google/gemini-cli --experimental-acp' : 'auto: local claude-code-acp'} value={agentCmd} onChange={(e) => setAgentCmd(e.target.value)} />
           </div>
+          {(agents.find(a => a.id === activeAgentId)?.envKeys || []).map((k) => (
+            <div key={k}>
+              <label className="block text-xs text-muted-foreground mb-1">{k}</label>
+              <input
+                className="w-full border border-input rounded px-2 py-1 text-sm"
+                type={/key|token|secret/i.test(k) ? 'password' : 'text'}
+                value={envMap[k] ?? ''}
+                onChange={(e) => setEnvMap(m => ({ ...m, [k]: e.target.value }))}
+                placeholder={k}
+              />
+            </div>
+          ))}
           <div>
             <label className="block text-xs text-muted-foreground mb-1">Working Directory</label>
             <input className="w-full border border-input rounded px-2 py-1 text-sm" value={cwd} onChange={(e) => setCwd(e.target.value)} placeholder="" />
@@ -1102,11 +1241,14 @@ const ACPPage: React.FC = () => {
             <input className="w-full border border-input rounded px-2 py-1 text-sm" value={proxyUrl} onChange={(e) => setProxyUrl(e.target.value)} placeholder="http://localhost:7890" />
           </div>
         </div>
-        <div className="mt-3 flex gap-2">
+        <div className="mt-3 flex flex-wrap gap-2 items-center">
           <Button disabled={!canConnect} onClick={handleConnect} className="inline-flex items-center gap-2">
             <Plug className="h-4 w-4" />
             Connect
           </Button>
+          <Button variant="secondary" disabled={!canStartStop} onClick={async () => { try { await (sendAcp as any)('agent.start', { agentId: activeAgentId }); const s = await (sendAcp as any)('agent.status', { agentId: activeAgentId }); setAgentStatus(s); } catch {} }}>Start</Button>
+          <Button variant="destructive" disabled={!canStartStop} onClick={async () => { try { await (sendAcp as any)('agent.stop', { agentId: activeAgentId }); const s = await (sendAcp as any)('agent.status', { agentId: activeAgentId }); setAgentStatus(s); } catch {} }}>Stop</Button>
+          <Button variant="secondary" disabled={!activeAgentId || !isConnected} onClick={async () => { try { const s = await (sendAcp as any)('agent.status', { agentId: activeAgentId }); setAgentStatus(s); } catch {} }}>Refresh Status</Button>
         </div>
         {init && (
           <div className="mt-3 text-xs text-muted-foreground">
@@ -1413,6 +1555,3 @@ const ACPPage: React.FC = () => {
 };
 
 export default ACPPage;
-
-
-

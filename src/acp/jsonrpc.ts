@@ -59,6 +59,11 @@ export class JsonRpcStdioClient extends EventEmitter {
     this.mode = mode;
     this.incoming.on('data', (chunk: Buffer) => this.onData(chunk));
     this.incoming.on('error', (err) => this.emit('error', err));
+    this.incoming.on('end', () => {
+      const e = new Error('jsonrpc: stream closed');
+      try { this.emit('error', e); } catch {}
+      this.abortAllPending(e);
+    });
   }
 
   request<T = any>(method: string, params?: JsonValue): Promise<T> {
@@ -162,6 +167,16 @@ export class JsonRpcStdioClient extends EventEmitter {
     if (typeof msg.method === 'string' && msg.id === undefined) {
       this.emit('notification', { method: msg.method, params: msg.params });
       return;
+    }
+  }
+
+  // Reject all pending requests (e.g., on process exit)
+  abortAllPending(error?: any) {
+    const err = error instanceof Error ? error : new Error(String(error || 'aborted'));
+    const entries = Array.from(this.pending.entries());
+    this.pending.clear();
+    for (const [, p] of entries) {
+      try { p.reject(err); } catch {}
     }
   }
 }

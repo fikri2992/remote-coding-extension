@@ -16,7 +16,7 @@ interface GitRepositoryState {
 }
 
 const GitPage: React.FC = () => {
-  const { sendJson, addMessageListener, isConnected } = useWebSocket();
+  const { sendJson, addMessageListener, isConnected, connect } = useWebSocket();
   const [repo, setRepo] = useState<GitRepositoryState | null>(null);
   const [diffFiles, setDiffFiles] = useState<Array<{ file: string; type: 'added' | 'modified' | 'deleted' | 'renamed'; additions: number; deletions: number; content: string }>>([]);
   const [commits, setCommits] = useState<Array<{ hash: string; message: string; author: string; date: string | Date }>>([]);
@@ -27,6 +27,7 @@ const GitPage: React.FC = () => {
   const [historyLoading, setHistoryLoading] = useState<boolean>(false);
   const [commitDiffLoading, setCommitDiffLoading] = useState<boolean>(false);
   const pendingMap = useRef<Record<string, string | { operation: string; timeoutId: NodeJS.Timeout }>>({});
+  const queuedOpsRef = useRef<Array<{ operation: string; options: any }>>([]);
   const [activeTab, setActiveTab] = useState<'status' | 'history'>('status');
   const [logCount, setLogCount] = useState<number>(20);
   const [canLoadMore, setCanLoadMore] = useState<boolean>(true);
@@ -45,31 +46,13 @@ const GitPage: React.FC = () => {
       setLoading(true);
     }
 
-    // Check if WebSocket is connected
+    // If socket is not connected, queue the op and trigger reconnect
     if (!isConnected) {
-      // Clear loading states immediately
-      if (operation === 'log') {
-        setHistoryLoading(false);
-      } else if (operation === 'show') {
-        setCommitDiffLoading(false);
-      } else {
-        setLoading(false);
-      }
-
-      // If this is not a retry, queue the request for when connection is ready
-      if (retryCount === 0) {
-        setError('Waiting for connection...');
-        // Retry when connection is established
-        setTimeout(() => {
-          if (isConnected) {
-            request(operation, options, retryCount + 1);
-          }
-        }, 1000);
-        return;
-      } else {
-        setError('Connection lost. Please refresh the page.');
-        return;
-      }
+      setError('Waiting for connection...');
+      // Queue for automatic retry after reconnect
+      queuedOpsRef.current.push({ operation, options });
+      try { connect(); } catch {}
+      return;
     }
 
     // Check if send was successful
@@ -242,6 +225,16 @@ const GitPage: React.FC = () => {
     return unsub;
   }, []);
 
+  // Clear transient connection errors once we are connected
+  useEffect(() => {
+    if (isConnected) {
+      setError(null);
+      // Flush queued ops
+      const queued = queuedOpsRef.current.splice(0, queuedOpsRef.current.length);
+      queued.forEach(({ operation, options }) => request(operation, options, 1));
+    }
+  }, [isConnected]);
+
   // Separate effect for initial load that depends on connection state
   useEffect(() => {
     if (isConnected) {
@@ -352,6 +345,9 @@ const GitPage: React.FC = () => {
             <button
               onClick={() => {
                 setError(null);
+                if (!isConnected) {
+                  try { connect(); } catch {}
+                }
                 if (isConnected) {
                   request('status');
                   request('diff');

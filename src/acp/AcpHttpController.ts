@@ -2,6 +2,9 @@ import path from 'path';
 import fs from 'fs';
 import { z } from 'zod';
 import { ACPConnection, AgentCommand } from './ACPConnection';
+import type { AgentAdapter } from './adapters/AgentAdapter';
+import { splitCommand } from './adapters/AgentAdapter';
+import { CredentialManager } from '../server/CredentialManager';
 import SessionsStore from './SessionsStore';
 import ThreadsStore from './ThreadsStore';
 import ModesStore from './ModesStore';
@@ -13,14 +16,21 @@ export class AcpHttpController {
   private conn: ACPConnection | null = null;
   private lastSessionId: string | null = null;
   private lastModes: any | null = null;
+  private lastCmdSig: string | null = null;
   private sessions: SessionsStore;
   private threads: ThreadsStore;
   private modesStore!: ModesStore;
   private terminalCommands!: TerminalCommandsStore;
+  private agentId: string;
+  private adapter: AgentAdapter | undefined;
 
   constructor(
-    private dataRoot: string = path.join(process.cwd(), '.on-the-go', 'acp')
+    private dataRoot: string = path.join(process.cwd(), '.on-the-go', 'acp'),
+    agentId: string = 'claude',
+    adapter?: AgentAdapter,
   ) {
+    this.agentId = agentId || 'claude';
+    this.adapter = adapter;
     this.sessions = new SessionsStore(path.join(this.dataRoot, 'sessions.json'));
     this.threads = new ThreadsStore(path.join(this.dataRoot, 'threads'));
     this.modesStore = new ModesStore(path.join(this.dataRoot, 'modes'));
@@ -33,6 +43,7 @@ export class AcpHttpController {
     cwd: z.string().optional(),
     env: z.record(z.string()).optional(),
     proxy: z.string().optional(),
+    forceRestart: z.boolean().optional(),
   });
   private static AuthSchema = z.object({ methodId: z.string().min(1) });
   private static NewSessionSchema = z.object({ cwd: z.string().optional(), mcpServers: z.array(z.any()).optional() });
@@ -73,11 +84,14 @@ export class AcpHttpController {
     const parsed = AcpHttpController.ConnectSchema.safeParse(body ?? {});
     if (!parsed.success) throw new Error('invalid connect body');
     const { agentCmd, cwd, env, proxy, provided, reason } = this.validateConnectBody(parsed.data);
+    const forceRestart = !!parsed.data.forceRestart;
 
     const { exe, args } = this.parseAgentCmd(agentCmd, proxy);
 
-    // Idempotent connect: if already connected, return existing init
-    if (this.conn && (this.conn as any).isConnected) {
+    // Compute desired command signature for reuse detection
+    const desiredSig = `${exe} ${args.join(' ')}`.trim();
+    // Idempotent connect: reuse only if command signature matches and not forced
+    if (!forceRestart && this.conn && (this.conn as any).isConnected && this.lastCmdSig === desiredSig) {
       const init = this.conn.getInitializeInfo();
       if (init) {
         try { AcpEventBus.emit('agent_connect', { type: 'agent_connect', exe, args, cwd: cwd || process.cwd(), envKeys: env ? Object.keys(env) : [], providedCmd: provided, reason: 'reuse_existing' }); } catch {}
@@ -94,7 +108,7 @@ export class AcpHttpController {
 
     // Wire ACP events => EventBus + persistence
     this.conn.on('session_update', (update: SessionUpdate, sid?: string) => {
-      AcpEventBus.emit('session_update', { type: 'session_update', update });
+      AcpEventBus.emit('session_update', { type: 'session_update', agentId: this.agentId, update });
       const threadId = sid || this.lastSessionId;
       if (threadId) {
         this.threads.append(threadId, update).catch((e) => {
@@ -119,16 +133,16 @@ export class AcpHttpController {
       } catch {}
     });
     this.conn.on('agent_stderr', (line: string) => {
-      AcpEventBus.emit('agent_stderr', { type: 'agent_stderr', line });
+      AcpEventBus.emit('agent_stderr', { type: 'agent_stderr', agentId: this.agentId, line });
     });
     this.conn.on('permission_request', (payload: any) => {
-      AcpEventBus.emit('permission_request', { type: 'permission_request', ...payload });
+      AcpEventBus.emit('permission_request', { type: 'permission_request', agentId: this.agentId, ...payload });
     });
     this.conn.on('terminal_output', ({ terminalId, chunk, stream }) => {
-      AcpEventBus.emit('terminal_output', { type: 'terminal_output', terminalId, chunk, stream });
+      AcpEventBus.emit('terminal_output', { type: 'terminal_output', agentId: this.agentId, terminalId, chunk, stream });
     });
     this.conn.on('terminal_exit', ({ terminalId, exitStatus }) => {
-      AcpEventBus.emit('terminal_exit', { type: 'terminal_exit', terminalId, exitStatus });
+      AcpEventBus.emit('terminal_exit', { type: 'terminal_exit', agentId: this.agentId, terminalId, exitStatus });
       // Persist command status and broadcast update
       try {
         const payload: any = { status: 'exited' as const };
@@ -141,37 +155,40 @@ export class AcpHttpController {
       } catch {}
     });
     this.conn.on('initialized', (init: any) => {
-      AcpEventBus.emit('agent_initialized', { type: 'agent_initialized', init });
+      AcpEventBus.emit('agent_initialized', { type: 'agent_initialized', agentId: this.agentId, init });
     });
     this.conn.on('agent_exit', (payload: any) => {
-      try { AcpEventBus.emit('agent_exit', { type: 'agent_exit', ...payload }); } catch {}
+      try { AcpEventBus.emit('agent_exit', { type: 'agent_exit', agentId: this.agentId, ...payload }); } catch {}
     });
+
+    // Prepare sanitized working directory and environment to avoid spawn EINVAL on Windows
+    const safeCwd = this.sanitizeCwd(cwd);
+    const envWithProxy: Record<string, string> | undefined = this.buildEnv(env, proxy);
 
     // Emit debug info about the command we will spawn
     try {
-      AcpEventBus.emit('agent_connect', { type: 'agent_connect', exe, args, cwd: cwd || process.cwd(), envKeys: env ? Object.keys(env) : [], providedCmd: provided, reason });
+      AcpEventBus.emit('agent_connect', {
+        type: 'agent_connect',
+        agentId: this.agentId,
+        exe,
+        args,
+        cwd: safeCwd,
+        envKeys: envWithProxy ? Object.keys(envWithProxy) : [],
+        providedCmd: provided,
+        reason
+      });
     } catch {}
 
-    // Merge proxy into env for agent consumption (common Node proxy vars)
-    const envWithProxy: Record<string, string> | undefined = (() => {
-      if (!env && !proxy) return env as any;
-      const out: Record<string, string> = { ...(env || {}) };
-      if (proxy) {
-        if (!out.HTTPS_PROXY) out.HTTPS_PROXY = proxy;
-        if (!out.HTTP_PROXY) out.HTTP_PROXY = proxy;
-      }
-      return out;
-    })();
-
-    const init = await this.conn.connect({ path: exe, args, cwd: cwd || process.cwd(), env: envWithProxy as any });
+    const init = await this.conn.connect({ path: exe, args, cwd: safeCwd, env: envWithProxy as any }, this.adapter?.framing as any);
     if (!init || typeof (init as any).protocolVersion === 'undefined') {
       const e: any = new Error('Agent failed to initialize');
       e.code = 500;
-      e.debug = { exe, args, cwd: cwd || process.cwd(), providedCmd: provided, reason };
+      e.debug = { exe, args, cwd: safeCwd, providedCmd: provided, reason };
       throw e;
     }
+    this.lastCmdSig = desiredSig;
     // Do not clear lastSessionId silently; validity will be handled by ensureActiveSession()
-    return { ok: true, init, debug: { exe, args, cwd: cwd || process.cwd(), providedCmd: provided, reason } } as any;
+    return { ok: true, init, debug: { exe, args, cwd: safeCwd, providedCmd: provided, reason } } as any;
   }
 
   getAuthMethods(): any[] {
@@ -180,7 +197,7 @@ export class AcpHttpController {
   }
 
   async authenticate(body: any): Promise<{ ok: true }> {
-    if (!this.conn) throw new Error('not connected');
+    if (!this.conn || !this.conn.isConnected) throw new Error('not connected');
     const parsed = AcpHttpController.AuthSchema.safeParse(body ?? {});
     if (!parsed.success) throw new Error('methodId required');
     await this.conn.authenticate(parsed.data.methodId);
@@ -189,7 +206,7 @@ export class AcpHttpController {
 
   // --- Session ---
   async newSession(body: any): Promise<{ sessionId: string; modes?: any }>{
-    if (!this.conn) throw this.authMapError(new Error('not connected'));
+    if (!this.conn || !this.conn.isConnected) throw this.authMapError(new Error('not connected'));
     const parsed = AcpHttpController.NewSessionSchema.safeParse(body ?? {});
     const cwd = parsed.success && parsed.data.cwd ? parsed.data.cwd : process.cwd();
     const mcpServers = parsed.success && Array.isArray(parsed.data.mcpServers) ? parsed.data.mcpServers : [];
@@ -210,7 +227,7 @@ export class AcpHttpController {
   }
 
   async setMode(body: any): Promise<{ ok: true }>{
-    if (!this.conn) throw new Error('not connected');
+    if (!this.conn || !this.conn.isConnected) throw new Error('not connected');
     const parsed = AcpHttpController.SetModeSchema.safeParse(body ?? {});
     const sessionId = String(parsed.success && parsed.data.sessionId ? parsed.data.sessionId : (this.lastSessionId || ''));
     const modeId = parsed.success ? parsed.data.modeId : '';
@@ -223,7 +240,7 @@ export class AcpHttpController {
   }
 
   async cancel(body: any): Promise<{ ok: true }>{
-    if (!this.conn) throw new Error('not connected');
+    if (!this.conn || !this.conn.isConnected) throw new Error('not connected');
     const parsed = AcpHttpController.CancelSchema.safeParse(body ?? {});
     const sessionId = String(parsed.success && parsed.data.sessionId ? parsed.data.sessionId : (this.lastSessionId || ''));
     if (!sessionId) throw new Error('no sessionId');
@@ -233,7 +250,7 @@ export class AcpHttpController {
 
   // --- Prompt ---
   async prompt(body: any): Promise<any> {
-    if (!this.conn) throw this.authMapError(new Error('not connected'));
+    if (!this.conn || !this.conn.isConnected) throw this.authMapError(new Error('not connected'));
     const parsed = AcpHttpController.PromptSchema.safeParse(body ?? {});
     if (!parsed.success) throw new Error('prompt array required');
     const prompt = parsed.data.prompt;
@@ -290,7 +307,7 @@ export class AcpHttpController {
 
   // Ensure an active agent session and return its id
   private async ensureActiveSession(): Promise<string> {
-    if (!this.conn) throw new Error('not connected');
+    if (!this.conn || !this.conn.isConnected) throw new Error('not connected');
     if (this.lastSessionId && typeof this.lastSessionId === 'string') return this.lastSessionId;
     const resp = await this.conn.newSession({ cwd: process.cwd(), mcpServers: [] });
     const sid: string = (resp as any).sessionId || (resp as any).session_id;
@@ -336,7 +353,7 @@ export class AcpHttpController {
   }
 
   async selectModel(body: any): Promise<{ ok: true }>{
-    if (!this.conn) throw new Error('not connected');
+    if (!this.conn || !this.conn.isConnected) throw new Error('not connected');
     const sessionId = String((body && typeof body.sessionId === 'string' ? body.sessionId : this.lastSessionId) || '');
     const modelId = String(body?.modelId || '');
     if (!sessionId) throw new Error('no sessionId');
@@ -347,7 +364,7 @@ export class AcpHttpController {
 
   // --- Permissions ---
   async permission(body: any): Promise<{ ok: true }>{
-    if (!this.conn) throw new Error('not connected');
+    if (!this.conn || !this.conn.isConnected) throw new Error('not connected');
     const parsed = AcpHttpController.PermissionSchema.safeParse(body ?? {});
     if (!parsed.success) throw new Error('invalid permission body');
     if (parsed.data.outcome === 'selected' && !parsed.data.optionId) throw new Error('optionId required for selected');
@@ -357,7 +374,7 @@ export class AcpHttpController {
 
   // --- Terminals ---
   terminalCreate(body: any) {
-    if (!this.conn) throw new Error('not connected');
+    if (!this.conn || !this.conn.isConnected) throw new Error('not connected');
     const parsed = AcpHttpController.TerminalCreateSchema.safeParse(body ?? {});
     if (!parsed.success) throw new Error('invalid terminal/create body');
     const { command, args, env, cwd, outputByteLimit } = parsed.data;
@@ -387,13 +404,13 @@ export class AcpHttpController {
     return res;
   }
   terminalOutput(body: any) {
-    if (!this.conn) throw new Error('not connected');
+    if (!this.conn || !this.conn.isConnected) throw new Error('not connected');
     const parsed = AcpHttpController.TerminalIdSchema.safeParse(body ?? {});
     if (!parsed.success) throw new Error('terminalId required');
     return this.conn.readTerminalOutput(parsed.data.terminalId);
   }
   terminalKill(body: any) {
-    if (!this.conn) throw new Error('not connected');
+    if (!this.conn || !this.conn.isConnected) throw new Error('not connected');
     const parsed = AcpHttpController.TerminalIdSchema.safeParse(body ?? {});
     if (!parsed.success) throw new Error('terminalId required');
     const tid = parsed.data.terminalId;
@@ -403,7 +420,7 @@ export class AcpHttpController {
     return { ok: true };
   }
   terminalRelease(body: any) {
-    if (!this.conn) throw new Error('not connected');
+    if (!this.conn || !this.conn.isConnected) throw new Error('not connected');
     const parsed = AcpHttpController.TerminalIdSchema.safeParse(body ?? {});
     if (!parsed.success) throw new Error('terminalId required');
     const tid = parsed.data.terminalId;
@@ -413,7 +430,7 @@ export class AcpHttpController {
     return { ok: true };
   }
   async terminalWaitForExit(body: any) {
-    if (!this.conn) throw new Error('not connected');
+    if (!this.conn || !this.conn.isConnected) throw new Error('not connected');
     const parsed = AcpHttpController.TerminalIdSchema.safeParse(body ?? {});
     if (!parsed.success) throw new Error('terminalId required');
     const exitStatus = await this.conn.waitTerminalExit(parsed.data.terminalId);
@@ -449,6 +466,7 @@ export class AcpHttpController {
   async renameThread(body: any) { const id = String(body?.id || body?.threadId || ''); const title = String(body?.title || '').trim(); if (!id) throw new Error('id required'); await this.threads.setTitle(id, title || 'Default Chat'); return { ok: true }; }
 
   // --- helpers ---
+  status() { return { agentId: this.agentId, connected: !!(this.conn && this.conn.isConnected) }; }
   private validateConnectBody(body: any) {
     const cwd = typeof body?.cwd === 'string' ? body.cwd : undefined;
     const env = (body?.env && typeof body.env === 'object') ? body.env : undefined;
@@ -458,6 +476,7 @@ export class AcpHttpController {
     const allowAny = process.env.KIRO_ALLOW_ANY_AGENT_CMD === '1';
 
     const resolveDefault = (): string => {
+      if (this.adapter) return this.adapter.defaultCommand();
       const nodeExe = process.execPath || 'node';
       const nmScript = path.join(process.cwd(), 'node_modules', '@zed-industries', 'claude-code-acp', 'dist', 'index.js');
       const localScript = path.join(process.cwd(), 'claude-code-acp', 'dist', 'index.js');
@@ -475,7 +494,12 @@ export class AcpHttpController {
 
     const isAllowed = (cmd: string): boolean => {
       if (!cmd) return false;
-      return /claude-code-acp/i.test(cmd);
+      if (this.adapter) return this.adapter.allowlist.test(cmd);
+      // default fallback
+      const c = cmd.toLowerCase();
+      const allowClaude = /claude-code-acp/.test(c) || /@zed-industries\s*\/\s*claude-code-acp/.test(c);
+      const allowGemini = /gemini-cli/.test(c) || /@google\s*\/\s*gemini/.test(c) || /\bgemini\b/.test(c);
+      return allowClaude || allowGemini;
     };
 
     let reason: string | undefined;
@@ -506,21 +530,78 @@ export class AcpHttpController {
   }
 
   private parseAgentCmd(agentCmd: string, proxy?: string): { exe: string; args: string[] } {
-    const matches = agentCmd.match(/(?:"[^"]+"|'[^']+'|\S+)/g);
-    let parts: string[] = matches ? Array.from(matches) : [];
-    const exe = parts.shift()?.replace(/^\"|\"$/g, '').replace(/^'|'$/g, '');
+    const { exe, args } = splitCommand(agentCmd);
     if (!exe) throw new Error('invalid agentCmd');
-    // Sanitize quotes for executable and arguments now that we've tokenized
-    const dequote = (s: string): string => {
-      if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
-        return s.slice(1, -1);
+    let sanitizedExe = exe;
+    let sanitizedArgs = args;
+    // If using Gemini adapter, ensure ACP subcommand is present so the process stays alive
+    if (this.adapter && this.adapter.id === 'gemini') {
+      const lowerArgs = sanitizedArgs.map((a) => a.toLowerCase());
+      const hasSub = lowerArgs.includes('acp') || lowerArgs.includes('serve');
+      const hasExperimentalFlag = lowerArgs.includes('--experimental-acp');
+      const invokesGemini = (
+        sanitizedExe.toLowerCase().includes('gemini') ||
+        lowerArgs.some((a) => a.includes('@google/gemini'))
+      );
+      if (invokesGemini) {
+        // Support both CLI variants:
+        // 1) Newer: `gemini acp` (subcommand)
+        // 2) Older: `gemini --experimental-acp` (flag)
+        // Only append 'acp' if neither the subcommand nor the experimental flag is present.
+        if (!hasSub && !hasExperimentalFlag) {
+          sanitizedArgs = [...sanitizedArgs, 'acp'];
+        }
+        // If the user supplied --experimental-acp, keep it and do NOT add 'acp'.
       }
-      return s;
-    };
-    const sanitizedExe = dequote(exe);
-    let sanitizedArgs = parts.map(dequote);
+    }
     if (proxy && !sanitizedArgs.includes('--proxy')) sanitizedArgs = sanitizedArgs.concat(['--proxy', proxy]);
     return { exe: sanitizedExe, args: sanitizedArgs };
+  }
+
+  private sanitizeCwd(input?: string): string {
+    try {
+      let s = typeof input === 'string' ? input.trim() : '';
+      if (s && ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'")))) {
+        s = s.slice(1, -1);
+      }
+      const abs = s ? (path.isAbsolute(s) ? s : path.join(process.cwd(), s)) : process.cwd();
+      const norm = path.normalize(abs);
+      const st = fs.statSync(norm);
+      if (st.isDirectory()) return norm;
+    } catch {}
+    return process.cwd();
+  }
+
+  private buildEnv(base?: Record<string, string>, proxy?: string): Record<string, string> | undefined {
+    // Merge provided env, add proxy vars, and include saved credentials. Coerce all values to strings.
+    const clean = (src?: Record<string, any>): Record<string, string> => {
+      const out: Record<string, string> = {};
+      if (src && typeof src === 'object') {
+        for (const [k, v] of Object.entries(src)) {
+          if (v === undefined || v === null) continue;
+          out[k] = String(v);
+        }
+      }
+      return out;
+    };
+
+    let merged: Record<string, string> = clean(base);
+    if (proxy) {
+      if (!merged.HTTPS_PROXY) merged.HTTPS_PROXY = proxy;
+      if (!merged.HTTP_PROXY) merged.HTTP_PROXY = proxy;
+    }
+
+    try {
+      const cm = new CredentialManager();
+      const saved = cm.getAllAICredentials();
+      for (const [k, v] of Object.entries(saved)) {
+        if ((merged as any)[k] === undefined && v !== undefined && v !== null) {
+          merged[k] = String(v);
+        }
+      }
+    } catch {}
+
+    return Object.keys(merged).length ? merged : undefined;
   }
 
   // --- Diffs ---

@@ -49,7 +49,7 @@ export class ACPConnection extends EventEmitter {
   private pendingPermissionIds = new Set<number>();
   private terminals = new Map<string, TerminalRecord>();
   private termSeq = 0;
-  private adapterName: 'claude' | 'generic' = 'generic';
+  private adapterName: 'claude' | 'gemini' | 'generic' = 'generic';
 
   constructor(private serverName = 'acp-agent') { super(); }
 
@@ -59,29 +59,106 @@ export class ACPConnection extends EventEmitter {
     return this.initialized;
   }
 
-  async connect(command: AgentCommand): Promise<InitializeResponse> {
+  async connect(command: AgentCommand, framingOverride?: 'lsp' | 'ndjson'): Promise<InitializeResponse> {
     if (this.rpc) return this.initialized!;
 
-    // Spawn the agent process directly (no shell) to avoid Windows quoting issues
-    // when the executable path contains spaces (e.g., "C:\\Program Files\\...").
-    // Using a shell here causes cmd.exe to mis-parse unquoted paths and results in
-    // "'C:\\Program' is not recognized..." errors.
-    this.child = spawn(command.path, command.args ?? [], {
+    // Helper to wait for spawn or error
+    const awaitStart = (child: ChildProcess) => new Promise<void>((resolve, reject) => {
+      let settled = false;
+      const onError = (err: any) => {
+        if (settled) return;
+        settled = true;
+        try { this.emit('agent_stderr', `[spawn] ${err?.message || String(err)}\n`); } catch {}
+        reject(err);
+      };
+      const onSpawn = () => {
+        if (settled) return;
+        settled = true;
+        resolve();
+      };
+      child.once('error', onError);
+      child.once('spawn', onSpawn);
+      setTimeout(() => { if (!settled) { settled = true; resolve(); } }, 200);
+    });
+
+    const exeLower = (command.path || '').toLowerCase();
+    const isWin = process.platform === 'win32';
+    const mayNeedCmd = isWin && (
+      exeLower.endsWith('.cmd') ||
+      exeLower.endsWith('.bat') ||
+      exeLower === 'npm' || exeLower === 'npx' ||
+      exeLower === 'npm.cmd' || exeLower === 'npx.cmd' ||
+      // Add common CLI shim names that are typically .cmd on Windows
+      exeLower === 'gemini' || exeLower === 'gemini.cmd'
+    );
+
+    const spawnDirect = () => spawn(command.path, command.args ?? [], {
       stdio: ['pipe', 'pipe', 'pipe'],
       env: { ...process.env, ...(command.env ?? {}) },
       cwd: command.cwd ?? process.cwd(),
       shell: false,
       windowsHide: true,
     });
+    const spawnViaCmd = () => {
+      const cmdStr = [command.path, ...(command.args ?? [])].join(' ');
+      return spawn('cmd.exe', ['/d', '/s', '/c', cmdStr], {
+        stdio: ['pipe', 'pipe', 'pipe'],
+        env: { ...process.env, ...(command.env ?? {}) },
+        cwd: command.cwd ?? process.cwd(),
+        windowsHide: true,
+        shell: false,
+      });
+    };
+
+    try {
+      if (mayNeedCmd) {
+        this.child = spawnViaCmd();
+        await awaitStart(this.child);
+      } else {
+        this.child = spawnDirect();
+        await awaitStart(this.child);
+      }
+    } catch (err: any) {
+      if (mayNeedCmd) {
+        // If first attempt via cmd failed, try direct as a fallback
+        try {
+          this.child = spawnDirect();
+          await awaitStart(this.child);
+        } catch (err2: any) {
+          throw new Error(`Failed to start agent: ${err2?.message || err?.message || String(err2 || err)}`);
+        }
+      } else if (isWin) {
+        // On Windows, try cmd fallback once for any odd cases
+        try {
+          this.child = spawnViaCmd();
+          await awaitStart(this.child);
+        } catch (err2: any) {
+          throw new Error(`Failed to start agent: ${err2?.message || err?.message || String(err2 || err)}`);
+        }
+      } else {
+        throw new Error(`Failed to start agent: ${err?.message || String(err)}`);
+      }
+    }
 
     this.child.stderr?.on('data', (d) => this.emit('agent_stderr', String(d)));
-    this.child.on('exit', (code, signal) => this.emit('agent_exit', { code, signal }));
+    this.child.on('exit', (code, signal) => {
+      try { this.rpc?.abortAllPending(new Error('agent exited')); } catch {}
+      this.rpc = null;
+      this.emit('agent_exit', { code, signal });
+    });
+    this.child.on('close', () => {
+      try { this.rpc?.abortAllPending(new Error('agent closed')); } catch {}
+      this.rpc = null;
+    });
 
     const usesClaude =
       (command.path && command.path.toLowerCase().includes('claude-code-acp')) ||
       (command.args ?? []).some((a) => a.toLowerCase().includes('claude-code-acp'));
-    const framing: 'lsp' | 'ndjson' = usesClaude ? 'ndjson' : 'lsp';
-    this.adapterName = usesClaude ? 'claude' : 'generic';
+    const usesGemini =
+      (command.path && command.path.toLowerCase().includes('gemini')) ||
+      (command.args ?? []).some((a) => a.toLowerCase().includes('@google/gemini') || a.toLowerCase() === 'gemini');
+    const framing: 'lsp' | 'ndjson' = framingOverride || (usesClaude ? 'ndjson' : (usesGemini ? 'ndjson' : 'lsp'));
+    this.adapterName = usesClaude ? 'claude' : (usesGemini ? 'gemini' : 'generic');
 
     this.rpc = new JsonRpcStdioClient(this.child.stdin!, this.child.stdout!, framing);
     this.rpc.on('error', (err: any) => {
@@ -218,7 +295,7 @@ export class ACPConnection extends EventEmitter {
     return res;
   }
 
-  getAdapterName(): 'claude' | 'generic' {
+  getAdapterName(): 'claude' | 'gemini' | 'generic' {
     return this.adapterName;
   }
 
@@ -238,9 +315,16 @@ export class ACPConnection extends EventEmitter {
 
   async prompt(req: PromptRequest): Promise<PromptResponse> {
     // Normalize payload for different adapters (claude vs generic)
-    const payload = this.adapterName === 'claude'
-      ? req
-      : ({ ...req, session_id: (req as any).sessionId, sessionId: undefined } as any);
+    let payload: any = req;
+    if (this.adapterName === 'claude') {
+      payload = req;
+    } else if (this.adapterName === 'gemini') {
+      // Gemini expects camelCase params (sessionId, prompt)
+      payload = req;
+    } else {
+      // Generic fallback (legacy agents) use snake_case
+      payload = { ...req, session_id: (req as any).sessionId, sessionId: undefined } as any;
+    }
     const res = await this.rpc?.request('session/prompt', payload);
     return res as PromptResponse;
   }
@@ -248,7 +332,7 @@ export class ACPConnection extends EventEmitter {
   async cancel(sessionId: SessionId): Promise<void> {
     const payload = this.adapterName === 'claude'
       ? { sessionId }
-      : { session_id: sessionId };
+      : (this.adapterName === 'gemini' ? { sessionId } : { session_id: sessionId });
     await this.rpc?.notify('session/cancel', payload);
   }
 
@@ -264,18 +348,18 @@ export class ACPConnection extends EventEmitter {
   async setMode(sessionId: SessionId, modeId: string): Promise<void> {
     const payload = this.adapterName === 'claude'
       ? { sessionId, modeId }
-      : { session_id: sessionId, mode_id: modeId };
+      : (this.adapterName === 'gemini' ? { sessionId, modeId } : { session_id: sessionId, mode_id: modeId });
     await this.rpc?.request('session/set_mode', payload);
   }
 
   async listModels(sessionId: SessionId): Promise<any> {
     if (!this.supportsModelListing()) return [];
     try {
-      const res = await this.rpc?.request('session/list_models', { session_id: sessionId });
+      const res = await this.rpc?.request('session/list_models', this.adapterName === 'gemini' ? { sessionId } : { session_id: sessionId });
       return res;
     } catch (err) {
       try {
-        const res = await this.rpc?.request('agent/list_models', { session_id: sessionId });
+        const res = await this.rpc?.request('agent/list_models', this.adapterName === 'gemini' ? { sessionId } : { session_id: sessionId });
         return res;
       } catch (err2) {
         return [];
@@ -286,11 +370,11 @@ export class ACPConnection extends EventEmitter {
   async selectModel(sessionId: SessionId, modelId: string): Promise<void> {
     if (!this.supportsModelListing()) throw new Error('Model selection is not supported by this agent');
     try {
-      await this.rpc?.request('session/select_model', { session_id: sessionId, model_id: modelId });
+      await this.rpc?.request('session/select_model', this.adapterName === 'gemini' ? { sessionId, modelId } : { session_id: sessionId, model_id: modelId });
       return;
     } catch (err) {
       try {
-        await this.rpc?.request('agent/select_model', { session_id: sessionId, model_id: modelId });
+        await this.rpc?.request('agent/select_model', this.adapterName === 'gemini' ? { sessionId, modelId } : { session_id: sessionId, model_id: modelId });
       } catch (err2) {
         const e: any = err2 ?? err;
         const msg = (e && e.message) ? e.message : 'Model selection failed';

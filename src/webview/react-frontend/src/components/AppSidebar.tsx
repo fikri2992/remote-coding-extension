@@ -6,7 +6,8 @@ import {
   GitBranch,
   Terminal,
   Settings,
-  Network
+  Network,
+  Gem
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
@@ -15,7 +16,8 @@ interface AppSidebarProps {
 }
 
 const menuItems = [
-  { id: 'home', label: 'Home', icon: Home, path: '/' },
+  { id: 'home', label: 'Claude', icon: Home, path: '/' },
+  { id: 'gemini', label: 'Gemini', icon: Gem, path: '/gemini' },
   { id: 'tunnels', label: 'Tunnels', icon: Network, path: '/tunnels' },
   { id: 'files', label: 'Files', icon: Folder, path: '/files' },
   { id: 'git', label: 'Git', icon: GitBranch, path: '/git' },
@@ -38,7 +40,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
       {/* Navigation Menu */}
       <nav className="flex-1 px-4 py-6">
         <ul className="space-y-3">
-          {menuItems.filter((i) => ['home','acp','files','terminal','terminal-commands','git','tunnels','settings'].includes(i.id)).map((item) => {
+          {menuItems.filter((i) => ['home','gemini','acp','files','terminal','terminal-commands','git','tunnels','settings'].includes(i.id)).map((item) => {
             const Icon = item.icon;
             return (
               <li key={item.id}>

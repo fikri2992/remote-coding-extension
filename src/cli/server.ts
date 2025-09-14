@@ -5,6 +5,7 @@ import { TerminalService } from './services/TerminalService';
 import { CLIGitService } from './services/GitService';
 import { CLIFileSystemService } from './services/FileSystemService';
 import { AcpHttpController } from '../acp/AcpHttpController';
+import { AgentRegistry } from '../acp/AgentRegistry';
 import {
   createTunnel as cfCreateTunnel,
   getActiveTunnels as cfGetActiveTunnels,
@@ -133,6 +134,7 @@ export class CliServer {
   private gitService?: CLIGitService | undefined;
   private filesystemService?: CLIFileSystemService | undefined;
   private acpController?: AcpHttpController | undefined;
+  private agentRegistry?: AgentRegistry | undefined;
   private isRunning = false;
   private config?: CliConfig;
   private configPath?: string;
@@ -220,18 +222,38 @@ export class CliServer {
 
       // Initialize ACP controller (WS-only; no REST endpoints)
       console.log(`🤖 Initializing ACP controller (WS-only)...`);
-      this.acpController = new AcpHttpController();
-      await this.acpController.init();
+      this.agentRegistry = new AgentRegistry();
+      this.acpController = this.agentRegistry.get('claude');
 
-      // Option B — Autostart the ACP agent at server startup
+      // Option B – Autostart the ACP agent at server startup
       // Proactively connect so the agent is pre-warmed before any client appears.
       // Keep non-fatal: if credentials are missing or any error occurs, continue startup.
       try {
-        await this.acpController.connect({});
-        console.log('🤖 ACP agent autostarted (pre-warmed)');
+        if (process.env.KIRO_ACP_AUTOSTART !== '0') {
+          await this.acpController.connect({});
+          console.log('🤖 ACP agent autostarted (pre-warmed)');
+        } else {
+          console.log('🛑 ACP agent autostart disabled via KIRO_ACP_AUTOSTART=0');
+        }
       } catch (e: any) {
         console.warn('[ACP] Autostart failed (non-fatal):', e?.message || String(e));
       }
+
+      // Additional agents autostart if configured (multi-agent)
+      try {
+        const raw = String(process.env.KIRO_ACP_AUTOSTART_AGENTS || '').trim();
+        if (raw) {
+          const ids = raw.split(/[,;\s]+/).filter(Boolean);
+          for (const id of ids) {
+            try {
+              await (this.agentRegistry ?? (this.agentRegistry = new AgentRegistry())).get(id).connect({});
+              console.log(`dY\u000f- ACP autostarted: ${id}`);
+            } catch (err: any) {
+              console.warn(`[ACP] Autostart failed for ${id}:`, err?.message || String(err));
+            }
+          }
+        }
+      } catch {}
 
       // Register terminal service with WebSocket server
       if (this.webSocketServer) {
@@ -499,76 +521,98 @@ export class CliServer {
           onClientDisconnect: (_clientId: string) => {}
         });
 
-        // Register ACP service (WebSocket only)
+        // Register ACP service (WebSocket only; multi-agent via agentId)
         (this.webSocketServer as any).registerService('acp', {
           handle: async (_clientId: string, message: any) => {
-            if (!this.acpController) {
-              return { error: 'ACP service not available' };
-            }
             try {
               const operation = message.op;
               const payload = message.payload || {};
+              const agentId = String(payload.agentId || 'claude');
+              const ctl = (this.agentRegistry ?? (this.agentRegistry = new AgentRegistry())).get(agentId);
               switch (operation) {
                 case 'connect':
-                  return { success: true, data: await this.acpController.connect(payload) };
+                  return { success: true, data: await ctl.connect(payload) };
                 case 'authenticate':
-                  return { success: true, data: await this.acpController.authenticate(payload) };
+                  return { success: true, data: await ctl.authenticate(payload) };
                 case 'authMethods':
-                  return { success: true, data: { methods: this.acpController.getAuthMethods() } };
+                  return { success: true, data: { methods: ctl.getAuthMethods() } };
                 case 'session.new':
-                  return { success: true, data: await this.acpController.newSession(payload) };
+                  return { success: true, data: await ctl.newSession(payload) };
                 case 'session.setMode':
-                  return { success: true, data: await this.acpController.setMode(payload) };
+                  return { success: true, data: await ctl.setMode(payload) };
                 case 'cancel':
-                  return { success: true, data: await this.acpController.cancel(payload) };
+                  return { success: true, data: await ctl.cancel(payload) };
                 case 'prompt':
-                  return { success: true, data: await this.acpController.prompt(payload) };
+                  return { success: true, data: await ctl.prompt(payload) };
                 case 'session.state':
-                  return { success: true, data: this.acpController.state() };
+                  return { success: true, data: ctl.state() };
                 case 'session.ensureActive':
-                  return { success: true, data: { sessionId: await (this.acpController as any)['ensureActiveSession']() } };
+                  return { success: true, data: { sessionId: await (ctl as any)['ensureActiveSession']() } };
                 case 'session.selectThread':
-                  return { success: true, data: await this.acpController.selectThread(payload) };
+                  return { success: true, data: await ctl.selectThread(payload) };
                 case 'disconnect':
-                  return { success: true, data: await this.acpController.disconnect() };
+                  return { success: true, data: await ctl.disconnect() };
                 case 'models.list':
-                  return { success: true, data: await this.acpController.listModels(payload.sessionId) };
+                  return { success: true, data: await ctl.listModels(payload.sessionId) };
                 case 'model.select':
-                  return { success: true, data: await this.acpController.selectModel(payload) };
+                  return { success: true, data: await ctl.selectModel(payload) };
                 case 'permission':
-                  return { success: true, data: await this.acpController.permission(payload) };
+                  return { success: true, data: await ctl.permission(payload) };
                 case 'sessions.list':
-                  return { success: true, data: this.acpController.listSessions() };
+                  return { success: true, data: ctl.listSessions() };
                 case 'session.select':
-                  return { success: true, data: await this.acpController.selectSession(payload) };
+                  return { success: true, data: await ctl.selectSession(payload) };
                 case 'session.delete':
-                  return { success: true, data: await this.acpController.deleteSession(payload) };
+                  return { success: true, data: await ctl.deleteSession(payload) };
                 case 'terminal.create':
-                  return { success: true, data: this.acpController.terminalCreate(payload) };
+                  return { success: true, data: ctl.terminalCreate(payload) };
                 case 'terminal.output':
-                  return { success: true, data: this.acpController.terminalOutput(payload) };
+                  return { success: true, data: ctl.terminalOutput(payload) };
                 case 'terminal.kill':
-                  return { success: true, data: this.acpController.terminalKill(payload) };
+                  return { success: true, data: ctl.terminalKill(payload) };
                 case 'terminal.release':
-                  return { success: true, data: this.acpController.terminalRelease(payload) };
+                  return { success: true, data: ctl.terminalRelease(payload) };
                 case 'terminal.waitForExit':
-                  return { success: true, data: await this.acpController.terminalWaitForExit(payload) };
+                  return { success: true, data: await ctl.terminalWaitForExit(payload) };
                 case 'terminal.commands.list':
-                  return { success: true, data: await this.acpController.listTerminalCommands() };
+                  return { success: true, data: await ctl.listTerminalCommands() };
                 case 'terminal.commands.remove':
-                  return { success: true, data: await this.acpController.removeTerminalCommand(payload) };
+                  return { success: true, data: await ctl.removeTerminalCommand(payload) };
                 case 'terminal.commands.clear':
-                  return { success: true, data: await this.acpController.clearTerminalCommands() };
+                  return { success: true, data: await ctl.clearTerminalCommands() };
                 case 'diff.apply':
-                  return { success: true, data: await this.acpController.applyDiff(payload) };
+                  return { success: true, data: await ctl.applyDiff(payload) };
                 case 'session.last':
-                  return { success: true, data: this.acpController.lastSession() };
+                  return { success: true, data: ctl.lastSession() };
                 case 'threads.list':
-                  return { success: true, data: await this.acpController.listThreads() };
+                  return { success: true, data: await ctl.listThreads() };
                 case 'thread.get':
-                  return { success: true, data: await this.acpController.getThread(payload.id) };
+                  return { success: true, data: await ctl.getThread(payload.id) };
                 case 'thread.rename':
-                  return { success: true, data: await (this.acpController as any).renameThread(payload) };
+                  return { success: true, data: await (ctl as any).renameThread(payload) };
+                case 'agents.list': {
+                  const reg = (this.agentRegistry ?? (this.agentRegistry = new AgentRegistry()));
+                  return { success: true, data: { agents: reg.list() } };
+                }
+                case 'agent.start': {
+                  const id = String(payload?.agentId || 'claude');
+                  const reg = (this.agentRegistry ?? (this.agentRegistry = new AgentRegistry()));
+                  const c = reg.get(id);
+                  const data = await c.connect({ forceRestart: true });
+                  return { success: true, data };
+                }
+                case 'agent.stop': {
+                  const id = String(payload?.agentId || 'claude');
+                  const reg = (this.agentRegistry ?? (this.agentRegistry = new AgentRegistry()));
+                  const c = reg.get(id);
+                  return { success: true, data: await c.disconnect() };
+                }
+                case 'agent.status': {
+                  const id = String(payload?.agentId || 'claude');
+                  const reg = (this.agentRegistry ?? (this.agentRegistry = new AgentRegistry()));
+                  const c = reg.get(id);
+                  return { success: true, data: c.status() };
+                }
                 default:
                   return { error: `Unknown ACP operation: ${operation}` };
               }

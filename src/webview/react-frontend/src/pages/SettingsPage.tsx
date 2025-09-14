@@ -61,21 +61,42 @@ const SettingsPage: React.FC = () => {
   const [geminiCollapsed, setGeminiCollapsed] = useState<boolean>(false);
   const [claudeApiKey, setClaudeApiKey] = useState<string>('');
   const [geminiApiKey, setGeminiApiKey] = useState<string>('');
+  // Autostart
+  const [autostartCollapsed, setAutostartCollapsed] = useState<boolean>(false);
+  const [autostartEnabled, setAutostartEnabled] = useState<boolean>(true);
+  const [autostartAgents, setAutostartAgents] = useState<string[]>([]);
+  const [availableAgents, setAvailableAgents] = useState<Array<{ id: string; title: string }>>([]);
 
-  // Generic request helper for fileSystem open/create
+  // Generic request helper for fileSystem open/create with timeout and send guard
   const sendFs = async (operation: 'open' | 'create', payload: any) => {
     return new Promise<any>((resolve, reject) => {
       try {
         const id = `fs_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
+        let done = false;
         const unsub = ws.addMessageListener((msg) => {
           if (msg?.type !== 'fileSystem') return;
           if (msg.id !== id) return;
+          if (done) return;
+          done = true;
           try { unsub(); } catch {}
-          if (msg.data?.operation !== operation) return;
+          if (msg.data?.operation !== operation) {
+            return reject(new Error('Mismatched operation'));
+          }
           if (msg.data?.ok) resolve(msg.data?.result || true);
           else reject(new Error(msg.data?.error || `${operation} failed`));
         });
-        ws.sendJson({ type: 'fileSystem', id, data: { fileSystemData: { operation, ...payload } } });
+        const sent = ws.sendJson({ type: 'fileSystem', id, data: { fileSystemData: { operation, ...payload } } });
+        if (!sent) {
+          try { unsub(); } catch {}
+          return reject(new Error('WebSocket not connected'));
+        }
+        const t = setTimeout(() => {
+          if (!done) {
+            try { unsub(); } catch {}
+            reject(new Error('Request timeout'));
+          }
+        }, 10000);
+        try { (t as any).unref?.(); } catch {}
       } catch (e) { reject(e); }
     });
   };
@@ -99,11 +120,28 @@ const SettingsPage: React.FC = () => {
         const gApi = cfg?.integrations?.geminiCli?.apiKey || cfg?.env?.GEMINI_API_KEY || '';
         setClaudeApiKey(cApi);
         setGeminiApiKey(gApi);
+        // Autostart values from env
+        const env = cfg?.env || {};
+        const enabled = String(env.KIRO_ACP_AUTOSTART ?? '').trim();
+        setAutostartEnabled(enabled !== '0');
+        const extra = String(env.KIRO_ACP_AUTOSTART_AGENTS ?? '').trim();
+        setAutostartAgents(extra ? extra.split(/[,;\s]+/).filter(Boolean) : []);
       } finally {
         setLoading(false);
       }
     })();
   }, []);
+
+  // Load agents list for autostart selection
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await (ws as any)?.sendAcp?.('agents.list', {});
+        const list = Array.isArray(res?.agents) ? res.agents : [];
+        setAvailableAgents(list.map((a: any) => ({ id: a.id, title: a.title || a.id })));
+      } catch {}
+    })();
+  }, [ws]);
 
   // Merge helper
   const mergeAndSave = async (next: Partial<OTGConfig>) => {
@@ -116,9 +154,15 @@ const SettingsPage: React.FC = () => {
       lastModified: nowIso(),
     };
     const content = JSON.stringify(merged, null, 2);
-    await sendFs('create', { path: CONFIG_PATH, content });
-    setConfig(merged);
-    show({ title: 'Saved', description: 'Settings updated', variant: 'default' });
+    try {
+      await sendFs('create', { path: CONFIG_PATH, content });
+      setConfig(merged);
+      show({ title: 'Saved', description: 'Settings updated', variant: 'default' });
+    } catch (e: any) {
+      const msg = e?.message || String(e) || 'Failed to save settings';
+      show({ title: 'Save failed', description: msg, variant: 'destructive' });
+      throw e;
+    }
   };
 
   const saveClaude = async () => {
@@ -145,8 +189,65 @@ const SettingsPage: React.FC = () => {
     setGeminiApiKey(def || '');
   };
 
+  const saveAutostart = async () => {
+    const env = { ...(config?.env || {}) };
+    env.KIRO_ACP_AUTOSTART = autostartEnabled ? '1' : '0';
+    env.KIRO_ACP_AUTOSTART_AGENTS = (autostartAgents || []).join(',');
+    await mergeAndSave({ env });
+  };
+
+  const resetAutostart = () => {
+    const env = config?.env || {};
+    const enabled = String(env.KIRO_ACP_AUTOSTART ?? '').trim();
+    setAutostartEnabled(enabled !== '0');
+    const extra = String(env.KIRO_ACP_AUTOSTART_AGENTS ?? '').trim();
+    setAutostartAgents(extra ? extra.split(/[,;\s]+/).filter(Boolean) : []);
+  };
+
   return (
     <div className="space-y-6">
+      {/* Autostart */}
+      <CollapsibleCard
+        title={<span className="inline-flex items-center gap-2">Autostart</span>}
+        description="Control agent autostart behavior when the server launches"
+        collapsed={autostartCollapsed}
+        onToggle={() => setAutostartCollapsed(c => !c)}
+      >
+        <div className="space-y-3">
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={autostartEnabled}
+              onChange={(e) => setAutostartEnabled(e.target.checked)}
+            />
+            Autostart primary agent on server start
+          </label>
+          <div>
+            <div className="text-sm font-medium mb-1">Additional agents to autostart</div>
+            <div className="grid grid-cols-2 gap-2">
+              {availableAgents.map(a => (
+                <label key={a.id} className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={autostartAgents.includes(a.id)}
+                    onChange={(e) => setAutostartAgents(prev => e.target.checked ? Array.from(new Set([...prev, a.id])) : prev.filter(x => x !== a.id))}
+                  />
+                  {a.title}
+                </label>
+              ))}
+              {availableAgents.length === 0 && (
+                <div className="text-xs text-muted-foreground">No agents detected yet.</div>
+              )}
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">Stored as env KIRO_ACP_AUTOSTART and KIRO_ACP_AUTOSTART_AGENTS in /.on-the-go/config.json</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button disabled={loading} onClick={saveAutostart} className="rounded-md bg-primary px-3 py-2 text-white text-sm hover:bg-primary/90 neo:rounded-none neo:border-[4px] neo:border-border neo:text-primary-foreground neo:shadow-[5px_5px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[5px_5px_0_0_rgba(255,255,255,0.9)]">Save</button>
+            <button disabled={loading} onClick={resetAutostart} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted neo:rounded-none neo:border-[4px] neo:shadow-[5px_5px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[5px_5px_0_0_rgba(255,255,255,0.9)]">Reset</button>
+          </div>
+        </div>
+      </CollapsibleCard>
+
       {/* Claude Code ACP */}
       <CollapsibleCard
         title={<span className="inline-flex items-center gap-2"><Key className="w-4 h-4" /> Claude Code ACP</span>}

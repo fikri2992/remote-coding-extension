@@ -22,7 +22,7 @@ const rootRoute = createRootRoute({
   component: RootLayout,
 });
 
-// Create index route (Chat at "/")
+// Create index route (Claude ACP at "/")
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
@@ -84,6 +84,20 @@ const acpRoute = createRoute({
   component: ACPPage,
 });
 
+// Gemini route: same ACP UI, Gemini CLI defaults/preset applied in-page
+const geminiRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/gemini',
+  component: ACPPage,
+});
+
+// Claude alias route for clarity
+const claudeRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/claude',
+  component: ACPPage,
+});
+
 // Standalone homepage route for testing (not linked in menu)
 const homepageRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -127,6 +141,8 @@ const routeTree = rootRoute.addChildren([
   chatRoute,
   settingsRoute,
   acpRoute,
+  claudeRoute,
+  geminiRoute,
   homepageRoute,
 ]);
 

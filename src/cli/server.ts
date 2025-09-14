@@ -288,6 +288,18 @@ export class CliServer {
                   await this.gitService.add(options.files, options.workspacePath);
                   return { success: true };
 
+                case 'add-all':
+                  await this.gitService.executeSafeOperation('add-all', { workspacePath: options.workspacePath });
+                  return { success: true };
+
+                case 'add-untracked':
+                  await this.gitService.executeSafeOperation('add-untracked', { workspacePath: options.workspacePath });
+                  return { success: true };
+
+                case 'unstage':
+                  await this.gitService.executeSafeOperation('unstage', { files: options.files, workspacePath: options.workspacePath });
+                  return { success: true };
+
                 case 'commit':
                   await this.gitService.commit(options.message, options.files, options.workspacePath);
                   return { success: true };

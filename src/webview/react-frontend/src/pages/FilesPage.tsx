@@ -430,9 +430,6 @@ const FilesPage: React.FC = () => {
         </BottomSheetHeader>
         <div className="flex flex-col gap-2">
           <button className="w-full text-left px-3 py-2 rounded hover:bg-muted neo:rounded-none neo:border-[4px] neo:border-border neo:hover:bg-accent/10" onClick={() => { if (activeNode) { const p = activeNode.path; const currentDir = crumbs.length > 0 ? crumbs[crumbs.length - 1].path : '/'; setActiveNode(null); navigate({ to: '/files/view', search: { path: p, from: currentDir } as any }); } }}>Open</button>
-          <button className="w-full text-left px-3 py-2 rounded hover:bg-muted neo:rounded-none neo:border-[4px] neo:border-border neo:hover:bg-accent/10">Rename</button>
-          <button className="w-full text-left px-3 py-2 rounded hover:bg-muted neo:rounded-none neo:border-[4px] neo:border-border neo:hover:bg-accent/10">Delete</button>
-          <button className="w-full text-left px-3 py-2 rounded hover:bg-muted neo:rounded-none neo:border-[4px] neo:border-border neo:hover:bg-accent/10">Share</button>
         </div>
         <BottomSheetFooter>
           <button className="rounded-md border border-border px-3 py-2 text-sm neo:rounded-none neo:border-[4px] neo:shadow-[5px_5px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[5px_5px_0_0_rgba(255,255,255,0.9)]" onClick={() => setActiveNode(null)}>Close</button>

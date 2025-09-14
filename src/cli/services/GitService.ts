@@ -35,6 +35,7 @@ export interface GitServiceConfig {
         allowDestructive: boolean;
         requireConfirmation: boolean;
         maxCommitMessageLength: number;
+        maxSubjectLength: number;
     };
 }
 
@@ -53,12 +54,15 @@ export class GitConfigManager {
             enableDebug: process.env.KIRO_GIT_DEBUG === '1',
             allowedCommands: [
                 'status', 'log', 'diff', 'show', 'branch', 'add',
-                'commit', 'push', 'pull', 'fetch', 'merge', 'rebase'
+                'commit', 'push', 'pull', 'fetch', 'merge', 'rebase',
+                // extended convenience operations
+                'unstage', 'add-all', 'add-untracked'
             ],
             safety: {
                 allowDestructive: false,
                 requireConfirmation: true,
-                maxCommitMessageLength: 1000
+                maxCommitMessageLength: 1000,
+                maxSubjectLength: 72
             }
         };
 
@@ -159,21 +163,81 @@ export class CLIGitRepository {
     }
 
     async commit(message: string, files?: string[]): Promise<void> {
-        if (!this.configManager.validateCommitMessage(message)) {
+        const formattedMessage = this.formatCommitMessage(message);
+        if (!this.configManager.validateCommitMessage(formattedMessage)) {
             throw new Error('Invalid commit message');
         }
 
-        // Stage files if specified
+        // Stage files if specified, otherwise auto-stage all when there are
+        // no staged changes but there are unstaged/untracked changes.
         if (files && files.length > 0) {
-            await this.runGit(['add', ...files]);
+            await this.runGit(['add', '--', ...files]);
+        } else {
+            // Convenience: commit from UI should stage everything by default
+            await this.runGit(['add', '-A']);
         }
 
-        // Create commit
-        await this.runGit(['commit', '-m', message]);
+        // Create commit using -m flags (subject/body), like VS Code
+        const normalized = formattedMessage.replace(/\r\n/g, '\n');
+        const parts = normalized.split('\n');
+        const subjectLine = parts.shift() ?? '';
+        const body = parts.join('\n').trim();
+        const args: string[] = ['commit', '-m', subjectLine];
+        if (body) args.push('-m', body);
+        try {
+            await this.runGit(args);
+        } catch (err: any) {
+            const msg = String(err?.message || err || '').toLowerCase();
+            const needsStage =
+                msg.includes('changes not staged for commit') ||
+                msg.includes('no changes added to commit') ||
+                msg.includes('nothing added to commit');
+            if (needsStage) {
+                // Best-effort: stage everything and retry once
+                try { await this.runGit(['add', '-A']); } catch {}
+                await this.runGit(args);
+            } else {
+                throw err;
+            }
+        }
     }
 
     async add(files: string[]): Promise<void> {
         await this.runGit(['add', ...files]);
+    }
+
+    async addAll(): Promise<void> {
+        await this.runGit(['add', '-A']);
+    }
+
+    async addUntracked(): Promise<void> {
+        // Stage only untracked files (?? in porcelain)
+        const status = await this.runGit(['status', '--porcelain']);
+        const lines = status
+            .split('\n')
+            .map(l => l.replace(/\r$/, ''))
+            .filter(l => l.length > 0);
+        const untracked = lines
+            .filter(l => l.startsWith('??'))
+            .map(l => l.substring(3));
+        if (untracked.length > 0) {
+            await this.runGit(['add', '--', ...untracked]);
+        }
+    }
+
+    async unstage(files?: string[]): Promise<void> {
+        if (files && files.length > 0) {
+            // Unstage specific files
+            // Prefer 'restore --staged' where available; fallback to 'reset HEAD --'
+            try {
+                await this.runGit(['restore', '--staged', '--', ...files]);
+            } catch {
+                await this.runGit(['reset', 'HEAD', '--', ...files]);
+            }
+        } else {
+            // Unstage all staged changes (leave working tree intact)
+            await this.runGit(['reset']);
+        }
     }
 
     async push(remote?: string, branch?: string): Promise<void> {
@@ -204,8 +268,9 @@ export class CLIGitRepository {
     }
 
     private async runGit(args: string[]): Promise<string> {
+        const cmdStr = `git ${args.join(' ')}`;
         if (this.gitService.config.enableDebug) {
-            console.log(`[Git Debug] Running: git ${args.join(' ')} in ${this.rootPath}`);
+            console.log(`[Git Debug] Running: ${cmdStr} in ${this.rootPath}`);
         }
 
         return new Promise((resolve, reject) => {
@@ -216,11 +281,17 @@ export class CLIGitRepository {
                 env: { ...process.env, GIT_TERMINAL_PROMPT: '0' }
             }, (error, stdout, stderr) => {
                 if (error) {
+                    const errStderr = (stderr || '').toString();
+                    const outStr = (stdout || '').toString();
                     if (this.gitService.config.enableDebug) {
+                        console.log(`[Git Debug] Error running: ${cmdStr}`);
                         console.log(`[Git Debug] Error: ${error.message}`);
-                        console.log(`[Git Debug] Stderr: ${stderr}`);
+                        if (errStderr) console.log(`[Git Debug] Stderr: ${errStderr}`);
+                        if (outStr) console.log(`[Git Debug] Stdout: ${outStr}`);
                     }
-                    reject(new Error(`Git command failed: ${error.message}`));
+                    const errDetail = errStderr.trim() || outStr.trim() || error.message;
+                    const detailed = `${cmdStr}\n${errDetail}`;
+                    reject(new Error(`Git command failed: ${detailed}`));
                 } else {
                     if (this.gitService.config.enableDebug) {
                         console.log(`[Git Debug] Output: ${stdout}`);
@@ -333,6 +404,29 @@ export class CLIGitRepository {
 
         return diffs;
     }
+
+    // Format commit message like VS Code: limit first line (subject) length and
+    // move the overflow into the body, separated by a blank line.
+    private formatCommitMessage(raw: string): string {
+        const cfg = this.configManager.getConfig();
+        const maxSubject = Math.max(1, Number(cfg.safety.maxSubjectLength || 72));
+        const normalized = String(raw || '').replace(/\r\n/g, '\n').trim();
+        if (!normalized) return '';
+
+        const lines = normalized.split('\n');
+        let subject = (lines.shift() || '').trim();
+        let bodyLines = lines;
+
+        if (subject.length > maxSubject) {
+            const head = subject.slice(0, maxSubject).trimEnd();
+            const overflow = subject.slice(maxSubject).trim();
+            subject = head;
+            if (overflow) bodyLines = [overflow, ...bodyLines];
+        }
+
+        const body = bodyLines.join('\n').trim();
+        return body ? `${subject}\n\n${body}` : subject;
+    }
 }
 
 export class GitRepositoryDetector {
@@ -417,6 +511,12 @@ export class SafeGitExecutor {
                 return repo.commit(options.message, options.files);
             case 'add':
                 return repo.add(options.files);
+            case 'add-all':
+                return repo.addAll();
+            case 'add-untracked':
+                return repo.addUntracked();
+            case 'unstage':
+                return repo.unstage(options.files);
             case 'push':
                 return repo.push(options.remote, options.branch);
             case 'pull':

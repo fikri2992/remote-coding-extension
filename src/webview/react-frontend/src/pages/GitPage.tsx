@@ -167,6 +167,14 @@ const GitPage: React.FC = () => {
             setDiffFiles([]);
           }
           break;
+        case 'add':
+        case 'add-all':
+        case 'add-untracked':
+        case 'unstage':
+          // After staging/unstaging, refresh status and diff
+          request('status');
+          request('diff');
+          break;
         case 'log':
           if (Array.isArray(result)) {
             setCommits(result as any);
@@ -294,6 +302,13 @@ const GitPage: React.FC = () => {
 
   const onCommit = (msg: string) => request('commit', { message: msg });
 
+  // Staging actions
+  const stageFile = (path: string) => request('add', { files: [path] });
+  const unstageFile = (path: string) => request('unstage', { files: [path] });
+  const stageAll = () => request('add-all');
+  const stageUntracked = () => request('add-untracked');
+  const unstageAll = () => request('unstage');
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -414,7 +429,33 @@ const GitPage: React.FC = () => {
             {/* Status lists */}
             {statusItems.length > 0 && (
               <div className="bg-card rounded-lg border border-border neo:rounded-none neo:border-[3px] neo:shadow-[4px_4px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[4px_4px_0_0_rgba(255,255,255,0.9)]">
-                <GitStatusList items={statusItems} />
+                {/* Bulk actions */}
+                <div className="flex flex-wrap items-center gap-2 p-3 border-b border-border/60 neo:border-b-2">
+                  <button
+                    className="px-3 py-1.5 text-xs rounded-md border border-border hover:bg-muted disabled:opacity-50 neo:rounded-none neo:border-2"
+                    onClick={stageAll}
+                    disabled={loading || historyLoading || commitDiffLoading}
+                    title="Stage all changes"
+                  >Stage all</button>
+                  <button
+                    className="px-3 py-1.5 text-xs rounded-md border border-border hover:bg-muted disabled:opacity-50 neo:rounded-none neo:border-2"
+                    onClick={stageUntracked}
+                    disabled={loading || historyLoading || commitDiffLoading}
+                    title="Stage all untracked files"
+                  >Stage untracked</button>
+                  <button
+                    className="px-3 py-1.5 text-xs rounded-md border border-border hover:bg-muted disabled:opacity-50 neo:rounded-none neo:border-2"
+                    onClick={unstageAll}
+                    disabled={loading || historyLoading || commitDiffLoading}
+                    title="Unstage all staged changes"
+                  >Unstage all</button>
+                </div>
+                <GitStatusList
+                  items={statusItems}
+                  disabled={loading || historyLoading || commitDiffLoading}
+                  onStageFile={stageFile}
+                  onUnstageFile={unstageFile}
+                />
               </div>
             )}
 

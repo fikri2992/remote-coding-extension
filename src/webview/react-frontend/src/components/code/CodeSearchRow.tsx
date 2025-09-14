@@ -12,9 +12,10 @@ interface Props {
   onClose: () => void
   onOptionsChange: (opts: { caseSensitive: boolean; regexp: boolean; wholeWord: boolean }) => void
   className?: string
+  bottomOffset?: number
 }
 
-export const CodeSearchRow: React.FC<Props> = ({ open, query, options, onChange, onPrev, onNext, onClose, onOptionsChange, className }) => {
+export const CodeSearchRow: React.FC<Props> = ({ open, query, options, onChange, onPrev, onNext, onClose, onOptionsChange, className, bottomOffset }) => {
   const [showOpts, setShowOpts] = React.useState(false)
   const ref = React.useRef<HTMLDivElement | null>(null)
 
@@ -41,7 +42,7 @@ export const CodeSearchRow: React.FC<Props> = ({ open, query, options, onChange,
       className={cn('fixed inset-x-0 z-50 px-2', className)}
       style={{
         // Keep above the bottom bar and respect safe area on mobile
-        bottom: 'calc(env(safe-area-inset-bottom, 0px) + 88px)'
+        bottom: bottomOffset != null ? `${bottomOffset}px` : 'calc(env(safe-area-inset-bottom, 0px) + 88px)'
       }}
     >
       <div

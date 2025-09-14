@@ -325,6 +325,10 @@ const FileViewerPage: React.FC = () => {
       const sel = viewerRef.current?.getSelectionInfo()
       if (!sel || !sel.text) return
       await navigator.clipboard.writeText(sel.text)
+      // Hide the selection row after copying
+      viewerRef.current?.clearSelection()
+      setSelInfo({ chars: 0, lines: 0 })
+      selInfoRef.current = { chars: 0, lines: 0 }
     } catch (err) { console.error('Failed to copy selection:', err) }
   }
   const downloadFile = () => {
@@ -851,8 +855,9 @@ const FileViewerPage: React.FC = () => {
         onNext={() => viewerRef.current?.findNext()}
         onClose={() => setSearchOpen(false)}
         onOptionsChange={(next) => { setSearchOpts(next); viewerRef.current?.setSearch({ search: searchQuery, ...next }) }}
+        bottomOffset={bottomPad}
       />
-      <CodeSelectionRow open={showSelectionRow} selection={selInfo} onCopySelection={copySelection} onClear={() => viewerRef.current?.clearSelection()} />
+      <CodeSelectionRow open={showSelectionRow} selection={selInfo} onCopySelection={copySelection} onClear={() => viewerRef.current?.clearSelection()} bottomOffset={bottomPad} />
 
       {/* Options sheet */}
       <CodeOptionsSheet

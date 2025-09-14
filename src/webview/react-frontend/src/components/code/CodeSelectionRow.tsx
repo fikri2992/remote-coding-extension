@@ -6,14 +6,23 @@ interface Props {
   selection: { chars: number; lines: number }
   onCopySelection: () => void
   onClear: () => void
+  // Height in pixels of the fixed bottom bar; if provided we'll place this row just above it
+  bottomOffset?: number
 }
 
-export const CodeSelectionRow: React.FC<Props> = ({ open, selection, onCopySelection, onClear }) => {
+export const CodeSelectionRow: React.FC<Props> = ({ open, selection, onCopySelection, onClear, bottomOffset }) => {
   if (!open) return null
   return (
-    <div className="fixed inset-x-0 bottom-[72px] z-40 px-2" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+    <div
+      className="fixed inset-x-0 z-[60] px-2"
+      style={{
+        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+        bottom: bottomOffset != null ? `${bottomOffset}px` : 'calc(env(safe-area-inset-bottom, 0px) + 88px)'
+      }}
+    >
       <div className={cn(
-        'mx-auto max-w-[900px] bg-card border border-border rounded-md shadow-md p-2'
+        'mx-auto w-full max-w-[900px] bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/70',
+        'border border-border rounded-md shadow-lg p-2'
       )}>
         <div className="flex items-center justify-between gap-2">
           <div className="text-xs text-muted-foreground">Selection: {selection.chars} chars • {selection.lines} lines</div>

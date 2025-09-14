@@ -23,6 +23,20 @@ function mapServerNodes(children: any[], depth = 0): FileNodeLike[] {
   }));
 }
 
+// Heuristic: if last path segment contains a dot and does not start with a dot,
+// treat it as a file path and return its parent directory for tree requests.
+function normalizePathForTree(path: string): string {
+  const clean = (path || '/').replace(/\\/g, '/').replace(/\/+$/, '') || '/';
+  if (clean === '/') return '/';
+  const seg = clean.split('/').pop() || '';
+  if (seg.startsWith('.')) return clean; // directories like .kiro
+  if (seg.includes('.')) {
+    const parent = clean.slice(0, Math.max(1, clean.lastIndexOf('/')));
+    return parent || '/';
+  }
+  return clean;
+}
+
 const FilesPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -38,6 +52,7 @@ const FilesPage: React.FC = () => {
     return parts.map((seg, i) => ({ name: seg, path: '/' + parts.slice(0, i + 1).join('/') }));
   }, [location.search]);
   const [nodes, setNodes] = React.useState<FileNodeLike[]>([]);
+  const [searchQuery, setSearchQuery] = React.useState<string>('');
   const [activeNode, setActiveNode] = React.useState<FileNodeLike | null>(null);
   const [_currentPath, setCurrentPath] = React.useState<string>('/');
   const pendingIdRef = useRef<string | null>(null);
@@ -145,8 +160,20 @@ const FilesPage: React.FC = () => {
   const loadDirectory = (path: string) => {
     // Always fetch fresh data; do not use view-state or cache
     setRefreshing(false);
-    requestTree(path, 0, false);
+    const safe = normalizePathForTree(path);
+    requestTree(safe, 0, false);
   };
+
+  // Filter nodes client-side by name (case-insensitive)
+  const filteredNodes = React.useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return nodes;
+    try {
+      return nodes.filter(n => n.name.toLowerCase().includes(q));
+    } catch {
+      return nodes;
+    }
+  }, [nodes, searchQuery]);
 
   useEffect(() => {
     if (!isConnected) return;
@@ -180,7 +207,7 @@ const FilesPage: React.FC = () => {
       // watch events can be handled here later
     });
     // initial load respects ?path= in URL
-    const initialPath = ((location.search as any)?.path as string) || '/';
+    const initialPath = normalizePathForTree(((location.search as any)?.path as string) || '/');
     // Always fetch fresh data; do not use view-state or cache
     loadDirectory(initialPath);
     return unsub;
@@ -269,7 +296,29 @@ const FilesPage: React.FC = () => {
         </div>
 
         {/* View mode controls */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          {/* Search */}
+          <div className="flex items-center gap-2 flex-1 min-w-[160px] md:min-w-[280px]">
+            <div className="relative w-full md:w-72">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search files and folders"
+                className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-primary/20 neo:rounded-none neo:border-[2px]"
+                aria-label="Search files and folders"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  aria-label="Clear search"
+                >
+                  ×
+                </button>
+              )}
+            </div>
+          </div>
           <div className="flex items-center gap-4 flex-wrap">
             <span className="text-xs text-muted-foreground">View:</span>
             <div className="inline-flex rounded-md border border-border neo:rounded-none neo:border-[2px]">
@@ -298,33 +347,6 @@ const FilesPage: React.FC = () => {
                 Compact
               </button>
             </div>
-
-            {/* Filters */}
-            <span className="text-xs text-muted-foreground">Filters:</span>
-            <div className="inline-flex rounded-md border border-border neo:rounded-none neo:border-[2px]">
-              <button
-                onClick={() => { const next = !showHidden; setShowHidden(next); const p = _currentPath || (crumbs.length ? crumbs[crumbs.length - 1].path : '/'); setRefreshing(true); requestTree(p, 0, true, { allowHiddenFiles: next, useGitIgnore: !showIgnored }); }}
-                className={cn(
-                  'px-3 py-1 text-xs font-medium transition-colors',
-                  'neo:rounded-none',
-                  showHidden ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
-                )}
-                title="Show hidden files (dotfiles)"
-              >
-                Show hidden
-              </button>
-              <button
-                onClick={() => { const next = !showIgnored; setShowIgnored(next); const p = _currentPath || (crumbs.length ? crumbs[crumbs.length - 1].path : '/'); setRefreshing(true); requestTree(p, 0, true, { allowHiddenFiles: showHidden, useGitIgnore: !next }); }}
-                className={cn(
-                  'px-3 py-1 text-xs font-medium transition-colors border-l border-border',
-                  'neo:rounded-none neo:border-l-[2px]',
-                  showIgnored ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
-                )}
-                title="Show files ignored by .gitignore"
-              >
-                Show ignored
-              </button>
-            </div>
           </div>
           
           {/* File count, cache status, and loading indicator */}
@@ -335,7 +357,12 @@ const FilesPage: React.FC = () => {
                 <span>Loading...</span>
               </div>
             ) : (
-              <span>{nodes.length} {nodes.length === 1 ? 'item' : 'items'}</span>
+              <span>
+                {filteredNodes.length} {filteredNodes.length === 1 ? 'item' : 'items'}
+                {searchQuery && (
+                  <span className="ml-1 text-muted-foreground/60">(filtered)</span>
+                )}
+              </span>
             )}
           </div>
         </div>
@@ -370,6 +397,16 @@ const FilesPage: React.FC = () => {
               <div key={i} className="h-9 sm:h-10 rounded-md bg-muted/40 animate-pulse neo:rounded-none neo:border-[2px] neo:border-border/40" />
             ))}
           </div>
+        ) : (searchQuery && filteredNodes.length === 0) ? (
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <div className="w-16 h-16 mb-4 text-muted-foreground/30">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-4.35-4.35M10 18a8 8 0 100-16 8 8 0 000 16z" />
+              </svg>
+            </div>
+            <div className="text-sm font-medium text-muted-foreground mb-1">No results</div>
+            <div className="text-xs text-muted-foreground/70">Try a different search</div>
+          </div>
         ) : nodes.length === 0 && !loading ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <div className="w-16 h-16 mb-4 text-muted-foreground/30">
@@ -381,7 +418,7 @@ const FilesPage: React.FC = () => {
             <div className="text-xs text-muted-foreground/70">No files or folders found</div>
           </div>
         ) : (
-          <FileTree nodes={nodes} pendingPath={pendingNav.target?.path} onOpen={(node) => {
+          <FileTree nodes={filteredNodes} pendingPath={pendingNav.target?.path} onOpen={(node) => {
             openNode(node);
           }} onLongPress={setActiveNode} viewMode={viewMode} />
         )}

@@ -167,11 +167,6 @@ export const CodeToolbar: React.FC<CodeToolbarProps> = ({
 
       <div className="flex items-center gap-2">
         <button
-          onClick={onFindOpen}
-          className="px-2 py-1 text-xs rounded border border-border bg-background hover:bg-muted neo:rounded-none neo:border-[2px]"
-          title="Find (Ctrl/Cmd+F)"
-        >Find</button>
-        <button
           onClick={onGotoOpen}
           className="px-2 py-1 text-xs rounded border border-border bg-background hover:bg-muted neo:rounded-none neo:border-[2px]"
           title="Go to line (Ctrl/Cmd+G)"

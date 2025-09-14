@@ -148,6 +148,7 @@ interface SyntaxHighlighterProps {
   filename?: string
   className?: string
   showLineNumbers?: boolean
+  lineNumberStart?: number
   fontSize?: 'sm' | 'base' | 'lg'
   theme?: 'default' | 'neo'
 }
@@ -158,6 +159,7 @@ export const SyntaxHighlighter: React.FC<SyntaxHighlighterProps> = ({
   filename = '',
   className,
   showLineNumbers = false,
+  lineNumberStart = 1,
   fontSize = 'base',
   theme = 'default'
 }) => {
@@ -205,7 +207,7 @@ export const SyntaxHighlighter: React.FC<SyntaxHighlighterProps> = ({
                   'flex-shrink-0 w-12 text-right pr-3 py-1 text-muted-foreground select-none font-mono border-r border-border/50',
                   fontSizeClass
                 )}>
-                  {index + 1}
+                  {index + Math.max(1, Math.floor(lineNumberStart))}
                 </div>
               )}
               <div

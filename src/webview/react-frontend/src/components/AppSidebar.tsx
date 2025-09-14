@@ -5,7 +5,6 @@ import {
   Folder,
   GitBranch,
   Terminal,
-  MessageCircle,
   Settings,
   Network
 } from 'lucide-react';
@@ -20,11 +19,7 @@ const menuItems = [
   { id: 'tunnels', label: 'Tunnels', icon: Network, path: '/tunnels' },
   { id: 'files', label: 'Files', icon: Folder, path: '/files' },
   { id: 'git', label: 'Git', icon: GitBranch, path: '/git' },
-  { id: 'terminal', label: 'Terminal', icon: Terminal, path: '/terminal' },
-  { id: 'terminal-commands', label: 'Terminal Commands', icon: Terminal, path: '/terminal-commands' },
-  { id: 'chat-terminal', label: 'Chat Terminal 🚀', icon: MessageCircle, path: '/chat-terminal' },
-  { id: 'chat', label: 'Chat', icon: MessageCircle, path: '/chat' },
-  { id: 'acp', label: 'ACP', icon: Network, path: '/acp' },
+  { id: 'terminal-commands', label: 'Terminal', icon: Terminal, path: '/terminal-commands' },
   { id: 'settings', label: 'Settings', icon: Settings, path: '/settings' },
 ];
 

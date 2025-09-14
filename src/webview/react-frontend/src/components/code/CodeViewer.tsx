@@ -24,6 +24,7 @@ export interface CodeViewerProps {
   filename?: string
   wrap?: boolean
   lineNumbers?: boolean
+  lineNumberStart?: number
   fontSize?: FontSize
   theme?: CodeTheme
   whitespace?: boolean
@@ -117,7 +118,7 @@ const neoTheme = EditorView.theme({
 })
 
 export const CodeViewer = React.forwardRef<CodeViewerHandle, CodeViewerProps>(function CodeViewer(
-  { code, language, filename, wrap = false, lineNumbers: ln = true, fontSize = 'base', theme = 'default', whitespace = false, indentGuides = false, wrapColumn: _wrapColumn, className, onStats, onSelectionChange, onOpenSearch, gutterDigits },
+  { code, language, filename, wrap = false, lineNumbers: ln = true, lineNumberStart = 1, fontSize = 'base', theme = 'default', whitespace = false, indentGuides = false, wrapColumn: _wrapColumn, className, onStats, onSelectionChange, onOpenSearch, gutterDigits },
   ref
 ) {
   const containerRef = React.useRef<HTMLDivElement | null>(null)
@@ -132,6 +133,8 @@ export const CodeViewer = React.forwardRef<CodeViewerHandle, CodeViewerProps>(fu
   const indentComp = React.useRef(new Compartment())
   const keysComp = React.useRef(new Compartment())
   const gutterComp = React.useRef(new Compartment())
+  // Track last search string to avoid opening CM search panel implicitly
+  const lastSearchRef = React.useRef<string>('')
 
   // build base extensions
   const baseExtensions = React.useMemo<Extension[]>(() => [
@@ -162,7 +165,9 @@ export const CodeViewer = React.forwardRef<CodeViewerHandle, CodeViewerProps>(fu
       langComp.current.of([]),
       keysComp.current.of([]),
       wrapComp.current.of(wrap ? EditorView.lineWrapping : []),
-      lnComp.current.of(ln ? lineNumbers() : []),
+      lnComp.current.of(ln ? lineNumbers({
+        formatNumber: (n) => String(n + Math.max(1, Math.floor(lineNumberStart)) - 1)
+      }) : []),
       // Reserve a fixed gutter width based on expected digit count.
       // Using !important to override CodeMirror's dynamic inline width to prevent flicker.
       gutterComp.current.of(EditorView.theme({
@@ -221,8 +226,11 @@ export const CodeViewer = React.forwardRef<CodeViewerHandle, CodeViewerProps>(fu
   React.useEffect(() => {
     const view = viewRef.current
     if (!view) return
-    view.dispatch({ effects: lnComp.current.reconfigure(ln ? lineNumbers() : []) })
-  }, [ln])
+    const start = Math.max(1, Math.floor(lineNumberStart))
+    view.dispatch({ effects: lnComp.current.reconfigure(ln ? lineNumbers({
+      formatNumber: (n) => String(n + start - 1)
+    }) : []) })
+  }, [ln, lineNumberStart])
 
   // Update gutter fixed width when digit count changes
   React.useEffect(() => {
@@ -303,17 +311,27 @@ export const CodeViewer = React.forwardRef<CodeViewerHandle, CodeViewerProps>(fu
       try {
         if (typeof anySet === 'function') {
           anySet(v, q)
+          lastSearchRef.current = (q?.search || '')
           return
         }
       } catch { /* fallthrough */ }
       try {
         if (anySet && typeof anySet.of === 'function') {
           v.dispatch({ effects: anySet.of(q) })
+          lastSearchRef.current = (q?.search || '')
         }
       } catch {/* ignore */}
     },
-    findNext: () => { const v = viewRef.current; if (!v) return; findNext(v) },
-    findPrevious: () => { const v = viewRef.current; if (!v) return; findPrevious(v) },
+    findNext: () => {
+      const v = viewRef.current; if (!v) return;
+      if (!lastSearchRef.current || !lastSearchRef.current.trim()) return; // avoid opening default panel
+      findNext(v)
+    },
+    findPrevious: () => {
+      const v = viewRef.current; if (!v) return;
+      if (!lastSearchRef.current || !lastSearchRef.current.trim()) return; // avoid opening default panel
+      findPrevious(v)
+    },
     gotoLine: (line, col = 1) => {
       const v = viewRef.current; if (!v) return
       const l = Math.max(1, Math.min(v.state.doc.lines, Math.floor(line)))

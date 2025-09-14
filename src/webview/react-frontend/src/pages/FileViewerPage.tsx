@@ -14,6 +14,7 @@ import CodeSelectionRow from '../components/code/CodeSelectionRow'
 import { usePersistentState } from '../lib/hooks/usePersistentState'
 import { useMediaQuery } from '../lib/hooks/useMediaQuery'
 import MarkdownRenderer from '../components/code/MarkdownRenderer'
+import GoToLineModal from '../components/code/GoToLineModal'
 import { cn } from '../lib/utils'
 import { TopProgressBar } from '../components/feedback/TopProgressBar'
 import { usePendingNav } from '../contexts/PendingNavContext'
@@ -65,7 +66,9 @@ const FileViewerPage: React.FC = () => {
   const [isMarkdownRendered, setIsMarkdownRendered] = usePersistentState<boolean>('mdRendered', true)
 
   const viewerRef = useRef<CodeViewerHandle | null>(null)
-  const [stats, setStats] = useState<{ lines: number; length: number }>({ lines: 0, length: 0 })
+  const bottomBarRef = useRef<HTMLDivElement | null>(null)
+  const [bottomPad, setBottomPad] = useState<number>(0)
+  const [fileStats, setFileStats] = useState<{ lines: number; length: number }>({ lines: 0, length: 0 })
   const [selInfo, setSelInfo] = useState<{ chars: number; lines: number }>({ chars: 0, lines: 0 })
   const selInfoRef = useRef<{ chars: number; lines: number }>({ chars: 0, lines: 0 })
   const selectionUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null)
@@ -74,6 +77,7 @@ const FileViewerPage: React.FC = () => {
   const isSelectingRef = useRef<boolean>(false)
   const [optionsOpen, setOptionsOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
+  const [gotoOpen, setGotoOpen] = useState(false)
   const [searchQuery, setSearchQuery] = usePersistentState<string>('searchQuery', '')
   const [searchOpts, setSearchOpts] = usePersistentState<{ caseSensitive: boolean; regexp: boolean; wholeWord: boolean }>('searchOpts', { caseSensitive: false, regexp: false, wholeWord: false })
   const isMobile = useMediaQuery('(max-width: 767px)')
@@ -194,7 +198,7 @@ const FileViewerPage: React.FC = () => {
         } else {
           // Handle regular files
           const contentStr = r.content || ''
-          // Precompute stats before first render to avoid initial flicker
+          // Precompute file stats before first render to avoid initial flicker
           try {
             const len = contentStr.length
             let lines = 0
@@ -202,7 +206,7 @@ const FileViewerPage: React.FC = () => {
               if (contentStr.charCodeAt(i) === 10) lines++ // '\n'
             }
             if (len > 0) lines += 1
-            setStats({ lines, length: len })
+            setFileStats({ lines, length: len })
           } catch {}
 
           const fileContent = {
@@ -258,7 +262,7 @@ const FileViewerPage: React.FC = () => {
     const vs = getFileState(filePath)
     if (vs && typeof vs.content === 'string' && vs.content.length > 0) {
       setContent(vs.content)
-      // Precompute stats from cached view-state for stable gutter width
+      // Precompute file stats from cached view-state for stable gutter width
       try {
         const len = vs.content.length
         let lines = 0
@@ -266,7 +270,7 @@ const FileViewerPage: React.FC = () => {
           if (vs.content.charCodeAt(i) === 10) lines++ // '\n'
         }
         if (len > 0) lines += 1
-        setStats({ lines, length: len })
+        setFileStats({ lines, length: len })
       } catch {}
       if (vs.meta) setMeta(vs.meta)
       setLoading(false)
@@ -278,7 +282,7 @@ const FileViewerPage: React.FC = () => {
     const cached = peekFile(filePath, { allowStale: true })
     if (cached) {
       setContent(cached.content)
-      // Precompute stats from cache for stable gutter width
+      // Precompute file stats from cache for stable gutter width
       try {
         const len = cached.content.length
         let lines = 0
@@ -286,7 +290,7 @@ const FileViewerPage: React.FC = () => {
           if (cached.content.charCodeAt(i) === 10) lines++ // '\n'
         }
         if (len > 0) lines += 1
-        setStats({ lines, length: len })
+        setFileStats({ lines, length: len })
       } catch {}
       setMeta({ path: cached.path, truncated: cached.truncated, size: cached.size })
       setLoading(false)
@@ -407,7 +411,7 @@ const FileViewerPage: React.FC = () => {
     return () => el.removeEventListener('scroll', onScroll)
   }, [searchOpen])
 
-  const shouldFallback = React.useMemo(() => stats.length > 1_000_000 || stats.lines > 20000 || !!meta.truncated, [stats.length, stats.lines, meta.truncated])
+  const shouldFallback = React.useMemo(() => fileStats.length > 1_000_000 || fileStats.lines > 20000 || !!meta.truncated, [fileStats.length, fileStats.lines, meta.truncated])
   const languageOptions = React.useMemo(() => ['javascript', 'typescript', 'json', 'html', 'css', 'markdown', 'xml'], [])
   const isMarkdown = React.useMemo(() => (filePath || '').toLowerCase().endsWith('.md'), [filePath])
   const selectionActive = React.useMemo(() => selInfoRef.current.chars > 0, [selInfoRef.current.chars])
@@ -417,10 +421,10 @@ const FileViewerPage: React.FC = () => {
   const CHUNK_LINE_THRESHOLD = 3000
   const CHUNK_SIZE = 1000
   const [chunkIndex, setChunkIndex] = useState(0)
-  const isChunked = stats.lines >= CHUNK_LINE_THRESHOLD
-  const totalChunks = isChunked ? Math.ceil((stats.lines || 0) / CHUNK_SIZE) : 1
+  const isChunked = fileStats.lines >= CHUNK_LINE_THRESHOLD
+  const totalChunks = isChunked ? Math.ceil((fileStats.lines || 0) / CHUNK_SIZE) : 1
   const chunkStart = isChunked ? chunkIndex * CHUNK_SIZE + 1 : 1
-  const chunkEnd = isChunked ? Math.min((chunkIndex + 1) * CHUNK_SIZE, stats.lines || 0) : stats.lines || 0
+  const chunkEnd = isChunked ? Math.min((chunkIndex + 1) * CHUNK_SIZE, fileStats.lines || 0) : fileStats.lines || 0
   const visibleContent = React.useMemo(() => {
     if (!isChunked) return content
     const lines = content.split('\n')
@@ -429,8 +433,26 @@ const FileViewerPage: React.FC = () => {
 
   const showTopBar = useDelayedFlag(pendingNav.isActive, 200)
 
+  // Measure mobile bottom bar height and pad the scroll container accordingly
+  useEffect(() => {
+    const el = bottomBarRef.current
+    if (!el) { setBottomPad(0); return }
+    const measure = () => setBottomPad(el.offsetHeight || 0)
+    measure()
+    let ro: ResizeObserver | null = null
+    try {
+      ro = new ResizeObserver(() => measure())
+      ro.observe(el)
+    } catch {}
+    window.addEventListener('resize', measure)
+    return () => {
+      window.removeEventListener('resize', measure)
+      if (ro) try { ro.disconnect() } catch {}
+    }
+  }, [optionsOpen, searchOpen, wrap, showLineNumbers, indentGuides, whitespace, fontSize])
+
   return (
-    <div className="bg-card rounded-lg shadow-sm border border-border neo:rounded-none neo:border-[3px] neo:shadow-[8px_8px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[8px_8px_0_0_rgba(255,255,255,0.9)] flex flex-col h-full">
+    <div className="bg-card rounded-lg shadow-sm border border-border neo:rounded-none neo:border-[3px] neo:shadow-[8px_8px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[8px_8px_0_0_rgba(255,255,255,0.9)] flex flex-col h-full min-h-0">
       {/* Header - Mobile Responsive */}
       <div className="p-3 sm:p-4 border-b border-border bg-muted/20 neo:border-b-[2px]" aria-busy={loading || refreshing || undefined}>
         <TopProgressBar active={showTopBar} />
@@ -458,7 +480,7 @@ const FileViewerPage: React.FC = () => {
             {/* Mobile file info */}
             <div className="md:hidden flex items-center gap-2 mt-1 text-xs text-muted-foreground">
               {meta.size && <span>{formatFileSize(meta.size)}</span>}
-              <span>{content.split('\n').length} lines</span>
+              <span>{fileStats.lines} lines</span>
               <span className="font-mono">{filePath.split('.').pop()?.toUpperCase()}</span>
               {meta.truncated && <span className="text-amber-600 font-medium">(truncated)</span>}
             </div>
@@ -467,7 +489,7 @@ const FileViewerPage: React.FC = () => {
             <div className="hidden md:flex items-center gap-3 mt-1 text-xs text-muted-foreground">
               {meta.size && <span>{formatFileSize(meta.size)}</span>}
               {meta.truncated && <span className="text-amber-600 font-medium">(truncated)</span>}
-              <span>{content.split('\n').length} lines</span>
+              <span>{fileStats.lines} lines</span>
               <span className="font-mono">{filePath.split('.').pop()?.toUpperCase()}</span>
             </div>
           </div>
@@ -520,6 +542,16 @@ const FileViewerPage: React.FC = () => {
           <button onClick={downloadFile} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted transition-colors neo:rounded-none neo:border-[2px] whitespace-nowrap">Download</button>
         </div>
 
+        {/* Mobile: Image view tabs (Preview / Code) */}
+        {isImageFile(filePath) && (
+          <div className="md:hidden mb-3">
+            <MediaTabs
+              activeTab={imageState.mediaView}
+              onTabChange={(tab) => setImageState(prev => ({ ...prev, mediaView: tab }))}
+            />
+          </div>
+        )}
+
         {/* Desktop action buttons */}
         <div className="hidden md:flex items-center gap-2 mb-3">
           <button onClick={copyToClipboard} className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted transition-colors neo:rounded-none neo:border-[2px]">Copy</button>
@@ -556,19 +588,14 @@ const FileViewerPage: React.FC = () => {
             onThemeChange={setTheme}
             onLanguageChange={setLanguageOverride}
             onFindOpen={() => setSearchOpen(true)}
-            onGotoOpen={() => {
-              const val = window.prompt('Go to line (or line:column):', '')
-              if (!val) return
-              const [l, c] = val.split(':').map(v => parseInt(v, 10))
-              if (!isNaN(l)) viewerRef.current?.gotoLine(l, isNaN(c) ? 1 : c)
-            }}
+            onGotoOpen={() => setGotoOpen(true)}
           />
         </div>
 
         {/* Desktop status */}
         <div className="hidden md:flex px-4 py-1 text-xs text-muted-foreground border-b border-border items-center justify-between">
           <div className="flex items-center gap-3">
-            <span>{stats.lines} lines</span>
+            <span>{fileStats.lines} lines</span>
             {meta.size ? <span>{formatFileSize(meta.size)}</span> : null}
             {meta.truncated ? <span className="text-amber-600">truncated</span> : null}
           </div>
@@ -604,9 +631,35 @@ const FileViewerPage: React.FC = () => {
         </div>
       )}
 
-      {/* Code display */}
-      {!loading && !error && content && (
-        <div className="flex-1 overflow-y-auto max-h-[calc(100vh-16rem)] no-scrollbar" ref={scrollContainerRef}>
+      {/* Main display (code or images) */}
+      {!loading && !error && (content || (isImageFile(filePath) && imageData)) && (
+        <div
+          className={cn(
+            'flex-1 overflow-y-auto max-h-none sm:max-h-[calc(100vh-16rem)] no-scrollbar',
+            // Only enforce a minimum height for images so the preview is visible on mobile
+            isImageFile(filePath) ? 'min-h-[50vh] sm:min-h-0' : undefined
+          )}
+          style={{ paddingBottom: bottomPad ? bottomPad + 8 : 0 }}
+          ref={scrollContainerRef}
+        >
+          {/* Top chunk navigation for large files (sticky on scroll) */}
+          {isChunked && (
+            <div className="sticky top-0 z-10 px-3 py-2 flex items-center justify-between text-xs text-muted-foreground bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-border">
+              <div>Chunk {chunkIndex + 1} / {totalChunks} • Lines {chunkStart}–{chunkEnd}</div>
+              <div className="flex items-center gap-2">
+                <button
+                  disabled={chunkIndex === 0}
+                  onClick={() => { setChunkIndex((i) => Math.max(0, i - 1)); setSearchOpen(false) }}
+                  className={cn('px-2 py-1 rounded border border-border neo:rounded-none neo:border-[2px]', chunkIndex === 0 ? 'opacity-60 cursor-not-allowed' : 'hover:bg-muted')}
+                >Prev</button>
+                <button
+                  disabled={chunkIndex >= totalChunks - 1}
+                  onClick={() => { setChunkIndex((i) => Math.min(totalChunks - 1, i + 1)); setSearchOpen(false) }}
+                  className={cn('px-2 py-1 rounded border border-border neo:rounded-none neo:border-[2px]', chunkIndex >= totalChunks - 1 ? 'opacity-60 cursor-not-allowed' : 'hover:bg-muted')}
+                >Next</button>
+              </div>
+            </div>
+          )}
           {/* Image display */}
           {isImageFile(filePath) && imageData && (
             <div className="mt-2">
@@ -669,13 +722,13 @@ const FileViewerPage: React.FC = () => {
                       language={languageOverride}
                       wrap={wrap}
                       lineNumbers={showLineNumbers}
-                      gutterDigits={Math.max(3, String(stats.lines || 0).length)}
+                      lineNumberStart={chunkStart}
+                      gutterDigits={Math.max(3, String(fileStats.lines || 0).length)}
                       fontSize={isMobile && fontSize === 'base' ? 'lg' : fontSize}
                       theme={theme}
                       whitespace={whitespace}
                       indentGuides={indentGuides}
                       className="border-0 rounded-none"
-                      onStats={setStats}
                       onSelectionChange={(s) => {
                         const now = Date.now()
                         const newSelInfo = { chars: s.to - s.from, lines: s.lines }
@@ -719,6 +772,7 @@ const FileViewerPage: React.FC = () => {
                       code={visibleContent}
                       filename={filePath}
                       showLineNumbers={showLineNumbers}
+                      lineNumberStart={chunkStart}
                       fontSize={isMobile && fontSize === 'base' ? 'lg' : fontSize}
                       theme={theme === 'one-dark' ? 'default' : theme}
                       className="border-0 rounded-none"
@@ -726,7 +780,7 @@ const FileViewerPage: React.FC = () => {
                   </div>
                 )}
 
-                {/* Chunk navigation for large files */}
+                {/* Bottom chunk navigation for large files */}
                 {isChunked && (
                   <div className="px-3 py-2 flex items-center justify-between text-xs text-muted-foreground">
                     <div>Chunk {chunkIndex + 1} / {totalChunks} • Lines {chunkStart}–{chunkEnd}</div>
@@ -752,9 +806,7 @@ const FileViewerPage: React.FC = () => {
                   </div>
                 )}
 
-                {(searchOpen || showSelectionRow) && (
-                  <div style={{ height: '128px' }} />
-                )}
+                {/* Removed hardcoded spacer; bottom padding of the scroll container adjusts dynamically. */}
               </div>
             </>
           )}
@@ -768,19 +820,25 @@ const FileViewerPage: React.FC = () => {
 
       {/* Bottom bar */}
       <CodeBottomBar
+        ref={bottomBarRef}
         wrap={wrap}
         onToggleWrap={() => { setSearchOpen(false); setOptionsOpen(false); setWrap(!wrap) }}
-        onFind={() => { setOptionsOpen(false); setSearchOpen(!searchOpen) }}
-        onGoto={() => {
-          const val = window.prompt('Go to line (or line:column):', '')
-          if (!val) return
-          const [l, c] = val.split(':').map(v => parseInt(v, 10))
-          if (!isNaN(l)) viewerRef.current?.gotoLine(l, isNaN(c) ? 1 : c)
-        }}
+        onGoto={() => setGotoOpen(true)}
         onCopy={copyToClipboard}
         onMore={() => { setSearchOpen(false); setOptionsOpen(true) }}
-        lines={stats.lines}
+        lines={fileStats.lines}
         selection={selInfo}
+      />
+
+      {/* Go to line modal */}
+      <GoToLineModal
+        open={gotoOpen}
+        maxLines={fileStats.lines}
+        onClose={() => setGotoOpen(false)}
+        onSubmit={({ line, column }) => {
+          viewerRef.current?.gotoLine(line, column ?? 1)
+          setGotoOpen(false)
+        }}
       />
 
       {/* Docked rows */}

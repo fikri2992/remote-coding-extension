@@ -26,13 +26,8 @@ export function getFileIcon(name: string, type: NodeType): React.ReactElement {
   const lower = name.toLowerCase()
 
   if (type === 'directory') {
-    if (lower === 'node_modules') return <Package className={`${base} text-amber-600`} />
-    if (lower === '.git') return <GitBranch className={`${base} text-orange-600`} />
-    if (lower === 'public' || lower === 'static') return <Globe className={`${base} text-blue-600`} />
-    if (lower === 'src' || lower === 'source') return <Code className={`${base} text-purple-600`} />
-    if (lower === 'docs' || lower === 'documentation') return <FileText className={`${base} text-green-600`} />
-    if (lower === 'assets' || lower === 'images') return <Image className={`${base} text-pink-600`} />
-    return <Folder className={`${base} text-blue-500`} />
+    // Use a single, consistent folder icon for all directories
+    return <Folder className={`${base} text-blue-600`} />
   }
 
   // Special filenames

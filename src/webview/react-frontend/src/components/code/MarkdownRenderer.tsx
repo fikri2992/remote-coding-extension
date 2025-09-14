@@ -30,6 +30,7 @@ export const MarkdownRenderer: React.FC<{ content: string; className?: string }>
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
+          // Inline and block code handling: keep <pre> ownership with react-markdown
           code({ inline, className, children, ...props }: any) {
             if (inline) {
               return (
@@ -50,10 +51,17 @@ export const MarkdownRenderer: React.FC<{ content: string; className?: string }>
                 </code>
               )
             }
-            // Fenced code block
+            // For fenced code blocks, react-markdown will render a <pre> wrapper.
+            // We return just the code element here to avoid placing <pre> inside a <p>.
+            return <code className={className} {...props}>{children}</code>
+          },
+          pre({ children, ...preProps }: any) {
             return (
-              <pre className="bg-muted/40 border border-border rounded-lg p-3 overflow-auto text-xs leading-snug font-mono max-h-[520px]">
-                <code className={className} {...props}>{children}</code>
+              <pre
+                className="bg-muted/40 border border-border rounded-lg p-3 overflow-auto text-xs leading-snug font-mono max-h-[520px]"
+                {...preProps}
+              >
+                {children}
               </pre>
             )
           },

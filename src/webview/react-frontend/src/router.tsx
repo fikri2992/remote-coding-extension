@@ -16,17 +16,26 @@ import ACPPage from './pages/ACPPage.tsx';
 import TerminalCommandsPage from './pages/TerminalCommandsPage.tsx';
 
 import RootLayout from './layouts/RootLayout.tsx';
+import React from 'react';
 
 // Create a root route
 const rootRoute = createRootRoute({
   component: RootLayout,
 });
 
-// Create index route (Claude ACP at "/")
+// Create index route (redirect to "/claude")
+const RedirectToClaude: React.FC = () => {
+  React.useEffect(() => {
+    try { window.history.replaceState({}, '', '/claude'); window.dispatchEvent(new PopStateEvent('popstate')); }
+    catch { window.location.replace('/claude'); }
+  }, []);
+  return null;
+};
+
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
-  component: ChatPage,
+  component: RedirectToClaude,
 });
 
 // Create other routes
@@ -88,14 +97,14 @@ const acpRoute = createRoute({
 const geminiRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/gemini',
-  component: ACPPage,
+  component: ChatPage,
 });
 
 // Claude alias route for clarity
 const claudeRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/claude',
-  component: ACPPage,
+  component: ChatPage,
 });
 
 // Standalone homepage route for testing (not linked in menu)

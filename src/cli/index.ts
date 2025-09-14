@@ -12,10 +12,13 @@ import { stopCommand } from './commands/stop';
 import { statusCommand } from './commands/status';
 import { initCommand } from './commands/init';
 
+// Note: Keep version in sync with package.json
+const VERSION = '0.0.1';
+
 // Create the main CLI program
-const program = new Command('kiro-cli')
-  .description('Kiro CLI - Terminal, File System, Git, and Server Operations')
-  .version('1.0.0');
+const program = new Command('web-agent-client')
+  .description('Web Agent Client CLI - Terminal, File System, Git, and Server Operations')
+  .version(VERSION);
 
 // Add filesystem command group
 program.addCommand(filesystemCommand);

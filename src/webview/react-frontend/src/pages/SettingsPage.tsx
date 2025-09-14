@@ -54,6 +54,7 @@ const CollapsibleCard: React.FC<{
 
 const SettingsPage: React.FC = () => {
   const ws = useWebSocket();
+  const { isConnected } = ws as any;
   const { show } = useToast();
   const [loading, setLoading] = useState<boolean>(false);
   const [config, setConfig] = useState<OTGConfig | null>(null);
@@ -101,8 +102,9 @@ const SettingsPage: React.FC = () => {
     });
   };
 
-  // Load config on mount
+  // Load config when WebSocket is connected (prevents early-read race)
   useEffect(() => {
+    if (!isConnected) return;
     (async () => {
       setLoading(true);
       try {
@@ -130,10 +132,11 @@ const SettingsPage: React.FC = () => {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [isConnected]);
 
-  // Load agents list for autostart selection
+  // Load agents list for autostart selection once connected
   useEffect(() => {
+    if (!isConnected) return;
     (async () => {
       try {
         const res = await (ws as any)?.sendAcp?.('agents.list', {});
@@ -141,7 +144,7 @@ const SettingsPage: React.FC = () => {
         setAvailableAgents(list.map((a: any) => ({ id: a.id, title: a.title || a.id })));
       } catch {}
     })();
-  }, [ws]);
+  }, [ws, isConnected]);
 
   // Merge helper
   const mergeAndSave = async (next: Partial<OTGConfig>) => {

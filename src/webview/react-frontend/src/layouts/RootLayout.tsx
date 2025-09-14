@@ -18,7 +18,7 @@ const LayoutContent: React.FC = () => {
 
   // Get active item from current path
   const getActiveItemFromPath = (pathname: string): string => {
-    if (pathname === '/') return 'home';
+    if (pathname === '/' || pathname === '/claude') return 'home';
     const first = pathname.split('/')[1] || 'home';
     return first; // highlight by first segment (e.g., /files/view -> files)
   };

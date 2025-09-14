@@ -16,8 +16,8 @@ interface AppSidebarProps {
 }
 
 const menuItems = [
-  { id: 'home', label: 'Claude', icon: Home, path: '/' },
-  { id: 'gemini', label: 'Gemini', icon: Gem, path: '/gemini' },
+  { id: 'home', label: 'Claude Code', icon: Home, path: '/' },
+  { id: 'gemini', label: 'Gemini CLI', icon: Gem, path: '/gemini' },
   { id: 'tunnels', label: 'Tunnels', icon: Network, path: '/tunnels' },
   { id: 'files', label: 'Files', icon: Folder, path: '/files' },
   { id: 'git', label: 'Git', icon: GitBranch, path: '/git' },

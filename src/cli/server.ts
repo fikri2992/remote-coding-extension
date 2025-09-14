@@ -201,10 +201,11 @@ export class CliServer {
 
       // Initialize git service
       const workspaceRoot = process.cwd();
+      const cfgEnv = ((this.config as any)?.env || {}) as Record<string, string>;
       console.log(`🔧 Git Service workspace root: ${workspaceRoot}`);
       this.gitService = new CLIGitService({
         workspaceRoot: workspaceRoot,
-        enableDebug: process.env.KIRO_GIT_DEBUG === '1'
+        enableDebug: String(cfgEnv.KIRO_GIT_DEBUG || '').trim() === '1'
       });
 
       // Initialize filesystem service
@@ -229,7 +230,9 @@ export class CliServer {
       // Proactively connect so the agent is pre-warmed before any client appears.
       // Keep non-fatal: if credentials are missing or any error occurs, continue startup.
       try {
-        if (process.env.KIRO_ACP_AUTOSTART !== '0') {
+        const cfgEnv2 = ((this.config as any)?.env || {}) as Record<string, string>;
+        const autoStart = String(cfgEnv2.KIRO_ACP_AUTOSTART ?? '').trim();
+        if (autoStart !== '0') {
           await this.acpController.connect({});
           console.log('🤖 ACP agent autostarted (pre-warmed)');
         } else {
@@ -241,7 +244,8 @@ export class CliServer {
 
       // Additional agents autostart if configured (multi-agent)
       try {
-        const raw = String(process.env.KIRO_ACP_AUTOSTART_AGENTS || '').trim();
+        const cfgEnv3 = ((this.config as any)?.env || {}) as Record<string, string>;
+        const raw = String(cfgEnv3.KIRO_ACP_AUTOSTART_AGENTS || '').trim();
         if (raw) {
           const ids = raw.split(/[,;\s]+/).filter(Boolean);
           for (const id of ids) {

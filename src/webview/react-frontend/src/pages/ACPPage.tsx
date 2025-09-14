@@ -130,8 +130,9 @@ const ACPPage: React.FC = () => {
     } catch {}
   }, []);
 
-  // Load agents list and current status
+  // Load agents list and current status when WS is connected
   useEffect(() => {
+    if (!isConnected) return;
     (async () => {
       try {
         const res = await (sendAcp as any)('agents.list', {});
@@ -149,7 +150,7 @@ const ACPPage: React.FC = () => {
         setAgentStatus(s);
       } catch {}
     })();
-  }, [provider]);
+  }, [provider, isConnected]);
 
   // When agent changes, refresh status and reset env inputs for its keys
   useEffect(() => {

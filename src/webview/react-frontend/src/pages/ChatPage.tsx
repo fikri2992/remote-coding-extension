@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import { useLocation } from '@tanstack/react-router';
 import { useWebSocket } from '@/components/WebSocketProvider';
 import { Button } from '@/components/ui/button';
 import useConfirm from '@/lib/hooks/useConfirm';
@@ -40,11 +41,20 @@ type ContextItem = { id: string; type: 'file'; path: string; label: string; size
 export const ChatPage: React.FC = () => {
   const { addMessageListener, sendAcp, isConnected, sendJson, connect } = useWebSocket() as any;
   const { show } = useToast();
+  const location = useLocation();
+
+  // Reactive agent ID based on current route
+  const agentId: 'claude' | 'gemini' = useMemo(() => {
+    return location.pathname.startsWith('/gemini') ? 'gemini' : 'claude';
+  }, [location.pathname]);
 
   // Auto-connect/session state
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
+  const [connectionPhase, setConnectionPhase] = useState<'idle' | 'starting' | 'initialized' | 'session' | 'models' | 'ready'>('idle');
   const [sending, setSending] = useState(false);
+  const [sessionLoading, setSessionLoading] = useState(false);
+  const [threadLoading, setThreadLoading] = useState(false);
   // Modes/Models
   const [modes, setModes] = useState<any | null>(null);
   const [currentModeId, setCurrentModeId] = useState<string | null>(null);
@@ -61,32 +71,154 @@ export const ChatPage: React.FC = () => {
   const [toolsGroupOpen, setToolsGroupOpen] = useState<boolean>(false);
   const [openToolMap, setOpenToolMap] = useState<Record<string, boolean>>({});
 
-  // Persist group open preference per thread
+  // Track previous agent ID to detect switches
+  const prevAgentIdRef = useRef<'claude' | 'gemini' | null>(null);
+
+  // Save current agent state before switching
+  const saveAgentState = useCallback(() => {
+    if (!prevAgentIdRef.current) return;
+
+    const prevAgent = prevAgentIdRef.current;
+    try {
+      // Save current state to localStorage for previous agent
+      const stateToSave = {
+        sessionId,
+        currentModeId,
+        currentModelId,
+        models,
+        modes,
+        activeThreadId,
+        threadName,
+        input,
+        selectedContext,
+        messages: messages.slice(-50), // Save last 50 messages to prevent localStorage overflow
+        toolsGroupOpen,
+        openToolMap
+      };
+      localStorage.setItem(`chat:state:${prevAgent}`, JSON.stringify(stateToSave));
+    } catch (e) {
+      console.warn(`Failed to save state for ${prevAgent}:`, e);
+    }
+  }, []); // Empty deps - we'll access current values directly
+
+  // Restore agent-specific state
+  const restoreAgentState = useCallback(() => {
+    try {
+      const savedState = localStorage.getItem(`chat:state:${agentId}`);
+      if (savedState) {
+        const state = JSON.parse(savedState);
+
+        // Restore state with fallbacks
+        const restoredSessionId = state.sessionId || null;
+        setSessionId(restoredSessionId);
+        setCurrentModeId(state.currentModeId || null);
+        setCurrentModelId(state.currentModelId || null);
+        setModels(state.models || []);
+        setModes(state.modes || null);
+        setActiveThreadId(state.activeThreadId || null);
+        setThreadName(state.threadName || 'Default Chat');
+        setInput(state.input || '');
+        setSelectedContext(state.selectedContext || []);
+        setMessages(state.messages || []);
+        setToolsGroupOpen(state.toolsGroupOpen || false);
+        setOpenToolMap(state.openToolMap || {});
+
+        // If we have a restored session ID and WebSocket is connected, select the session
+        if (restoredSessionId && isConnected) {
+          setTimeout(async () => {
+            try {
+              // Use sendAcp directly instead of wsFirst to avoid dependency issues
+              await sendAcp('session.select', { sessionId: restoredSessionId }, { timeoutMs: 5000 });
+            } catch (e) {
+              console.warn(`Failed to select session for ${agentId}:`, e);
+            }
+          }, 100);
+        }
+
+        // Keep the saved state in localStorage so it persists for future switches
+      } else {
+        // No saved state, initialize with defaults
+        setSessionId(null);
+        setCurrentModeId(null);
+        setCurrentModelId(null);
+        setModels([]);
+        setModes(null);
+        setActiveThreadId(null);
+        setThreadName('Default Chat');
+        setInput('');
+        setSelectedContext([]);
+        setMessages([]);
+        setToolsGroupOpen(false);
+        setOpenToolMap({});
+      }
+    } catch (e) {
+      console.warn(`Failed to restore state for ${agentId}:`, e);
+      // Fallback to default state
+      setSessionId(null);
+      setCurrentModeId(null);
+      setCurrentModelId(null);
+      setModels([]);
+      setModes(null);
+      setActiveThreadId(null);
+      setThreadName('Default Chat');
+      setInput('');
+      setSelectedContext([]);
+      setMessages([]);
+      setToolsGroupOpen(false);
+      setOpenToolMap({});
+    }
+  }, [agentId, isConnected, sendAcp]);
+
+  // Detect agent switches and handle state preservation/restoration
   useEffect(() => {
-    const key = activeThreadId ? `chatToolsGroupOpen:${activeThreadId}` : 'chatToolsGroupOpen';
+    if (prevAgentIdRef.current && prevAgentIdRef.current !== agentId) {
+      // Agent switch detected
+      saveAgentState();
+      restoreAgentState();
+
+      // Reset some transient state that shouldn't persist
+      setIsTyping(false);
+      activeToolCallsRef.current = {};
+      setConnecting(false);
+      setSending(false);
+      setPermissionReq(null);
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+        typingTimeoutRef.current = null;
+      }
+
+      // Reset restore flag to trigger WebSocket reconnection for new agent
+      didRestoreRef.current = false;
+    }
+    prevAgentIdRef.current = agentId;
+  }, [agentId]); // Simplified dependencies
+
+  // Persist group open preference per agent+thread
+  useEffect(() => {
+    const key = activeThreadId ? `chatToolsGroupOpen:${agentId}:${activeThreadId}` : `chatToolsGroupOpen:${agentId}`;
     try {
       const v = localStorage.getItem(key);
       if (v === '1') setToolsGroupOpen(true);
       else if (v === '0') setToolsGroupOpen(false);
       else setToolsGroupOpen(false);
     } catch {}
-  }, [activeThreadId]);
+  }, [activeThreadId, agentId]);
 
-  // Per-call open/close persisted per session
+  // Per-call open/close persisted per agent+thread
   useEffect(() => {
-    const key = activeThreadId ? `chatToolOpenMap:${activeThreadId}` : 'chatToolOpenMap';
+    const key = activeThreadId ? `chatToolOpenMap:${agentId}:${activeThreadId}` : `chatToolOpenMap:${agentId}`;
     try {
       const raw = localStorage.getItem(key);
       if (raw) setOpenToolMap(JSON.parse(raw));
       else setOpenToolMap({});
     } catch { setOpenToolMap({}); }
-  }, [activeThreadId]);
+  }, [activeThreadId, agentId]);
 
   const handleToolOpenChange = (id: string, open: boolean) => {
     setOpenToolMap((prev) => {
       const next = { ...prev, [id]: open } as Record<string, boolean>;
       try {
-        const key = activeThreadId ? `chatToolOpenMap:${activeThreadId}` : 'chatToolOpenMap';
+        const key = activeThreadId ? `chatToolOpenMap:${agentId}:${activeThreadId}` : `chatToolOpenMap:${agentId}`;
         localStorage.setItem(key, JSON.stringify(next));
       } catch {}
       return next;
@@ -127,6 +259,35 @@ export const ChatPage: React.FC = () => {
   const sendingRef = useRef(sending);
   useEffect(() => { sendingRef.current = sending; }, [sending]);
 
+  // Derived availability badges
+  const availableModeCount = useMemo(() => {
+    try {
+      const m: any = modes || null;
+      if (!m) return 0;
+      const list = (m.available_modes || m.availableModes || []) as any[];
+      return Array.isArray(list) ? list.length : 0;
+    } catch { return 0; }
+  }, [modes]);
+  const modeBadgeActive = !!(availableModeCount > 0 || currentModeId);
+  const modelsBadgeActive = models.length > 0;
+
+  // Slow-connect toast indicator (one-shot per connect attempt)
+  const slowConnectShownRef = useRef(false);
+  useEffect(() => {
+    if (connecting && !slowConnectShownRef.current) {
+      const t = setTimeout(() => {
+        if (connecting) {
+          slowConnectShownRef.current = true;
+          show({ title: 'Agent Warming Up', description: 'Connection is taking a moment…', variant: 'default' });
+        }
+      }, 8000);
+      return () => { try { clearTimeout(t); } catch {} };
+    }
+    if (!connecting) {
+      slowConnectShownRef.current = false;
+    }
+  }, [connecting, show]);
+
   // When sending completes, if there are no active tool calls, ensure typing indicator is cleared.
   useEffect(() => {
     if (!sending) {
@@ -146,7 +307,17 @@ export const ChatPage: React.FC = () => {
 
   const canPrompt = useMemo(() => input.trim().length > 0 && !sending, [input, sending]);
 
-  const wsFirst = async <T = any,>(op: string, payload: any): Promise<T> => await sendAcp(op, payload);
+  // Restore unsent input per agent and persist while typing
+  useEffect(() => {
+    try { const v = localStorage.getItem(`chat:unsent:${agentId}`); if (typeof v === 'string') setInput(v); } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agentId]);
+  useEffect(() => { try { localStorage.setItem(`chat:unsent:${agentId}`, input); } catch {} }, [input, agentId]);
+
+  const wsFirst = async <T = any,>(op: string, payload: any, timeoutMs?: number): Promise<T> => {
+    const t = typeof timeoutMs === 'number' ? timeoutMs : (op === 'connect' ? 120000 : (op === 'prompt' ? 60000 : 15000));
+    return await sendAcp(op, { agentId, ...(payload || {}) }, { timeoutMs: t });
+  };
 
   // Auto-scroll
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }); }, [messages]);
@@ -155,6 +326,17 @@ export const ChatPage: React.FC = () => {
   useEffect(() => {
     const unsub = addMessageListener((msg: any) => {
       if (!msg) return;
+      if (msg.agentId && msg.agentId !== agentId) return;
+      
+      // Track connection phases for progress indicator
+      if (msg.type === 'agent_connect') {
+        setConnectionPhase('starting');
+      } else if (msg.type === 'agent_initialized') {
+        setConnectionPhase('initialized');
+      } else if (msg.type === 'session_created' || (msg.type === 'session_update' && msg.update?.type === 'session_created')) {
+        setConnectionPhase('session');
+      }
+      
       if (msg.type === 'session_update') {
         const update = normalizeUpdateShape(msg.update);
         setUpdates((prev: any) => [...prev, update]);
@@ -206,10 +388,7 @@ export const ChatPage: React.FC = () => {
         if (newId && typeof newId === 'string') {
           setSessionId(newId);
           // Treat recovered session as the active thread id
-          try {
-            setActiveThreadId(newId);
-            localStorage.setItem('chat:activeThreadId', newId);
-          } catch {}
+          try { setActiveThreadId(newId); localStorage.setItem(`chat:activeThreadId:${agentId}`, newId); } catch {}
           // Best-effort refresh threads and current transcript for the new session
           try { refreshThreads(); } catch {}
           try { loadThreadHistory(newId); } catch {}
@@ -231,26 +410,31 @@ export const ChatPage: React.FC = () => {
     (async () => {
       if (connecting) return;
       setConnecting(true);
+      setConnectionPhase('starting');
       try {
         try { connect?.(); } catch {}
         await safeConnect();
+        setConnectionPhase('initialized');
         // Try to restore the last selected thread from localStorage first
         let restored = null as string | null;
-        try { restored = localStorage.getItem('chat:activeThreadId'); } catch {}
+        try { restored = localStorage.getItem(`chat:activeThreadId:${agentId}`); } catch {}
         if (restored) {
           try { setActiveThreadId(restored); } catch {}
           // Ensure backend associates this thread, and adopt its session id
           try {
-            const sel = await wsFirst<any>('session.selectThread', { threadId: restored });
+            const sel = await wsFirst<any>('session.select', { sessionId: restored });
             const sid = (sel?.sessionId || sel?.session_id || sel?.data?.sessionId || sel?.data?.session_id || null) as string | null;
             if (sid) setSessionId(sid);
-            // Capture modes if backend provides them
-            const m = (sel?.modes || sel?.data?.modes) as any;
-            if (m) {
-              setModes(m);
-              const cm = (m as any).current_mode_id || (m as any).currentModeId;
-              if (cm) setCurrentModeId(cm);
-            }
+            // session.select does not include modes; fetch via session.state
+            try {
+              const st = await wsFirst<any>('session.state', {});
+              const m = (st?.modes as any) || null;
+              if (m) {
+                setModes(m);
+                const cm = (m as any).current_mode_id || (m as any).currentModeId;
+                if (cm) setCurrentModeId(cm);
+              }
+            } catch {}
           } catch {}
           try { await loadThreadHistory(restored); } catch {}
         } else {
@@ -260,7 +444,7 @@ export const ChatPage: React.FC = () => {
             const sid = (st?.sessionId || null) as string | null;
             if (sid) {
               setSessionId(sid);
-              try { setActiveThreadId(sid); localStorage.setItem('chat:activeThreadId', sid); } catch {}
+              try { setActiveThreadId(sid); localStorage.setItem(`chat:activeThreadId:${agentId}`, sid); } catch {}
               try { await loadThreadHistory(sid); } catch {}
             }
             // Also restore modes if available from state()
@@ -274,10 +458,10 @@ export const ChatPage: React.FC = () => {
           // As an offline-friendly fallback, try local last-session id
           if (!sessionId) {
             try {
-              const last = localStorage.getItem('chat:lastSessionId');
+              const last = localStorage.getItem(`chat:lastSessionId:${agentId}`);
               if (last) {
                 setSessionId(last);
-                try { setActiveThreadId(last); localStorage.setItem('chat:activeThreadId', last); } catch {}
+                try { setActiveThreadId(last); localStorage.setItem(`chat:activeThreadId:${agentId}`, last); } catch {}
                 try { await loadThreadHistory(last); } catch {}
               }
             } catch {}
@@ -287,24 +471,25 @@ export const ChatPage: React.FC = () => {
         fetchGitStatus().catch(() => {});
         discoverFiles('/').catch(() => {});
         // load models if supported
+        setConnectionPhase('models');
         refreshModels().catch(() => {});
         // load threads list for picker
         refreshThreads().catch(() => {});
+        setConnectionPhase('ready');
       } catch (e) {
         console.warn('[chat] auto-restore failed', e);
       } finally {
         didRestoreRef.current = true;
         setConnecting(false);
+        setConnectionPhase('idle');
       }
     })();
   }, [isConnected]);
 
   // Persist last seen session id for faster local restore
   useEffect(() => {
-    try {
-      if (sessionId) localStorage.setItem('chat:lastSessionId', sessionId);
-    } catch {}
-  }, [sessionId]);
+    try { if (sessionId) localStorage.setItem(`chat:lastSessionId:${agentId}`, sessionId); } catch {}
+  }, [sessionId, agentId]);
 
   async function safeConnect() {
     try { await wsFirst('connect', {}); } catch {}
@@ -547,12 +732,23 @@ export const ChatPage: React.FC = () => {
   }
 
   async function handleSelectSession(id: string) {
+    setSessionLoading(true);
     try {
-      const res = await wsFirst<any>('session.selectThread', { threadId: id });
+      const res = await wsFirst<any>('session.select', { sessionId: id });
       // Prefer server-reported session id; fall back to thread id for UI state
       const sid = pickSessionId(res) || id || null;
-      try { setActiveThreadId(id); localStorage.setItem('chat:activeThreadId', id); } catch {}
+      try { setActiveThreadId(id); localStorage.setItem(`chat:activeThreadId:${agentId}`, id); } catch {}
       if (sid) setSessionId(sid);
+      // Fetch modes for selected session
+      try {
+        const st = await wsFirst<any>('session.state', {});
+        const m = (st?.modes as any) || null;
+        if (m) {
+          setModes(m);
+          const cm = (m as any).current_mode_id || (m as any).currentModeId;
+          if (cm) setCurrentModeId(cm);
+        }
+      } catch {}
       await loadThreadHistory(id);
       setSessionSheetOpen(false);
     } catch (e: any) {
@@ -560,10 +756,19 @@ export const ChatPage: React.FC = () => {
       if (/not connected/i.test(msg) || /ACP service not available/i.test(msg)) {
         try { await wsFirst('connect', {}); } catch {}
         try {
-          const res2 = await wsFirst<any>('session.selectThread', { threadId: id });
+          const res2 = await wsFirst<any>('session.select', { sessionId: id });
           const sid2 = pickSessionId(res2) || id || null;
-          try { setActiveThreadId(id); localStorage.setItem('chat:activeThreadId', id); } catch {}
+          try { setActiveThreadId(id); localStorage.setItem(`chat:activeThreadId:${agentId}`, id); } catch {}
           if (sid2) setSessionId(sid2);
+          try {
+            const st = await wsFirst<any>('session.state', {});
+            const m = (st?.modes as any) || null;
+            if (m) {
+              setModes(m);
+              const cm = (m as any).current_mode_id || (m as any).currentModeId;
+              if (cm) setCurrentModeId(cm);
+            }
+          } catch {}
           await loadThreadHistory(id);
           setSessionSheetOpen(false);
           return;
@@ -573,6 +778,8 @@ export const ChatPage: React.FC = () => {
       } else {
         show({ title: 'Session Selection Error', description: e?.message || String(e), variant: 'destructive' });
       }
+    } finally {
+      setSessionLoading(false);
     }
   }
 
@@ -591,13 +798,22 @@ export const ChatPage: React.FC = () => {
       if (sessionId === id) {
         setSessionId(nextId);
         try {
-          if (nextId) { setActiveThreadId(nextId); localStorage.setItem('chat:activeThreadId', nextId); }
-          else { setActiveThreadId(null); localStorage.removeItem('chat:activeThreadId'); }
+          if (nextId) { setActiveThreadId(nextId); localStorage.setItem(`chat:activeThreadId:${agentId}`, nextId); }
+          else { setActiveThreadId(null); localStorage.removeItem(`chat:activeThreadId:${agentId}`); }
         } catch {}
         setMessages([]);
         if (nextId) {
           try {
             await wsFirst('session.select', { sessionId: nextId });
+            try {
+              const st = await wsFirst<any>('session.state', {});
+              const m = (st?.modes as any) || null;
+              if (m) {
+                setModes(m);
+                const cm = (m as any).current_mode_id || (m as any).currentModeId;
+                if (cm) setCurrentModeId(cm);
+              }
+            } catch {}
             await loadThreadHistory(nextId);
           } catch {}
         }
@@ -617,7 +833,7 @@ export const ChatPage: React.FC = () => {
       }
       if (sid) {
         setSessionId(sid);
-        try { setActiveThreadId(sid); localStorage.setItem('chat:activeThreadId', sid); } catch {}
+        try { setActiveThreadId(sid); localStorage.setItem(`chat:activeThreadId:${agentId}`, sid); } catch {}
         setMessages([]);
         setThreadName('Default Chat');
       }
@@ -866,6 +1082,7 @@ export const ChatPage: React.FC = () => {
 
   // Load existing transcript for a session id and map them into message bubbles
   async function loadThreadHistory(sid: string) {
+    setThreadLoading(true);
     try {
       const thread = await wsFirst<any>('thread.get', { id: sid });
       const updatesArr: any[] = Array.isArray(thread?.updates) ? thread.updates : [];
@@ -918,7 +1135,7 @@ export const ChatPage: React.FC = () => {
       // Reset typing state and active tool-call tracking when switching threads
       try { setIsTyping(false); } catch {}
       try { activeToolCallsRef.current = {}; } catch {}
-      try { setActiveThreadId(sid); localStorage.setItem('chat:activeThreadId', sid); } catch {}
+      try { setActiveThreadId(sid); localStorage.setItem(`chat:activeThreadId:${agentId}`, sid); } catch {}
       for (const raw of filtered) {
         try {
           const nu = normalizeUpdateShape(raw);
@@ -934,11 +1151,42 @@ export const ChatPage: React.FC = () => {
       }
     } catch (e) {
       try { console.warn('[chat] failed loading thread history', (e as any)?.message || String(e)); } catch {}
+    } finally {
+      setThreadLoading(false);
     }
   }
 
   return (
     <div className="flex flex-col h-[100svh] md:h-[100vh] overflow-hidden">
+      {/* Connection Progress Bar */}
+      {connecting && (
+        <div className="border-b border-border bg-muted/20 p-2 flex-none">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+              <span className="text-xs text-muted-foreground">
+                {connectionPhase === 'starting' && 'Starting agent...'}
+                {connectionPhase === 'initialized' && 'Agent initialized...'}
+                {connectionPhase === 'session' && 'Creating session...'}
+                {connectionPhase === 'models' && 'Loading models...'}
+                {connectionPhase === 'idle' && 'Connecting...'}
+              </span>
+            </div>
+            <div className="flex-1 bg-muted rounded-full h-1">
+              <div 
+                className="bg-primary h-1 rounded-full transition-all duration-500"
+                style={{ 
+                  width: connectionPhase === 'starting' ? '25%' : 
+                         connectionPhase === 'initialized' ? '50%' : 
+                         connectionPhase === 'session' ? '75%' : 
+                         connectionPhase === 'models' ? '90%' : '10%' 
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header (hidden on mobile to save space; global app header remains) */}
       <div className="hidden sm:flex border-b border-border p-2 items-center justify-between gap-2 flex-none">
         {/* Left: thread name (keep minimal on mobile) */}
@@ -964,7 +1212,6 @@ export const ChatPage: React.FC = () => {
                 {currentModelId ? `Model: ${currentModelId}` : 'Model'}
               </button>
             )}
-            <div className="text-xs text-muted-foreground">{connecting ? 'Connecting…' : (isConnected ? 'Connected' : 'Idle')}</div>
           </div>
           {/* Mobile: overflow menu */}
           <button
@@ -979,6 +1226,14 @@ export const ChatPage: React.FC = () => {
 
       {/* Messages */}
       <div className="flex-1 min-h-0 overflow-y-auto p-2 sm:p-3 space-y-2 sm:space-y-2 pb-12 sm:pb-0">
+        {threadLoading && (
+          <div className="flex items-center justify-center py-8">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <div className="w-4 h-4 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin" />
+              <span className="text-sm">Loading conversation...</span>
+            </div>
+          </div>
+        )}
         {(() => {
           const nodes: React.ReactNode[] = [];
           for (let i = 0; i < messages.length; ) {
@@ -1009,7 +1264,7 @@ export const ChatPage: React.FC = () => {
                     open={toolsGroupOpen || running}
                     onOpenChange={(o) => {
                       setToolsGroupOpen(o);
-                      try { const key = activeThreadId ? `chatToolsGroupOpen:${activeThreadId}` : 'chatToolsGroupOpen'; localStorage.setItem(key, o ? '1' : '0'); } catch {}
+                      try { const key = activeThreadId ? `chatToolsGroupOpen:${agentId}:${activeThreadId}` : `chatToolsGroupOpen:${agentId}`; localStorage.setItem(key, o ? '1' : '0'); } catch {}
                     }}
                     openMap={openToolMap}
                     onItemOpenChange={handleToolOpenChange}

@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { TunnelForm } from '../components/tunnels/TunnelForm';
 import { TunnelList } from '../components/tunnels/TunnelList';
-import { TunnelActions } from '../components/tunnels/TunnelActions';
 import { TunnelInfo, CreateTunnelRequest } from '../types/tunnel';
-import { AlertCircle, CheckCircle, Info } from 'lucide-react';
+import { AlertCircle, CheckCircle, Info, Play, RefreshCw, ChevronDown, ChevronRight } from 'lucide-react';
 import { useToast } from '../components/ui/toast';
 import useConfirm from '../lib/hooks/useConfirm';
 import { usePullToRefresh } from '../lib/hooks/usePullToRefresh';
@@ -15,9 +14,9 @@ import { useWebSocket } from '../components/WebSocketProvider';
 
 export const TunnelManagerPage: React.FC = () => {
   const [tunnels, setTunnels] = useState<TunnelInfo[]>([]);
-  const [loading, setLoading] = useState(false);
   const [creatingTunnel, setCreatingTunnel] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [listCollapsed, setListCollapsed] = useState<boolean>(false);
   const [notification, setNotification] = useState<{
     type: 'success' | 'error' | 'info';
     message: string;
@@ -25,7 +24,35 @@ export const TunnelManagerPage: React.FC = () => {
   const { show } = useToast();
   const [confirm, ConfirmUI] = useConfirm();
   const containerRef = useRef<HTMLDivElement>(null);
-  const ws = (() => { try { return useWebSocket(); } catch { return null as any; } })();
+  const ws = useWebSocket();
+  const isConnected = ws?.isConnected ?? false;
+
+  type PendingAction = { op: 'create' | 'stop' | 'stopAll' | 'restart'; payload: any; tempId?: string };
+  const [actionQueue, setActionQueue] = useState<PendingAction[]>([]);
+
+  const upsertById = (list: TunnelInfo[], item: TunnelInfo): TunnelInfo[] => {
+    const idx = list.findIndex(t => t.id === item.id);
+    if (idx >= 0) {
+      const next = [...list];
+      next[idx] = item;
+      return next;
+    }
+    return [...list, item];
+  };
+
+  const removeTempFor = (list: TunnelInfo[], real: TunnelInfo): TunnelInfo[] => {
+    return list.filter(t => !(t.pid === 0 && t.url === '' && t.localPort === real.localPort && t.type === real.type));
+  };
+
+  const dedupeList = (list: TunnelInfo[]): TunnelInfo[] => {
+    const map = new Map<string, TunnelInfo>();
+    // Prefer URL when present to collapse duplicates pointing to same public URL
+    for (const t of list) {
+      const key = t.url ? `url:${t.url}` : `id:${t.id}`;
+      map.set(key, t);
+    }
+    return Array.from(map.values());
+  };
 
   // VS Code message handling removed
 
@@ -46,16 +73,39 @@ export const TunnelManagerPage: React.FC = () => {
 
   const handleCreateTunnel = async (request: CreateTunnelRequest) => {
     setCreatingTunnel(true);
+    // Insert optimistic placeholder card (avoid duplicates for same port/type)
+    const tempId = `temp_${Date.now()}_${Math.random().toString(36).slice(2,6)}`;
+    const placeholder: TunnelInfo = {
+      id: tempId,
+      name: request.name,
+      url: '',
+      localPort: request.localPort,
+      pid: 0,
+      status: 'starting',
+      type: request.type,
+      token: (request as any).token,
+      createdAt: new Date(),
+    } as TunnelInfo;
+    setTunnels(prev => {
+      const exists = prev.some(t => t.pid === 0 && t.url === '' && t.localPort === placeholder.localPort && t.type === placeholder.type);
+      return exists ? prev : [...prev, placeholder];
+    });
+
     try {
-      if (!ws) throw new Error('WebSocket not connected');
+      if (!ws || !isConnected) {
+        // Queue for when we reconnect
+        setActionQueue(q => [...q, { op: 'create', payload: request, tempId }]);
+        show({ variant: 'default', title: 'Queued', description: 'Will create tunnel when connection restores' });
+        return;
+      }
       const res = await ws.sendRpc('tunnels', 'create', request);
       const tunnel = res?.tunnel || res?.data || res;
       if (tunnel && tunnel.url) {
-        setTunnels(prev => [...prev, tunnel as TunnelInfo]);
-        setNotification({ type: 'success', message: `Tunnel created successfully! Access at ${tunnel.url}` });
-        show({ variant: 'success', title: 'Tunnel created', description: tunnel.url });
+        // Do not append or notify here; rely on server 'tunnelCreated' event to avoid duplicates
       }
     } catch (e: any) {
+      // Remove optimistic placeholder on error
+      setTunnels(prev => prev.filter(t => t.id !== tempId));
       setNotification({ type: 'error', message: e?.message || 'Failed to create tunnel' });
       show({ variant: 'destructive', title: 'Create failed', description: e?.message });
     } finally {
@@ -74,7 +124,13 @@ export const TunnelManagerPage: React.FC = () => {
     });
     if (!ok) return;
     try {
-      if (!ws) throw new Error('WebSocket not connected');
+      if (!ws || !isConnected) {
+        // Queue and optimistically remove
+        setActionQueue(q => [...q, { op: 'stop', payload: { id: tunnelId } }]);
+        setTunnels(prev => prev.filter(t => t.id !== tunnelId));
+        show({ variant: 'default', title: 'Queued', description: 'Stop will be sent when reconnected' });
+        return;
+      }
       await ws.sendRpc('tunnels', 'stop', { id: tunnelId });
       // rely on broadcast; optimistically update
       setTunnels(prev => prev.filter(t => t.id !== tunnelId));
@@ -84,34 +140,15 @@ export const TunnelManagerPage: React.FC = () => {
     }
   };
 
-  const handleStopAll = async () => {
-    const running = tunnels.filter(t => t.status === 'running').length;
-    if (running > 0) {
-      const ok = await confirm({
-        title: 'Stop all tunnels?',
-        description: `This will stop ${running} running tunnel${running === 1 ? '' : 's'} and close their URLs.`,
-        confirmLabel: 'Stop All',
-        cancelLabel: 'Cancel',
-        confirmVariant: 'destructive',
-      });
-      if (!ok) return;
-    }
-    setLoading(true);
-    try {
-      if (!ws) throw new Error('WebSocket not connected');
-      await ws.sendRpc('tunnels', 'stopAll');
-      setTunnels([]);
-    } catch (e: any) {
-      setNotification({ type: 'error', message: e?.message || 'Failed to stop tunnels' });
-      show({ variant: 'destructive', title: 'Stop all failed', description: e?.message });
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleRestartTunnel = async (tunnelId: string) => {
     try {
-      if (!ws) throw new Error('WebSocket not connected');
+      if (!ws || !isConnected) {
+        setActionQueue(q => [...q, { op: 'restart', payload: { id: tunnelId } }]);
+        // Optimistically mark as starting
+        setTunnels(prev => prev.map(t => t.id === tunnelId ? { ...t, status: 'starting' } as TunnelInfo : t));
+        show({ variant: 'default', title: 'Queued', description: 'Restart will be sent when reconnected' });
+        return;
+      }
       await ws.sendRpc('tunnels', 'restart', { id: tunnelId });
       show({ variant: 'default', title: 'Restart requested' });
     } catch (e: any) {
@@ -133,7 +170,7 @@ export const TunnelManagerPage: React.FC = () => {
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      if (!ws) throw new Error('WebSocket not connected');
+      if (!ws || !isConnected) throw new Error('WebSocket not connected');
       const res = await ws.sendRpc('tunnels', 'list');
       const tunnelsResp = res?.tunnels || res?.data?.tunnels || res;
       if (Array.isArray(tunnelsResp)) setTunnels(tunnelsResp as TunnelInfo[]);
@@ -156,29 +193,49 @@ export const TunnelManagerPage: React.FC = () => {
       switch (type) {
         case 'tunnelCreated':
           if (msg.tunnel) {
-            setTunnels(prev => [...prev, msg.tunnel]);
-            setNotification({ type: 'success', message: `Tunnel created successfully! Access at ${msg.tunnel.url}` });
+            setTunnels(prev => dedupeList(upsertById(removeTempFor(prev, msg.tunnel), msg.tunnel as TunnelInfo)));
+            // Use toast only; avoid page-level notification duplication
             show({ variant: 'success', title: 'Tunnel created', description: msg.tunnel.url });
           }
           break;
         case 'tunnelStopped':
           if (msg.tunnelId) {
             setTunnels(prev => prev.filter(t => t.id !== msg.tunnelId));
-            setNotification({ type: 'success', message: 'Tunnel stopped successfully.' });
+            // Use toast only
             show({ variant: 'default', title: 'Tunnel stopped' });
           }
           break;
         case 'tunnelsUpdated':
-          if (Array.isArray(msg.tunnels)) setTunnels(msg.tunnels);
+          if (Array.isArray(msg.tunnels)) setTunnels(dedupeList(msg.tunnels as TunnelInfo[]));
           break;
         case 'tunnelError':
-          setNotification({ type: 'error', message: msg.error || 'An error occurred with the tunnel.' });
+          // Use toast only for errors to keep UI consistent
           show({ variant: 'destructive', title: 'Tunnel error', description: msg.error });
           break;
       }
     });
     return () => { try { unsub?.(); } catch {} };
   }, [ws]);
+
+  // Flush queued actions when connection is restored
+  const prevConnectedRef = useRef<boolean>(isConnected);
+  useEffect(() => {
+    if (!ws) return;
+    const wasConnected = prevConnectedRef.current;
+    if (!wasConnected && isConnected && actionQueue.length > 0) {
+      (async () => {
+        for (const a of actionQueue) {
+          try {
+            await ws.sendRpc('tunnels', a.op, a.payload);
+          } catch (e: any) {
+            show({ variant: 'destructive', title: 'Queued action failed', description: e?.message });
+          }
+        }
+        setActionQueue([]);
+      })();
+    }
+    prevConnectedRef.current = isConnected;
+  }, [isConnected]);
 
   // Auto-hide notifications
   useEffect(() => {
@@ -189,7 +246,7 @@ export const TunnelManagerPage: React.FC = () => {
   }, [notification]);
 
   return (
-    <div ref={containerRef} className="space-y-6 overflow-y-auto pb-24 sm:pb-0">
+    <div ref={containerRef} className="space-y-4 overflow-y-auto pb-24 sm:pb-0">
       {/* Notification */}
       {notification && (
         <div className={`p-4 rounded-lg flex items-center gap-3 ${
@@ -204,64 +261,65 @@ export const TunnelManagerPage: React.FC = () => {
         </div>
       )}
 
-      {/* Tunnel Actions */}
-      <TunnelActions
-        tunnels={tunnels}
-        onRefresh={handleRefresh}
-        onStopAll={handleStopAll}
-        loading={loading || refreshing}
-        disabled={creatingTunnel}
-      />
+      {/* Offline Banner */}
+      {!isConnected && (
+        <div className="p-3 rounded-lg bg-yellow-50 text-yellow-800 border border-yellow-200">
+          You are offline. Actions will be queued and sent when reconnected.
+        </div>
+      )}
+
+      {/* Summary Header */}
+      <div className="flex items-center justify-between bg-card border border-border rounded-lg p-3 neo:rounded-none neo:border-[3px]">
+        <button
+          type="button"
+          onClick={() => setListCollapsed(c => !c)}
+          className="inline-flex items-center gap-2 text-sm font-medium text-foreground hover:text-primary"
+          aria-expanded={!listCollapsed}
+        >
+          {listCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          <span>Active Tunnels</span>
+          <span className="ml-2 inline-flex items-center gap-2 text-xs text-muted-foreground">
+            <span>Total: {tunnels.length}</span>
+            <span>Running: {tunnels.filter(t => t.status === 'running').length}</span>
+            <span>Starting: {tunnels.filter(t => t.status === 'starting').length}</span>
+            <span>Errors: {tunnels.filter(t => t.status === 'error').length}</span>
+          </span>
+        </button>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={handleRefresh}
+            title="Refresh"
+            disabled={refreshing}
+            className="p-2 rounded hover:bg-muted disabled:opacity-50"
+            aria-label="Refresh"
+          >
+            <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+          </button>
+          
+        </div>
+      </div>
 
       {/* Create Tunnel Form */}
       <TunnelForm
         onCreateTunnel={handleCreateTunnel}
         loading={creatingTunnel}
-        disabled={loading || refreshing}
+        disabled={refreshing}
       />
 
-      {/* Active Tunnels List */}
-      <div className="space-y-4 neo:divide-y-[3px] neo:divide-border">
-        <h3 className="text-lg font-semibold text-foreground">Active Tunnels</h3>
-      <TunnelList
-        tunnels={tunnels}
-        onStopTunnel={handleStopTunnel}
-        onRestartTunnel={handleRestartTunnel}
-        onStartQuickTunnel={handleStartQuickTunnel}
-        loading={refreshing}
-      />
-
-      <ConfirmUI />
-      </div>
-
-      {/* Status Summary */}
-      <div className="bg-card p-4 rounded-lg shadow-sm border border-border neo:rounded-none neo:border-[3px] neo:shadow-[8px_8px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[8px_8px_0_0_rgba(255,255,255,0.9)]">
-        <h4 className="text-sm font-medium text-foreground mb-2">Status Summary</h4>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-          <div>
-            <span className="text-gray-600">Total:</span>
-            <span className="ml-2 font-medium">{tunnels.length}</span>
-          </div>
-          <div>
-            <span className="text-gray-600">Running:</span>
-            <span className="ml-2 font-medium text-green-600">
-              {tunnels.filter(t => t.status === 'running').length}
-            </span>
-          </div>
-          <div>
-            <span className="text-gray-600">Starting:</span>
-            <span className="ml-2 font-medium text-blue-600">
-              {tunnels.filter(t => t.status === 'starting').length}
-            </span>
-          </div>
-          <div>
-            <span className="text-gray-600">Errors:</span>
-            <span className="ml-2 font-medium text-red-600">
-              {tunnels.filter(t => t.status === 'error').length}
-            </span>
-          </div>
+      {/* Active Tunnels List (collapsible) */}
+      {!listCollapsed && (
+        <div className="space-y-4">
+          <TunnelList
+            tunnels={tunnels}
+            onStopTunnel={handleStopTunnel}
+            onRestartTunnel={handleRestartTunnel}
+            onStartQuickTunnel={handleStartQuickTunnel}
+            loading={refreshing}
+          />
+          <ConfirmUI />
         </div>
-      </div>
+      )}
     </div>
   );
 };

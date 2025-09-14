@@ -28,6 +28,25 @@ export const TunnelList: React.FC<TunnelListProps> = ({
   const { show } = useToast()
   const [qr, setQr] = React.useState<{ open: boolean; url: string }>({ open: false, url: '' })
 
+  // Compute sorted list early to keep hooks order consistent across renders
+  const sorted = React.useMemo(() => {
+    const order: Record<TunnelInfo['status'], number> = {
+      running: 0,
+      starting: 1,
+      error: 2,
+      stopping: 3,
+      stopped: 4,
+    }
+    return [...tunnels].sort((a, b) => {
+      const sa = order[a.status] ?? 99
+      const sb = order[b.status] ?? 99
+      if (sa !== sb) return sa - sb
+      const ta = new Date(a.createdAt as any).getTime()
+      const tb = new Date(b.createdAt as any).getTime()
+      return tb - ta
+    })
+  }, [tunnels])
+
   const copy = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text)
@@ -79,33 +98,12 @@ export const TunnelList: React.FC<TunnelListProps> = ({
           </div>
           <h3 className="text-lg font-medium text-gray-900 mb-2">No Active Tunnels</h3>
           <p className="text-gray-600">Create your first tunnel to get started with remote access.</p>
-          {onStartQuickTunnel && (
-            <div className="mt-4">
-              <Button onClick={onStartQuickTunnel} className="px-4 py-2">Start Quick Tunnel</Button>
-            </div>
-          )}
         </CardContent>
       </Card>
     )
   }
 
-  const sorted = React.useMemo(() => {
-    const order: Record<TunnelInfo['status'], number> = {
-      running: 0,
-      starting: 1,
-      error: 2,
-      stopping: 3,
-      stopped: 4,
-    }
-    return [...tunnels].sort((a, b) => {
-      const sa = order[a.status] ?? 99
-      const sb = order[b.status] ?? 99
-      if (sa !== sb) return sa - sb
-      const ta = new Date(a.createdAt as any).getTime()
-      const tb = new Date(b.createdAt as any).getTime()
-      return tb - ta
-    })
-  }, [tunnels])
+  // 'sorted' already computed above to maintain consistent hook order
 
   return (
     <div className="space-y-4">
@@ -121,10 +119,10 @@ export const TunnelList: React.FC<TunnelListProps> = ({
                   <TunnelStatusPill status={tunnel.status} />
                 </div>
 
-                <div className="space-y-2 text-sm text-gray-600">
+                <div className="space-y-2 text-sm text-muted-foreground">
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="shrink-0 font-medium">URL:</span>
-                    <a href={tunnel.url} target="_blank" rel="noopener noreferrer" className="truncate text-blue-600 hover:text-blue-800 flex items-center gap-1">
+                    <a href={tunnel.url} target="_blank" rel="noopener noreferrer" className="truncate text-primary hover:underline flex items-center gap-1">
                       <span className="truncate">{tunnel.url}</span>
                       <ExternalLink className="w-3 h-3 shrink-0" strokeWidth={2.5} />
                     </a>
@@ -145,42 +143,41 @@ export const TunnelList: React.FC<TunnelListProps> = ({
                 </div>
               </div>
 
-              <div className="sm:ml-4 flex items-center gap-2">
-                <Link to="/tunnels/$id" params={{ id: tunnel.id }} className="text-sm underline text-blue-600 hover:text-blue-800">
+              <div className="sm:ml-4 flex items-center gap-1">
+                <Link to="/tunnels/$id" params={{ id: tunnel.id }} className="text-sm text-primary hover:underline">
                   Details
                 </Link>
                 <Tooltip content="Copy URL">
-                  <Button variant="secondary" size="icon" onClick={() => copy(tunnel.url)} aria-label="Copy URL">
+                  <Button variant="ghost" size="icon" onClick={() => copy(tunnel.url)} aria-label="Copy URL">
                     <Copy className="w-4 h-4" strokeWidth={2.5} />
                   </Button>
                 </Tooltip>
                 <Tooltip content="Share">
-                  <Button variant="secondary" size="icon" onClick={() => share(tunnel.url)} aria-label="Share URL">
+                  <Button variant="ghost" size="icon" onClick={() => share(tunnel.url)} aria-label="Share URL">
                     <Share2 className="w-4 h-4" strokeWidth={2.5} />
                   </Button>
                 </Tooltip>
                 <Tooltip content="Show QR">
-                  <Button variant="secondary" size="icon" onClick={() => setQr({ open: true, url: tunnel.url })}>
+                  <Button variant="ghost" size="icon" onClick={() => setQr({ open: true, url: tunnel.url })}>
                     <QrCode className="w-4 h-4" strokeWidth={2.5} />
                   </Button>
                 </Tooltip>
-                <Button
+                <button
                   onClick={() => onStopTunnel(tunnel.id)}
-                  className={cn('px-3 py-2 text-sm', tunnel.status === 'running' ? '' : 'opacity-50 cursor-not-allowed')}
-                  variant="destructive"
+                  className={cn('px-2 py-1 text-sm text-red-600 hover:text-red-700', tunnel.status === 'running' ? '' : 'opacity-50 cursor-not-allowed')}
                   disabled={tunnel.status !== 'running'}
+                  aria-label="Stop Tunnel"
                 >
-                  <StopCircle className="w-4 h-4" strokeWidth={2.5} /> Stop
-                </Button>
+                  <span className="inline-flex items-center gap-1"><StopCircle className="w-4 h-4" strokeWidth={2.5} /> Stop</span>
+                </button>
                 {onRestartTunnel && (
-                  <Button
+                  <button
                     onClick={() => onRestartTunnel(tunnel.id)}
-                    className="px-3 py-2 text-sm"
-                    variant="secondary"
+                    className="px-2 py-1 text-sm text-foreground hover:underline disabled:opacity-50"
                     disabled={tunnel.status === 'starting' || tunnel.status === 'stopping'}
                   >
                     Restart
-                  </Button>
+                  </button>
                 )}
               </div>
             </div>

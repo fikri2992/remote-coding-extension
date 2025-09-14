@@ -5,7 +5,7 @@ import { cn } from '../../lib/utils'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '../ui/card'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
-import { RadioGroup, RadioGroupItem } from '../ui/radio-group'
+// Segmented control implemented inline; radio group not used anymore
 import { Alert, AlertDescription, AlertTitle } from '../ui/alert'
 import { Button } from '../ui/button'
 import { TokenManagerDialog } from './TokenManagerDialog'
@@ -22,6 +22,7 @@ export const TunnelForm: React.FC<TunnelFormProps> = ({ onCreateTunnel, loading 
   const [errors, setErrors] = useState<Partial<Record<keyof CreateTunnelRequest, string>>>({})
   const { tokens } = useTunnelTokens()
   const [tokenDialogOpen, setTokenDialogOpen] = useState(false)
+  const [showInfo, setShowInfo] = useState(false)
 
   useEffect(() => {
     try {
@@ -32,6 +33,13 @@ export const TunnelForm: React.FC<TunnelFormProps> = ({ onCreateTunnel, loading 
       }
     } catch {}
   }, [])
+
+  // When switching to Named and there are no saved tokens, auto-open token manager
+  useEffect(() => {
+    if (formData.type === 'named' && tokens.length === 0) {
+      setTokenDialogOpen(true)
+    }
+  }, [formData.type, tokens.length])
 
   const validateForm = (): boolean => {
     const newErrors: Partial<Record<keyof CreateTunnelRequest, string>> = {}
@@ -60,21 +68,56 @@ export const TunnelForm: React.FC<TunnelFormProps> = ({ onCreateTunnel, loading 
   return (
     <Card className="shadow-sm">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Play className="w-5 h-5 text-blue-600" strokeWidth={2.5} />
-          Create New Tunnel
-        </CardTitle>
+        <div className="flex items-center justify-between gap-2">
+          <CardTitle className="flex items-center gap-2">
+            <Play className="w-5 h-5 text-primary" strokeWidth={2.5} />
+            Create New Tunnel
+          </CardTitle>
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            aria-label={showInfo ? 'Hide info' : 'Show info'}
+            onClick={() => setShowInfo(v => !v)}
+            title={showInfo ? 'Hide info' : 'How it works'}
+          >
+            <Info className="w-4 h-4" />
+          </Button>
+        </div>
         <CardDescription>Expose a local port securely over Cloudflare.</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-5">
-          <div className="space-y-2">
-            <Label>Tunnel Type</Label>
-            <div className="flex flex-wrap gap-2">
-              <RadioGroup value={formData.type} onChange={(v) => handleInputChange('type', v as 'quick' | 'named')}>
-                <RadioGroupItem value="quick">Quick Tunnel</RadioGroupItem>
-                <RadioGroupItem value="named">Named Tunnel</RadioGroupItem>
-              </RadioGroup>
+          <div className="space-y-3">
+            <Label className="mr-4">Tunnel Type</Label>
+            <div className="inline-flex items-center bg-muted/40 border border-border rounded-md overflow-hidden neo:rounded-none neo:border-[3px]">
+              <button
+                type="button"
+                onClick={() => handleInputChange('type', 'quick')}
+                className={cn(
+                  'px-3 py-2 text-sm font-medium transition-colors',
+                  formData.type === 'quick' ? 'bg-primary/10 text-primary' : 'text-foreground hover:bg-muted'
+                )}
+                aria-pressed={formData.type === 'quick'}
+              >
+                Quick
+              </button>
+              <button
+                type="button"
+                onClick={() => handleInputChange('type', 'named')}
+                className={cn(
+                  'px-3 py-2 text-sm font-medium transition-colors border-l border-border',
+                  formData.type === 'named' ? 'bg-primary/10 text-primary' : 'text-foreground hover:bg-muted'
+                )}
+                aria-pressed={formData.type === 'named'}
+              >
+                Named
+              </button>
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {formData.type === 'quick'
+                ? 'Temporary sharable URL that stops when you stop it.'
+                : 'Persistent tunnel using your token.'}
             </div>
           </div>
 
@@ -143,13 +186,9 @@ export const TunnelForm: React.FC<TunnelFormProps> = ({ onCreateTunnel, loading 
           />
 
           <CardFooter className="p-0 hidden sm:flex justify-end">
-            <button
+            <Button
               type="submit"
               disabled={disabled || loading}
-              className={cn(
-                'inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700',
-                disabled || loading ? 'opacity-60 cursor-not-allowed hover:bg-blue-600' : ''
-              )}
               aria-label="Create Tunnel"
             >
               {loading ? (
@@ -163,19 +202,16 @@ export const TunnelForm: React.FC<TunnelFormProps> = ({ onCreateTunnel, loading 
                   Create Tunnel
                 </>
               )}
-            </button>
+            </Button>
           </CardFooter>
 
           <div className="sm:hidden">
             <div className="fixed inset-x-0 bottom-4 px-4 pointer-events-none">
-              <button
+              <Button
                 type="submit"
+                size="lg"
+                className="pointer-events-auto w-full"
                 disabled={disabled || loading}
-                className={cn(
-                  'pointer-events-auto w-full inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-3 text-base font-semibold text-white shadow-lg transition-colors hover:bg-blue-700',
-                  'neo:rounded-none neo:border-[3px] neo:border-border neo:shadow-[6px_6px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[6px_6px_0_0_rgba(255,255,255,0.9)]',
-                  disabled || loading ? 'opacity-60 cursor-not-allowed hover:bg-blue-600' : ''
-                )}
                 aria-label="Create Tunnel"
               >
                 {loading ? (
@@ -189,21 +225,23 @@ export const TunnelForm: React.FC<TunnelFormProps> = ({ onCreateTunnel, loading 
                     Create Tunnel
                   </>
                 )}
-              </button>
+              </Button>
             </div>
           </div>
         </form>
 
-        <Alert variant="info" className="mt-6">
-          <AlertTitle className="flex items-center gap-2"><Info className="w-4 h-4" strokeWidth={2.5} /> How it works</AlertTitle>
-          <AlertDescription>
-            <ul className="list-disc space-y-1 pl-5">
-              <li><strong>Quick Tunnel</strong> creates a temporary tunnel that expires when stopped.</li>
-              <li><strong>Named Tunnel</strong> uses a pre-configured tunnel with a token for persistent access.</li>
-              <li>The tunnel exposes your local app running on the specified port.</li>
-            </ul>
-          </AlertDescription>
-        </Alert>
+        {showInfo && (
+          <Alert variant="info" className="mt-6">
+            <AlertTitle className="flex items-center gap-2"><Info className="w-4 h-4" strokeWidth={2.5} /> How it works</AlertTitle>
+            <AlertDescription>
+              <ul className="list-disc space-y-1 pl-5">
+                <li><strong>Quick Tunnel</strong> creates a temporary tunnel that expires when stopped.</li>
+                <li><strong>Named Tunnel</strong> uses a pre-configured tunnel with a token for persistent access.</li>
+                <li>The tunnel exposes your local app running on the specified port.</li>
+              </ul>
+            </AlertDescription>
+          </Alert>
+        )}
       </CardContent>
     </Card>
   )

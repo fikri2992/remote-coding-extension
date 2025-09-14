@@ -3,6 +3,7 @@ import { Dialog, DialogHeader, DialogTitle, DialogFooter } from '../ui/dialog'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { useTunnelTokens, type TunnelToken } from '../../lib/hooks/useTunnelTokens'
+import { useToast } from '../ui/toast'
 
 interface TokenManagerDialogProps {
   open: boolean
@@ -12,21 +13,27 @@ interface TokenManagerDialogProps {
 
 export const TokenManagerDialog: React.FC<TokenManagerDialogProps> = ({ open, onClose, onSelectToken }) => {
   const { tokens, addToken, removeToken } = useTunnelTokens()
+  const { show } = useToast()
   const [label, setLabel] = React.useState('')
   const [value, setValue] = React.useState('')
   const [error, setError] = React.useState<string>('')
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     const trimmed = value.trim()
     if (!trimmed) {
       setError('Token value is required')
       return
     }
-    const t = addToken(label.trim() || 'Token', trimmed)
-    setLabel('')
-    setValue('')
-    setError('')
-    if (onSelectToken) onSelectToken(t)
+    try {
+      const t = await addToken(label.trim() || 'Token', trimmed)
+      setLabel('')
+      setValue('')
+      setError('')
+      if (onSelectToken && t) onSelectToken(t)
+      show({ variant: 'success', title: 'Token added' })
+    } catch (e: any) {
+      show({ variant: 'destructive', title: 'Add token failed', description: e?.message })
+    }
   }
 
   const masked = (v: string) => {
@@ -77,7 +84,9 @@ export const TokenManagerDialog: React.FC<TokenManagerDialogProps> = ({ open, on
                     {onSelectToken && (
                       <Button size="sm" variant="secondary" onClick={() => onSelectToken(t)}>Use</Button>
                     )}
-                    <Button size="sm" variant="destructive" onClick={() => removeToken(t.id)}>Delete</Button>
+                    <Button size="sm" variant="destructive" onClick={async () => {
+                      try { await removeToken(t.id); show({ variant: 'default', title: 'Token deleted' }) } catch (e: any) { show({ variant: 'destructive', title: 'Delete failed', description: e?.message }) }
+                    }}>Delete</Button>
                   </div>
                 </li>
               ))}

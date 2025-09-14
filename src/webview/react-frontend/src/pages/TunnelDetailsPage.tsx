@@ -15,7 +15,8 @@ export const TunnelDetailsPage: React.FC = () => {
   const [tunnel, setTunnel] = React.useState<TunnelInfo | null>(null)
   const [loading, setLoading] = React.useState(true)
   const { show } = useToast()
-  const ws = (() => { try { return useWebSocket() } catch { return null as any } })()
+  const ws = useWebSocket()
+  const [tab, setTab] = React.useState<'overview' | 'logs' | 'diagnostics'>('overview')
 
   React.useEffect(() => {
     let mounted = true
@@ -101,38 +102,73 @@ export const TunnelDetailsPage: React.FC = () => {
       )}
       {tunnel && (
         <div className="bg-card p-6 rounded-lg border border-border space-y-4">
-          <div className="flex items-center gap-3">
-            <h2 className="text-xl font-semibold truncate">{tunnel.name || `Tunnel ${tunnel.id.slice(-4)}`}</h2>
-            <TunnelStatusPill status={tunnel.status} />
-          </div>
-          <div className="text-sm space-y-2">
-            <div className="flex items-center gap-2">
-              <span className="font-medium">URL:</span>
-              <a href={tunnel.url} target="_blank" rel="noopener noreferrer" className="truncate text-blue-600 hover:text-blue-800 inline-flex items-center gap-1">
-                <span className="truncate max-w-[60vw] sm:max-w-none">{tunnel.url}</span>
-                <ExternalLink className="w-3 h-3" />
-              </a>
+          {/* Header with tabs */}
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <h2 className="text-xl font-semibold truncate">{tunnel.name || `Tunnel ${tunnel.id.slice(-4)}`}</h2>
+              <TunnelStatusPill status={tunnel.status} />
             </div>
-            <div className="flex flex-wrap gap-4">
-              <span><span className="font-medium">Local Port:</span> {tunnel.localPort}</span>
-              <span><span className="font-medium">Type:</span> {tunnel.type}</span>
-              <span><span className="font-medium">PID:</span> {tunnel.pid}</span>
+            <div className="inline-flex items-center rounded-md overflow-hidden border border-border neo:rounded-none neo:border-[2px]">
+              <button
+                type="button"
+                className={`px-3 py-1.5 text-sm ${tab === 'overview' ? 'bg-primary/10 text-primary' : 'hover:bg-muted'}`}
+                onClick={() => setTab('overview')}
+              >Overview</button>
+              <button
+                type="button"
+                className={`px-3 py-1.5 text-sm border-l border-border ${tab === 'logs' ? 'bg-primary/10 text-primary' : 'hover:bg-muted'}`}
+                onClick={() => setTab('logs')}
+              >Logs</button>
+              <button
+                type="button"
+                className={`px-3 py-1.5 text-sm border-l border-border ${tab === 'diagnostics' ? 'bg-primary/10 text-primary' : 'hover:bg-muted'}`}
+                onClick={() => setTab('diagnostics')}
+              >Diagnostics</button>
             </div>
-            <div>
-              <span className="font-medium">Created:</span> {new Date(tunnel.createdAt as any).toLocaleString()}
+          </div>
+
+          {/* Overview */}
+          {tab === 'overview' && (
+            <div className="space-y-3">
+              <div className="text-sm space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium">URL:</span>
+                  <a href={tunnel.url} target="_blank" rel="noopener noreferrer" className="truncate text-blue-600 hover:text-blue-800 inline-flex items-center gap-1">
+                    <span className="truncate max-w-[60vw] sm:max-w-none">{tunnel.url}</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+                <div className="flex flex-wrap gap-4">
+                  <span><span className="font-medium">Local Port:</span> {tunnel.localPort}</span>
+                  <span><span className="font-medium">Type:</span> {tunnel.type}</span>
+                  <span><span className="font-medium">PID:</span> {tunnel.pid}</span>
+                </div>
+                <div>
+                  <span className="font-medium">Created:</span> {new Date(tunnel.createdAt as any).toLocaleString()}
+                </div>
+                {tunnel.error && <div className="text-red-600">{tunnel.error}</div>}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="secondary" onClick={() => copy(tunnel.url)}><Copy className="w-4 h-4 mr-2" /> Copy URL</Button>
+                <Button variant="secondary" onClick={() => share(tunnel.url)}><Share2 className="w-4 h-4 mr-2" /> Share</Button>
+                <Button variant="destructive" onClick={stop}>Stop</Button>
+              </div>
             </div>
-            {tunnel.error && <div className="text-red-600">{tunnel.error}</div>}
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button variant="secondary" onClick={() => copy(tunnel.url)}><Copy className="w-4 h-4 mr-2" /> Copy URL</Button>
-            <Button variant="secondary" onClick={() => share(tunnel.url)}><Share2 className="w-4 h-4 mr-2" /> Share</Button>
-            <Button variant="destructive" onClick={stop}>Stop</Button>
-          </div>
+          )}
+
+          {/* Logs */}
+          {tab === 'logs' && (
+            <TunnelLogs tunnelId={id} />
+          )}
+
+          {/* Diagnostics (placeholder) */}
+          {tab === 'diagnostics' && (
+            <div className="text-sm text-muted-foreground">
+              Diagnostics coming soon.
+            </div>
+          )}
         </div>
       )}
-
-      {/* Logs */}
-      <TunnelLogs tunnelId={id} />
     </div>
   )
 }

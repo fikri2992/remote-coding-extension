@@ -16,6 +16,67 @@ import {
 } from '../server/CloudflaredManager';
 import fs from 'fs/promises';
 import path from 'path';
+import os from 'os';
+
+// Token storage file path
+const tokenStoragePath = path.join(os.homedir(), '.kiro-remote', 'tunnel-tokens.json');
+
+// Load tunnel tokens from storage
+async function loadTunnelTokens(): Promise<any[]> {
+  try {
+    const content = await fs.readFile(tokenStoragePath, 'utf-8');
+    return JSON.parse(content);
+  } catch (error: unknown) {
+    const err = error as any;
+    if (err && err.code === 'ENOENT') {
+      return [];
+    }
+    throw err;
+  }
+}
+
+async function ensureTokenDir() {
+  try {
+    await fs.mkdir(path.dirname(tokenStoragePath), { recursive: true });
+  } catch {}
+}
+
+// Add a tunnel token to storage
+async function addTunnelToken(label: string, value: string): Promise<any> {
+  const tokens = await loadTunnelTokens();
+  const newToken = { id: Date.now().toString(), label, value, createdAt: new Date().toISOString() };
+  tokens.push(newToken);
+  await ensureTokenDir();
+  await fs.writeFile(tokenStoragePath, JSON.stringify(tokens, null, 2));
+  return newToken;
+}
+
+// Remove a tunnel token from storage
+async function removeTunnelToken(id: string): Promise<boolean> {
+  const tokens = await loadTunnelTokens();
+  const index = tokens.findIndex((token) => token.id === id);
+  if (index === -1) {
+    return false;
+  }
+  tokens.splice(index, 1);
+  await ensureTokenDir();
+  await fs.writeFile(tokenStoragePath, JSON.stringify(tokens, null, 2));
+  return true;
+}
+
+// Update a tunnel token in storage
+async function updateTunnelToken(id: string, updates: any): Promise<any | null> {
+  const tokens = await loadTunnelTokens();
+  const index = tokens.findIndex((token) => token.id === id);
+  if (index === -1) {
+    return null;
+  }
+  const updatedToken = { ...tokens[index], ...updates };
+  tokens[index] = updatedToken;
+  await ensureTokenDir();
+  await fs.writeFile(tokenStoragePath, JSON.stringify(tokens, null, 2));
+  return updatedToken;
+}
 
 export interface CliConfig {
   version: string;
@@ -334,6 +395,32 @@ export class CliServer {
                   return { success: true, data: cfGetActiveTunnels() };
                 case 'status':
                   return { success: true, data: await cfGetTunnelsSummary() };
+                // Token persistence ops
+                case 'tokens.list': {
+                  const tokens = await loadTunnelTokens();
+                  return { success: true, data: tokens };
+                }
+                case 'tokens.add': {
+                  const label = typeof body.label === 'string' ? body.label.trim() : '';
+                  const value = typeof body.value === 'string' ? body.value.trim() : '';
+                  if (!value) return { success: false, error: 'value is required' };
+                  const t = await addTunnelToken(label || 'Token', value);
+                  return { success: true, data: t };
+                }
+                case 'tokens.remove': {
+                  const id = typeof body.id === 'string' ? body.id : '';
+                  if (!id) return { success: false, error: 'id is required' };
+                  const ok = await removeTunnelToken(id);
+                  return { success: true, data: { ok } };
+                }
+                case 'tokens.update': {
+                  const id = typeof body.id === 'string' ? body.id : '';
+                  const label = typeof body.label === 'string' ? body.label.trim() : undefined;
+                  const value = typeof body.value === 'string' ? body.value.trim() : undefined;
+                  if (!id) return { success: false, error: 'id is required' };
+                  const t = await updateTunnelToken(id, { label, value });
+                  return t ? { success: true, data: t } : { success: false, error: 'not found' };
+                }
                 case 'create': {
                   const localPort = Number(body.localPort || 0);
                   if (!localPort || Number.isNaN(localPort)) {

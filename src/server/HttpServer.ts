@@ -465,11 +465,11 @@ export class HttpServer {
             reject(new Error(`Failed to start HTTP server after ${maxAttempts} attempts. Ports ${this.config.httpPort}-${currentPort - 1} are all in use.`));
             return;
         }
-
-        this.server!.listen(currentPort, 'localhost', () => {
+        const host = this.config.host || 'localhost';
+        this.server!.listen(currentPort, host as any, () => {
             // Update config with the actual port used
             this.config.httpPort = currentPort;
-            console.log(`HTTP server started on http://localhost:${currentPort}`);
+            console.log(`HTTP server started on http://${host}:${currentPort}`);
             resolve();
         });
 

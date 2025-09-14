@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ChevronDown, ChevronRight, Key, Shield } from 'lucide-react';
+import { ChevronDown, ChevronRight, Key, Shield, AlertTriangle } from 'lucide-react';
 import { useToast } from '../components/ui/toast';
 import { useWebSocket } from '../components/WebSocketProvider';
 
@@ -62,6 +62,11 @@ const SettingsPage: React.FC = () => {
   const [geminiCollapsed, setGeminiCollapsed] = useState<boolean>(false);
   const [claudeApiKey, setClaudeApiKey] = useState<string>('');
   const [geminiApiKey, setGeminiApiKey] = useState<string>('');
+  // Confirmation dialog state
+  const [showConfirmDialog, setShowConfirmDialog] = useState<boolean>(false);
+  const [confirmAction, setConfirmAction] = useState<(() => Promise<void>) | null>(null);
+  const [confirmTitle, setConfirmTitle] = useState<string>('');
+  const [confirmApiType, setConfirmApiType] = useState<string>('');
   // Autostart
   const [autostartCollapsed, setAutostartCollapsed] = useState<boolean>(false);
   const [autostartEnabled, setAutostartEnabled] = useState<boolean>(true);
@@ -169,10 +174,17 @@ const SettingsPage: React.FC = () => {
   };
 
   const saveClaude = async () => {
-    await mergeAndSave({
-      integrations: { claudeCodeACP: { apiKey: claudeApiKey } },
-      env: { ...(config?.env || {}), ANTHROPIC_API_KEY: claudeApiKey }
-    });
+    const actualSave = async () => {
+      await mergeAndSave({
+        integrations: { claudeCodeACP: { apiKey: claudeApiKey } },
+        env: { ...(config?.env || {}), ANTHROPIC_API_KEY: claudeApiKey }
+      });
+    };
+    
+    setConfirmTitle('Save Claude API Key');
+    setConfirmApiType('ANTHROPIC_API_KEY');
+    setConfirmAction(() => actualSave);
+    setShowConfirmDialog(true);
   };
 
   const resetClaude = () => {
@@ -181,10 +193,17 @@ const SettingsPage: React.FC = () => {
   };
 
   const saveGemini = async () => {
-    await mergeAndSave({
-      integrations: { geminiCli: { apiKey: geminiApiKey } },
-      env: { ...(config?.env || {}), GEMINI_API_KEY: geminiApiKey }
-    });
+    const actualSave = async () => {
+      await mergeAndSave({
+        integrations: { geminiCli: { apiKey: geminiApiKey } },
+        env: { ...(config?.env || {}), GEMINI_API_KEY: geminiApiKey }
+      });
+    };
+    
+    setConfirmTitle('Save Gemini API Key');
+    setConfirmApiType('GEMINI_API_KEY');
+    setConfirmAction(() => actualSave);
+    setShowConfirmDialog(true);
   };
 
   const resetGemini = () => {
@@ -207,8 +226,88 @@ const SettingsPage: React.FC = () => {
     setAutostartAgents(extra ? extra.split(/[,;\s]+/).filter(Boolean) : []);
   };
 
+  const handleConfirmSave = async () => {
+    if (confirmAction) {
+      try {
+        await confirmAction();
+      } catch (error) {
+        // Error already handled in mergeAndSave
+      }
+    }
+    setShowConfirmDialog(false);
+    setConfirmAction(null);
+  };
+
+  const handleCancelSave = () => {
+    setShowConfirmDialog(false);
+    setConfirmAction(null);
+  };
+
   return (
     <div className="space-y-6">
+      {/* Confirmation Dialog */}
+      {showConfirmDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-card rounded-lg border border-border p-6 max-w-md mx-4 neo:rounded-none neo:border-[3px] neo:shadow-[8px_8px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[8px_8px_0_0_rgba(255,255,255,0.9)]">
+            <div className="flex items-center gap-3 mb-4">
+              <AlertTriangle className="w-6 h-6 text-yellow-500" />
+              <h3 className="text-lg font-semibold">{confirmTitle}</h3>
+            </div>
+            
+            <div className="space-y-3 mb-6">
+              <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md p-3">
+                <p className="text-sm text-yellow-800 dark:text-yellow-200 font-medium mb-2">
+                  ⚠️ Security Warning
+                </p>
+                <p className="text-sm text-yellow-700 dark:text-yellow-300">
+                  Your API key will be stored in <code>/.on-the-go/config.json</code>. This file contains sensitive information.
+                </p>
+              </div>
+              
+              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md p-3">
+                <p className="text-sm text-blue-800 dark:text-blue-200 font-medium mb-2">
+                  💡 Recommended: Use Environment Variables
+                </p>
+                <p className="text-sm text-blue-700 dark:text-blue-300 mb-2">
+                  For better security, set your API key as an environment variable instead:
+                </p>
+                <code className="block text-xs bg-blue-100 dark:bg-blue-900/40 p-2 rounded border text-blue-900 dark:text-blue-100">
+                  export {confirmApiType}="your-api-key-here"
+                </code>
+              </div>
+              
+              <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md p-3">
+                <p className="text-sm text-red-800 dark:text-red-200 font-medium mb-1">
+                  🔒 Important: Add to .gitignore
+                </p>
+                <p className="text-sm text-red-700 dark:text-red-300">
+                  Make sure <code>.on-the-go/</code> is in your <code>.gitignore</code> file to prevent committing API keys.
+                </p>
+              </div>
+            </div>
+            
+            <p className="text-sm text-muted-foreground mb-4">
+              Are you sure you want to save this API key to the config file?
+            </p>
+            
+            <div className="flex items-center gap-3 justify-end">
+              <button
+                onClick={handleCancelSave}
+                className="rounded-md border border-border px-4 py-2 text-sm hover:bg-muted neo:rounded-none neo:border-[3px] neo:shadow-[4px_4px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[4px_4px_0_0_rgba(255,255,255,0.9)]"
+              >
+                No, Cancel
+              </button>
+              <button
+                onClick={handleConfirmSave}
+                disabled={loading}
+                className="rounded-md bg-primary px-4 py-2 text-white text-sm hover:bg-primary/90 neo:rounded-none neo:border-[3px] neo:border-border neo:text-primary-foreground neo:shadow-[4px_4px_0_0_rgba(0,0,0,1)] dark:neo:shadow-[4px_4px_0_0_rgba(255,255,255,0.9)]"
+              >
+                Yes, Save API Key
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Autostart */}
       <CollapsibleCard
         title={<span className="inline-flex items-center gap-2">Autostart</span>}

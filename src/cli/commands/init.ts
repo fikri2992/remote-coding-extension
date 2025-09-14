@@ -99,6 +99,13 @@ Created: ${new Date().toISOString()}
         await maybeAuthenticateClaudeAgent();
       }
 
+      // Ensure .on-the-go is ignored by Git and config has default features
+      await ensureOnTheGoGitignore();
+      await ensureConfigHasFeaturesDefault();
+
+      // Offer to init Git repo, or disable Git menu if declined
+      await maybeInitGitOrDisableMenu();
+
       console.log('\n🎉 Setup complete. Next steps:');
       console.log('   • Start the server:   cotg-cli start');
       console.log('   • Open the app at:    http://localhost:3900');
@@ -244,4 +251,86 @@ async function maybeAuthenticateClaudeAgent(): Promise<void> {
   } catch (e: any) {
     console.warn('⚠️  Authentication flow skipped:', e?.message || String(e));
   }
+}
+
+async function ensureOnTheGoGitignore(): Promise<void> {
+  try {
+    const giPath = path.join(process.cwd(), '.gitignore');
+    let content = '';
+    try {
+      content = await fs.readFile(giPath, 'utf-8');
+    } catch (e: any) {
+      if (e?.code !== 'ENOENT') throw e;
+    }
+    const has = content.split(/\r?\n/).some(l => l.trim() === '.on-the-go');
+    if (!has) {
+      const updated = (content ? content.replace(/\s*$/, '\n') : '') + '.on-the-go\n';
+      await fs.writeFile(giPath, updated, 'utf-8');
+      console.log('dY", Added .on-the-go to .gitignore');
+    }
+  } catch (e: any) {
+    console.warn('�s��,?  Could not update .gitignore:', e?.message || String(e));
+  }
+}
+
+async function ensureConfigHasFeaturesDefault(): Promise<void> {
+  try {
+    const cfgPath = path.join(process.cwd(), '.on-the-go', 'config.json');
+    const raw = await fs.readFile(cfgPath, 'utf-8');
+    const cfg = JSON.parse(raw);
+    cfg.features = cfg.features || {};
+    if (typeof cfg.features.gitMenu === 'undefined') {
+      cfg.features.gitMenu = true;
+      cfg.lastModified = new Date().toISOString();
+      await fs.writeFile(cfgPath, JSON.stringify(cfg, null, 2), 'utf-8');
+    }
+  } catch {
+    // ignore
+  }
+}
+
+async function maybeInitGitOrDisableMenu(): Promise<void> {
+  try {
+    const isRepo = fsSync.existsSync(path.join(process.cwd(), '.git'));
+    if (isRepo) {
+      return;
+    }
+    const ok = await askYesNo('No Git repository detected. Initialize one now?', true);
+    if (ok) {
+      const code = await runGitInit();
+      if (code === 0) {
+        console.log('�o. git init completed.');
+      } else {
+        console.warn('�s��,?  git init failed; continuing without Git.');
+      }
+      return;
+    }
+    await setGitMenuFeature(false);
+    console.log('�?-�,?  Git initialization skipped. Git menu disabled in config.');
+  } catch (e: any) {
+    console.warn('�s��,?  Git setup step skipped:', e?.message || String(e));
+  }
+}
+
+async function runGitInit(): Promise<number> {
+  return new Promise((resolve) => {
+    const child = cp.spawn('git', ['init'], { stdio: 'inherit', shell: true });
+    child.on('exit', (code) => resolve(code ?? 0));
+    child.on('error', () => resolve(1));
+  });
+}
+
+async function setGitMenuFeature(enabled: boolean): Promise<void> {
+  try {
+    const cfgPath = path.join(process.cwd(), '.on-the-go', 'config.json');
+    let cfg: any = {};
+    try {
+      const raw = await fs.readFile(cfgPath, 'utf-8');
+      cfg = JSON.parse(raw);
+    } catch {}
+    cfg.features = cfg.features || {};
+    cfg.features.gitMenu = Boolean(enabled);
+    cfg.lastModified = new Date().toISOString();
+    await fs.writeFile(cfgPath, JSON.stringify(cfg, null, 2), 'utf-8');
+  } catch {}
 }

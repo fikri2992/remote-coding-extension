@@ -154,7 +154,7 @@ export class CliServer {
     }
   }
 
-  async start(options: { port?: number; config?: string } = {}) {
+  async start(options: { port?: number; host?: string; config?: string; tunnel?: boolean } = {}) {
     if (this.isRunning) {
       console.log('✅ Server is already running');
       return;
@@ -167,8 +167,9 @@ export class CliServer {
       }
       this.config = await this.loadConfig();
 
-      // Override port if provided
+      // Override port/host if provided
       const port = options.port || this.config.server.port;
+      const host = options.host || this.config.server.host || 'localhost';
 
       console.log('🚀 Starting Kiro Remote server...');
       console.log(`📁 Configuration: ${this.configPath}`);
@@ -177,6 +178,7 @@ export class CliServer {
       // Start unified HTTP server (serves React dist; WS upgrades attach here)
       const serverCfg: ServerConfig = {
         httpPort: port,
+        host,
         autoStartTunnel: false,
       };
       this.webServer = new HttpServer(serverCfg);

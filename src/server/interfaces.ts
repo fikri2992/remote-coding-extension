@@ -14,6 +14,8 @@ export interface TunnelStatus {
 export interface ServerConfig {
     /** HTTP server port */
     httpPort: number;
+    /** Host interface to bind (default 'localhost') */
+    host?: string;
     /** WebSocket server port (optional, defaults to httpPort + 1) */
     websocketPort?: number;
     /** Optional Cloudflare named tunnel to use (fallback to quick tunnel if omitted) */

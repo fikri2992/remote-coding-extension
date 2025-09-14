@@ -4,24 +4,49 @@ import { ProcessManager, ServerProcessInfo } from '../services/ProcessManager';
 import { execSync } from 'child_process';
 import fs from 'fs/promises';
 import path from 'path';
+import os from 'os';
 
 export const startCommand = new Command('start')
   .description('Build React frontend and start the Kiro Remote server')
   .option('-p, --port <number>', 'Port number for the web server', '3900')
+  .option('--host <host>', 'Host to bind the server to', 'localhost')
+  .option('--tunnel', 'Expose server via Cloudflare Tunnel', false)
   .option('-c, --config <path>', 'Path to config file', '.on-the-go/config.json')
   .option('--skip-build', 'Skip React frontend build', false)
   .action(async (options) => {
     const server = new CliServer(options.config);
-    
+
+    const port = parseInt(options.port);
+    const host: string = options.tunnel ? '0.0.0.0' : (options.host || 'localhost');
+
+    const getLanIp = (): string | undefined => {
+      const nets = os.networkInterfaces();
+      for (const name of Object.keys(nets)) {
+        const addrs = nets[name] || [];
+        for (const addr of addrs) {
+          if (!addr.internal && addr.family === 'IPv4') return addr.address;
+        }
+      }
+      return undefined;
+    };
+
+    let tunnelInfo: { id: string; url: string } | null = null;
+
     // Handle graceful shutdown
     const shutdown = async () => {
-      console.log('\n🛑 Shutting down server...');
+      console.log('\nShutting down server...');
       try {
         await server.stop();
+        if (tunnelInfo) {
+          try {
+            const { stopTunnelById } = await import('../../server/CloudflaredManager');
+            await stopTunnelById(tunnelInfo.id);
+          } catch {}
+        }
         await ProcessManager.cleanupProcessFiles();
         process.exit(0);
       } catch (error) {
-        console.error('❌ Error during shutdown:', error);
+        console.error('Error during shutdown:', error);
         process.exit(1);
       }
     };
@@ -33,55 +58,55 @@ export const startCommand = new Command('start')
 
     // Handle uncaught exceptions
     process.on('uncaughtException', (error) => {
-      console.error('❌ Uncaught Exception:', error);
+      console.error('Uncaught Exception:', error);
       shutdown();
     });
 
     process.on('unhandledRejection', (reason, promise) => {
-      console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+      console.error('Unhandled Rejection at:', promise, 'reason:', reason);
       shutdown();
     });
 
     try {
       // Build React frontend unless skipped
       if (!options.skipBuild) {
-        console.log('🔨 Building React frontend...');
+        console.log('Building React frontend...');
         
-        // Check if React frontend directory exists
         const frontendDir = path.join(process.cwd(), 'src', 'webview', 'react-frontend');
         try {
           await fs.access(frontendDir);
         } catch {
-          console.error('❌ React frontend directory not found:', frontendDir);
+          console.error('React frontend directory not found:', frontendDir);
           process.exit(1);
         }
 
-        // Build the React frontend
         try {
           execSync('cd src/webview/react-frontend && npm run build', { 
             stdio: 'inherit',
             cwd: process.cwd()
           });
-          console.log('✅ React frontend built successfully');
+          console.log('React frontend built successfully');
         } catch (error) {
-          console.error('❌ Failed to build React frontend:', error);
+          console.error('Failed to build React frontend:', error);
           process.exit(1);
         }
       } else {
-        console.log('⏭️  Skipping React frontend build');
+        console.log('Skipping React frontend build');
       }
 
       // Start the WebSocket server
-      console.log('🚀 Starting WebSocket server...');
+      console.log('Starting WebSocket server...');
       await server.start({ 
-        port: parseInt(options.port),
-        config: options.config 
+        port,
+        host,
+        config: options.config,
+        tunnel: Boolean(options.tunnel)
       });
       
       // Save server process information for management by other CLI commands
       const processInfo: ServerProcessInfo = {
         pid: process.pid,
-        port: parseInt(options.port),
+        port,
         configPath: options.config,
         startTime: new Date().toISOString(),
         nodeVersion: process.version,
@@ -91,18 +116,32 @@ export const startCommand = new Command('start')
       await ProcessManager.saveServerProcess(processInfo);
       
       console.log('');
-      console.log('🎉 All services started successfully!');
-      console.log(`📱 Web interface: http://localhost:${options.port}`);
-      console.log('🔧 WebSocket: Connected');
-      console.log(`📋 Server PID: ${process.pid}`);
+      console.log('All services started successfully!');
+      const localUrl = `http://localhost:${port}`;
+      console.log(`  Local:   ${localUrl}`);
+      const lanIp = getLanIp();
+      if (lanIp) {
+        console.log(`  Network: http://${lanIp}:${port}`);
+      }
+      if (options.tunnel) {
+        try {
+          const { createTunnel } = await import('../../server/CloudflaredManager');
+          const t = await createTunnel({ localPort: port, type: 'quick' });
+          tunnelInfo = { id: t.id, url: t.url };
+          console.log(`  Tunnel:  ${t.url}`);
+        } catch (e: any) {
+          console.warn('Failed to start Cloudflare Tunnel:', e?.message || String(e));
+        }
+      }
+      console.log('');
+      console.log('WebSocket: Connected');
+      console.log(`Server PID: ${process.pid}`);
       console.log('');
       console.log('Press Ctrl+C to stop all services');
       
-      // Keep the process alive
-      // The server will run until interrupted
-      
     } catch (error) {
-      console.error('❌ Failed to start services:', error);
+      console.error('Failed to start services:', error);
       process.exit(1);
     }
   });
+

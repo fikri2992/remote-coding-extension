@@ -45,6 +45,49 @@ cotg-cli stop
 
 Then open http://localhost:3900 in your browser.
 
+## Tunnel Mode (Cloudflare)
+
+Expose your local server securely over the internet using an ephemeral Cloudflare Tunnel. This also prints LAN and localhost URLs (similar to Vite):
+
+```bash
+# Bind to all interfaces when tunneling, print Local/Network/Tunnel URLs
+cotg-cli start -p 3900 --tunnel
+
+# Optional: specify host (defaults to 0.0.0.0 when --tunnel is used)
+cotg-cli start -p 3900 --tunnel --host 0.0.0.0
+```
+
+Example output:
+
+```
+All services started successfully!
+  Local:   http://localhost:3900
+  Network: http://192.168.1.23:3900
+  Tunnel:  https://abcde12345.trycloudflare.com
+
+WebSocket: Connected
+Server PID: 12345
+```
+
+Notes:
+- Requires `cloudflared` on PATH. If missing, run `cotg-cli init` to install or see Cloudflare Tunnel docs.
+- The tunnel is terminated when you stop the CLI (Ctrl+C).
+
+## Project Init
+
+Initialize the `.on-the-go` folder, ensure `cloudflared` setup, and prepare your workspace:
+
+```bash
+cotg-cli init
+```
+
+What it does:
+- Creates `.on-the-go/` with `config.json`, `prompts/`, and `results/` (if absent).
+- Ensures `.on-the-go` is listed in `.gitignore`.
+- Checks for a Git repository and offers to run `git init`.
+  - If you decline, it updates `.on-the-go/config.json` to disable the Git menu in the UI.
+- Optionally installs `cloudflared` and helps authenticate the ACP agent.
+
 ## CLI Commands
 
 Top-level commands:

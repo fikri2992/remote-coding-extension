@@ -244,6 +244,21 @@ export class CliServer {
         console.warn('[ACP] Autostart failed (non-fatal):', e?.message || String(e));
       }
 
+      // Also autostart Gemini ACP by default (non-fatal on failure)
+      try {
+        const cfgEnvG = ((this.config as any)?.env || {}) as Record<string, string>;
+        const autoStartG = String(cfgEnvG.KIRO_ACP_AUTOSTART ?? '').trim();
+        if (autoStartG !== '0') {
+          const reg = (this.agentRegistry ?? (this.agentRegistry = new AgentRegistry()));
+          try {
+            await reg.get('gemini').connect({});
+            console.log('dY\u000f- ACP agent autostarted: gemini');
+          } catch (err: any) {
+            console.warn('[ACP] Autostart failed for gemini (non-fatal):', err?.message || String(err));
+          }
+        }
+      } catch {}
+
       // Additional agents autostart if configured (multi-agent)
       try {
         const cfgEnv3 = ((this.config as any)?.env || {}) as Record<string, string>;
@@ -277,7 +292,19 @@ export class CliServer {
           }
         });
 
-        // Register git service with WebSocket server
+        // Before registering, ensure feature flag and repo presence
+        try {
+          const features = ((this.config as any)?.features || {}) as { gitMenu?: boolean };
+          const gitFeatureEnabled = (typeof features.gitMenu === 'boolean') ? !!features.gitMenu : true;
+          let repoExists = false;
+          try { const st = await fs.stat(require('path').join(process.cwd(), '.git')); repoExists = !!st; } catch { repoExists = false; }
+          if (!gitFeatureEnabled || !repoExists) {
+            this.gitService = undefined;
+          }
+        } catch {}
+
+        // Register git service with WebSocket server (only if available)
+        if (this.gitService) {
         (this.webSocketServer as any).registerService('git', {
           handle: async (clientId: string, message: any) => {
             if (!this.gitService) {
@@ -392,6 +419,7 @@ export class CliServer {
             // Git service doesn't need special disconnect handling
           }
         });
+        }
 
         // Register filesystem service with WebSocket server
         (this.webSocketServer as any).registerService('fileSystem', {

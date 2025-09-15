@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import '../utils/silenceConsole';
 /**
  * CLI Entry Point - Terminal, File System, and Git Commands Integration
  */

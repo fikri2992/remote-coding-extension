@@ -32,6 +32,29 @@ export const startCommand = new Command('start')
 
     let tunnelInfo: { id: string; url: string } | null = null;
 
+    // Simple loading spinner util
+    const spinner = (() => {
+      const frames = ['-', '\\', '|', '/'];
+      let i = 0;
+      let timer: NodeJS.Timer | null = null;
+      let prefix = 'Loading';
+      return {
+        start(text?: string) {
+          prefix = text || prefix;
+          if (timer) return;
+          process.stdout.write(`${prefix} ... `);
+          timer = setInterval(() => {
+            const frame = frames[i++ % frames.length];
+            try { process.stdout.write(`\r${prefix} ${frame}  `); } catch {}
+          }, 80);
+        },
+        stop(finalText?: string) {
+          if (timer) { clearInterval(timer); timer = null; }
+          try { process.stdout.write(`\r${finalText || prefix}      \n`); } catch {}
+        }
+      };
+    })();
+
     // Handle graceful shutdown
     const shutdown = async () => {
       console.log('\nShutting down server...');
@@ -105,14 +128,15 @@ export const startCommand = new Command('start')
         console.log('Skipping React frontend build');
       }
 
-      // Start the WebSocket server
-      console.log('Starting WebSocket server...');
-      await server.start({ 
+      // Start the WebSocket + HTTP server
+      spinner.start('Starting local server');
+      await server.start({
         port,
         host,
         config: options.config,
         tunnel: Boolean(options.tunnel)
       });
+      spinner.stop('Local server ready');
       
       // Save server process information for management by other CLI commands
       const processInfo: ServerProcessInfo = {
@@ -126,24 +150,30 @@ export const startCommand = new Command('start')
       
       await ProcessManager.saveServerProcess(processInfo);
       
-      console.log('');
-      console.log('All services started successfully!');
-      const localUrl = `http://localhost:${port}`;
-      console.log(`  Local:   ${localUrl}`);
-      const lanIp = getLanIp();
-      if (lanIp) {
-        console.log(`  Network: http://${lanIp}:${port}`);
-      }
+      // If requested, establish a tunnel before printing any URLs
       if (options.tunnel) {
+        spinner.start('Establishing tunnel');
         try {
           const { createTunnel } = await import('../../server/CloudflaredManager');
           const t = await createTunnel({ localPort: port, type: 'quick' });
           tunnelInfo = { id: t.id, url: t.url };
-          console.log(`  Tunnel:  ${t.url}`);
+          spinner.stop('Tunnel ready');
         } catch (e: any) {
+          spinner.stop('Tunnel failed to start');
           console.warn('Failed to start Cloudflare Tunnel:', e?.message || String(e));
         }
       }
+
+      // Only print URLs once everything is ready
+      const localUrl = `http://localhost:${port}`;
+      const lanIp = getLanIp();
+      const lines: string[] = [];
+      lines.push(`  Local:   ${localUrl}`);
+      if (lanIp) lines.push(`  Network: http://${lanIp}:${port}`);
+      if (tunnelInfo?.url) lines.push(`  Tunnel:  ${tunnelInfo.url}`);
+
+      console.log('\nAll services started successfully!');
+      for (const l of lines) console.log(l);
       console.log('');
       console.log('WebSocket: Connected');
       console.log(`Server PID: ${process.pid}`);

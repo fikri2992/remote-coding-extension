@@ -15,7 +15,8 @@ interface GitRepositoryState {
 }
 
 const GitPage: React.FC = () => {
-  const { sendJson, addMessageListener, isConnected, connect } = useWebSocket();
+  const { sendJson, addMessageListener, isConnected, connect, registeredServices } = useWebSocket() as any;
+  const hasGit = Array.isArray(registeredServices) && registeredServices.includes('git');
   const [repo, setRepo] = useState<GitRepositoryState | null>(null);
   const [diffFiles, setDiffFiles] = useState<Array<{ file: string; type: 'added' | 'modified' | 'deleted' | 'renamed'; additions: number; deletions: number; content: string }>>([]);
   const [commits, setCommits] = useState<Array<{ hash: string; message: string; author: string; date: string | Date }>>([]);
@@ -101,7 +102,7 @@ const GitPage: React.FC = () => {
   };
 
   useEffect(() => {
-    const unsub = addMessageListener((msg) => {
+    const unsub = addMessageListener((msg: any) => {
       if (msg?.type !== 'git') return;
       const pendingData = pendingMap.current[msg.id];
       if (!pendingData) return; // not ours
@@ -235,13 +236,13 @@ const GitPage: React.FC = () => {
 
   // Separate effect for initial load that depends on connection state
   useEffect(() => {
-    if (isConnected) {
+    if (isConnected && hasGit) {
       console.log('GitPage: Connection established, loading initial data...');
       request('status');
       request('diff');
       request('log', { count: logCount });
     }
-  }, [isConnected]);
+  }, [isConnected, hasGit]);
 
   // Cleanup on component unmount
   useEffect(() => {
@@ -297,6 +298,20 @@ const GitPage: React.FC = () => {
   const stageAll = () => request('add-all');
   const stageUntracked = () => request('add-untracked');
   const unstageAll = () => request('unstage');
+
+  if (!hasGit) {
+    return (
+      <div className="rounded-lg border border-dashed border-border p-8 text-center neo:rounded-none neo:border-[3px]">
+        <div className="text-muted-foreground">
+          <svg className="w-12 h-12 mx-auto mb-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          <div className="text-sm font-medium mb-1">Git is disabled</div>
+          <div className="text-xs">Open a folder with a Git repository or enable the Git menu feature.</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

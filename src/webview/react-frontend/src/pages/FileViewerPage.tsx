@@ -241,7 +241,10 @@ const FileViewerPage: React.FC = () => {
         setError(errText)
         pendingNav.fail(msg.data?.error)
         live.announce('Failed to open file')
-        show({ title: 'Failed to open', description: errText, variant: 'destructive' })
+        // Suppress toast on timeouts to reduce noise
+        if (!/timeout/i.test(String(errText))) {
+          show({ title: 'Failed to open', description: errText, variant: 'destructive' })
+        }
       }
       
       pendingIdRef.current = null

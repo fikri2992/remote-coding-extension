@@ -94,10 +94,8 @@ Created: ${new Date().toISOString()}
       // 2) Environment checks and setup
       console.log('\n🔧 Running environment checks...');
       await ensureCloudflaredFlow();
-      const agentOk = await ensureClaudeAgentFlow();
-      if (agentOk) {
-        await maybeAuthenticateClaudeAgent();
-      }
+      await ensureClaudeAgentFlow();
+      await showAuthGuidance();
 
       // Ensure .on-the-go is ignored by Git and config has default features
       await ensureOnTheGoGitignore();
@@ -333,4 +331,33 @@ async function setGitMenuFeature(enabled: boolean): Promise<void> {
     cfg.lastModified = new Date().toISOString();
     await fs.writeFile(cfgPath, JSON.stringify(cfg, null, 2), 'utf-8');
   } catch {}
+}
+
+// Display concise authentication guidance for Claude Code and Google Gemini
+async function showAuthGuidance(): Promise<void> {
+  try {
+    console.log('');
+    console.log('Authentication setup (Claude Code + Google Gemini)');
+    console.log('');
+    console.log('Option A: Set API key environment variables (recommended)');
+    console.log('  Claude Code (Anthropic):');
+    console.log('    Windows (cmd):       set ANTHROPIC_API_KEY=sk-ant-...');
+    console.log('    PowerShell:          $env:ANTHROPIC_API_KEY = "sk-ant-..."');
+    console.log('    Bash (macOS/Linux):  export ANTHROPIC_API_KEY="sk-ant-..."');
+    console.log('    Alternative key name also supported: CLAUDE_API_KEY');
+    console.log('');
+    console.log('  Google Gemini:');
+    console.log('    Windows (cmd):       set GEMINI_API_KEY=AIza...   (or set GOOGLE_API_KEY=...)');
+    console.log('    PowerShell:          $env:GEMINI_API_KEY = "AIza..."   # or $env:GOOGLE_API_KEY = "..."');
+    console.log('    Bash (macOS/Linux):  export GEMINI_API_KEY="AIza..."   # or export GOOGLE_API_KEY="..."');
+    console.log('');
+    console.log('Option B: Manual login in the app UI');
+    console.log('  1) Start:  cotg-cli start');
+    console.log('  2) Open:   http://localhost:3900');
+    console.log('  3) Go to the ACP tab, select Claude or Gemini, and follow the login prompts.');
+    console.log('');
+    console.log('Tip: Restart the CLI or server after setting environment variables.');
+  } catch (e: any) {
+    console.warn('Auth guidance step skipped:', e?.message || String(e));
+  }
 }

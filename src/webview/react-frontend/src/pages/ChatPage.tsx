@@ -39,8 +39,14 @@ type ChatMessage = {
 type ContextItem = { id: string; type: 'file'; path: string; label: string; size?: number };
 
 export const ChatPage: React.FC = () => {
-  const { addMessageListener, sendAcp, isConnected, sendJson, connect } = useWebSocket() as any;
+  const { addMessageListener, sendAcp, isConnected, sendJson, connect, registeredServices } = useWebSocket() as any;
+  const hasGitService = Array.isArray(registeredServices) && registeredServices.includes('git');
   const { show } = useToast();
+  const showIfNotTimeout = (title: string, description: any, variant: 'destructive' | 'default' | 'success' | 'info' = 'destructive') => {
+    const msg = String(description ?? '');
+    if (/timeout/i.test(msg)) return;
+    show({ title, description, variant });
+  };
   const location = useLocation();
 
   // Reactive agent ID based on current route
@@ -554,6 +560,7 @@ export const ChatPage: React.FC = () => {
   }
 
   async function fetchGitStatus() {
+    if (!hasGitService) { setGitChangedFiles([]); return; }
     try {
       const result = await wsRpc<any>('git', { gitData: { operation: 'status', options: {} } });
       const changed = new Set<string>();
@@ -686,20 +693,20 @@ export const ChatPage: React.FC = () => {
           },
         ]);
       } else {
-        show({ title: 'Prompt Error', description: msg, variant: 'destructive' });
+        showIfNotTimeout('Prompt Error', msg, 'destructive');
       }
       try { setIsTyping(false); } catch {}
     } finally { setSending(false); }
   }
 
   async function handleCancel() {
-    try { await wsFirst('cancel', { sessionId: sessionId || undefined }); } catch (e: any) { show({ title: 'Cancel Error', description: e?.message || String(e), variant: 'destructive' }); }
+    try { await wsFirst('cancel', { sessionId: sessionId || undefined }); } catch (e: any) { showIfNotTimeout('Cancel Error', e?.message || String(e), 'destructive'); }
     try { setIsTyping(false); } catch {}
   }
 
   async function handlePermission(outcome: 'selected' | 'cancelled', optionId?: string) {
     if (!permissionReq) return;
-    try { await wsFirst('permission', { requestId: permissionReq.requestId, outcome, optionId }); } catch (e: any) { show({ title: 'Permission Error', description: e?.message || String(e), variant: 'destructive' }); } finally { setPermissionReq(null); }
+    try { await wsFirst('permission', { requestId: permissionReq.requestId, outcome, optionId }); } catch (e: any) { showIfNotTimeout('Permission Error', e?.message || String(e), 'destructive'); } finally { setPermissionReq(null); }
   }
 
   async function refreshModels() {
@@ -714,12 +721,12 @@ export const ChatPage: React.FC = () => {
 
   async function handleSelectModel(modelId: string) {
     if (!sessionId) return;
-    try { await wsFirst('model.select', { sessionId, modelId }); setCurrentModelId(modelId); setModelSheetOpen(false); } catch (e: any) { show({ title: 'Model Selection Error', description: e?.message || String(e), variant: 'destructive' }); }
+    try { await wsFirst('model.select', { sessionId, modelId }); setCurrentModelId(modelId); setModelSheetOpen(false); } catch (e: any) { showIfNotTimeout('Model Selection Error', e?.message || String(e), 'destructive'); }
   }
 
   async function handleSelectMode(modeId: string) {
     if (!sessionId) return;
-    try { await wsFirst('session.setMode', { sessionId, modeId }); setCurrentModeId(modeId); setModeSheetOpen(false); } catch (e: any) { show({ title: 'Mode Selection Error', description: e?.message || String(e), variant: 'destructive' }); }
+    try { await wsFirst('session.setMode', { sessionId, modeId }); setCurrentModeId(modeId); setModeSheetOpen(false); } catch (e: any) { showIfNotTimeout('Mode Selection Error', e?.message || String(e), 'destructive'); }
   }
 
   // Sessions picker helpers
@@ -788,10 +795,10 @@ export const ChatPage: React.FC = () => {
           setSessionSheetOpen(false);
           return;
         } catch (e2: any) {
-          show({ title: 'Session Selection Error', description: e2?.message || String(e2), variant: 'destructive' });
+          showIfNotTimeout('Session Selection Error', e2?.message || String(e2), 'destructive');
         }
       } else {
-        show({ title: 'Session Selection Error', description: e?.message || String(e), variant: 'destructive' });
+        showIfNotTimeout('Session Selection Error', e?.message || String(e), 'destructive');
       }
     }
   }
@@ -832,7 +839,7 @@ export const ChatPage: React.FC = () => {
         }
       }
       await refreshThreads();
-    } catch (e: any) { show({ title: 'Session Deletion Error', description: e?.message || String(e), variant: 'destructive' }); }
+    } catch (e: any) { showIfNotTimeout('Session Deletion Error', e?.message || String(e), 'destructive'); }
   }
 
   async function handleNewSession() {
@@ -852,7 +859,7 @@ export const ChatPage: React.FC = () => {
       }
       await refreshThreads();
       setSessionSheetOpen(false);
-    } catch (e: any) { show({ title: 'New Session Error', description: e?.message || String(e), variant: 'destructive' }); }
+    } catch (e: any) { showIfNotTimeout('New Session Error', e?.message || String(e), 'destructive'); }
   }
 
   // Render helpers
@@ -865,7 +872,7 @@ export const ChatPage: React.FC = () => {
           // Hide file/context attachments in the transcript to keep it minimal
           if (part.type === 'resource_link') { return null; }
           if (part.type === 'resource' && 'text' in (part.resource || {})) { return null; }
-          if (part.type === 'diff' && (part.newText || part.diff?.newText)) { const path = part.path || part.file || part.filepath || part.uri || ''; const text = String(part.diff?.newText || part.newText || ''); return (<DiffBlock key={i} path={path || '(unknown path)'} diffText={text} initiallyCollapsed onApply={async () => { try { const pth = String(path || ''); await wsFirst('diff.apply', { path: pth, newText: text }); show({ title: 'Diff Applied', description: 'Applied diff to ' + (pth || '(unknown)'), variant: 'success' }); } catch (e: any) { show({ title: 'Diff Apply Error', description: e?.message || String(e), variant: 'destructive' }); } }} />); }
+          if (part.type === 'diff' && (part.newText || part.diff?.newText)) { const path = part.path || part.file || part.filepath || part.uri || ''; const text = String(part.diff?.newText || part.newText || ''); return (<DiffBlock key={i} path={path || '(unknown path)'} diffText={text} initiallyCollapsed onApply={async () => { try { const pth = String(path || ''); await wsFirst('diff.apply', { path: pth, newText: text }); show({ title: 'Diff Applied', description: 'Applied diff to ' + (pth || '(unknown)'), variant: 'success' }); } catch (e: any) { showIfNotTimeout('Diff Apply Error', e?.message || String(e), 'destructive'); } }} />); }
           if (part.type === 'terminal') { const out = typeof part.output === 'string' ? part.output : ''; if (out) return <TerminalBlock key={i} output={out} terminalId={String(part.terminalId || part.id || '') || undefined} initiallyCollapsed />; const tid = part.terminalId || part.id; return <div key={i} className="text-xs text-muted-foreground">[terminal]{tid ? ` (${tid})` : ''}</div>; }
           if (part.type === 'image') { try { const url = `data:${part.mimeType};base64,${part.data}`; return <img key={i} src={url} alt="image" className="max-w-full rounded border border-border" />; } catch { return <div key={i} className="text-xs text-muted-foreground">[image]</div>; } }
           if (part.type === 'audio') { try { const url = `data:${part.mimeType};base64,${part.data}`; return (<audio key={i} controls className="w-full"><source src={url} type={String(part.mimeType || 'audio/mpeg')} /></audio>); } catch { return <div key={i} className="text-xs text-muted-foreground">[audio]</div>; } }

@@ -107,7 +107,9 @@ export const TunnelManagerPage: React.FC = () => {
       // Remove optimistic placeholder on error
       setTunnels(prev => prev.filter(t => t.id !== tempId));
       setNotification({ type: 'error', message: e?.message || 'Failed to create tunnel' });
-      show({ variant: 'destructive', title: 'Create failed', description: e?.message });
+      if (!/timeout/i.test(String(e?.message || ''))) {
+        show({ variant: 'destructive', title: 'Create failed', description: e?.message });
+      }
     } finally {
       setCreatingTunnel(false);
     }
@@ -136,7 +138,9 @@ export const TunnelManagerPage: React.FC = () => {
       setTunnels(prev => prev.filter(t => t.id !== tunnelId));
     } catch (e: any) {
       setNotification({ type: 'error', message: e?.message || 'Failed to stop tunnel' });
-      show({ variant: 'destructive', title: 'Stop failed', description: e?.message });
+      if (!/timeout/i.test(String(e?.message || ''))) {
+        show({ variant: 'destructive', title: 'Stop failed', description: e?.message });
+      }
     }
   };
 
@@ -153,7 +157,9 @@ export const TunnelManagerPage: React.FC = () => {
       show({ variant: 'default', title: 'Restart requested' });
     } catch (e: any) {
       setNotification({ type: 'error', message: e?.message || 'Failed to restart tunnel' });
-      show({ variant: 'destructive', title: 'Restart failed', description: e?.message });
+      if (!/timeout/i.test(String(e?.message || ''))) {
+        show({ variant: 'destructive', title: 'Restart failed', description: e?.message });
+      }
     }
   };
 
@@ -166,7 +172,9 @@ export const TunnelManagerPage: React.FC = () => {
       if (Array.isArray(tunnelsResp)) setTunnels(tunnelsResp as TunnelInfo[]);
     } catch (e: any) {
       setNotification({ type: 'error', message: e?.message || 'Failed to refresh tunnels' });
-      show({ variant: 'destructive', title: 'Refresh failed', description: e?.message });
+      if (!/timeout/i.test(String(e?.message || ''))) {
+        show({ variant: 'destructive', title: 'Refresh failed', description: e?.message });
+      }
     } finally {
       setRefreshing(false);
     }
@@ -200,7 +208,9 @@ export const TunnelManagerPage: React.FC = () => {
           break;
         case 'tunnelError':
           // Use toast only for errors to keep UI consistent
-          show({ variant: 'destructive', title: 'Tunnel error', description: msg.error });
+          if (!/timeout/i.test(String(msg?.error || ''))) {
+            show({ variant: 'destructive', title: 'Tunnel error', description: msg.error });
+          }
           break;
       }
     });
@@ -218,7 +228,9 @@ export const TunnelManagerPage: React.FC = () => {
           try {
             await ws.sendRpc('tunnels', a.op, a.payload);
           } catch (e: any) {
-            show({ variant: 'destructive', title: 'Queued action failed', description: e?.message });
+            if (!/timeout/i.test(String(e?.message || ''))) {
+              show({ variant: 'destructive', title: 'Queued action failed', description: e?.message });
+            }
           }
         }
         setActionQueue([]);

@@ -6,6 +6,7 @@ interface WebSocketContextType {
   connectionCount: number;
   lastActivity: string | null;
   supportsAcpRequests: boolean;
+  registeredServices: string[];
   connect: () => void;
   disconnect: () => void;
   // New helpers for sending and subscribing to messages
@@ -54,6 +55,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
   const listenersRef = useRef<Array<(data: any) => void>>([]);
   const supportsAcpRef = useRef<boolean>(false);
   const [supportsAcpRequests, setSupportsAcpRequests] = useState<boolean>(false);
+  const [registeredServices, setRegisteredServices] = useState<string[]>([]);
   const pendingAcpRef = useRef<Map<string, { resolve: (v: any) => void; reject: (e: any) => void; timer?: any }>>(new Map());
   const pendingRpcRef = useRef<Map<string, { resolve: (v: any) => void; reject: (e: any) => void; timer?: any }>>(new Map());
 
@@ -115,6 +117,10 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
             supportsAcpRef.current = true;
             setSupportsAcpRequests(true);
           }
+          try {
+            const svcs = Array.isArray(data.availableServices) ? data.availableServices.filter((s: any) => typeof s === 'string') : [];
+            setRegisteredServices(svcs);
+          } catch {}
         }
 
         // Resolve ACP request/response pairs
@@ -288,6 +294,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
     connectionCount,
     lastActivity,
     supportsAcpRequests,
+    registeredServices,
     connect,
     disconnect,
     sendJson,

@@ -10,6 +10,7 @@ import {
   Gem
 } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { useWebSocket } from './WebSocketProvider';
 
 interface AppSidebarProps {
   activeItem?: string;
@@ -28,6 +29,8 @@ const menuItems = [
 export const AppSidebar: React.FC<AppSidebarProps> = ({
   activeItem
 }) => {
+  const { registeredServices } = useWebSocket();
+  const hasGit = Array.isArray(registeredServices) && registeredServices.includes('git');
   return (
     <div className="flex flex-col h-full bg-background">
       {/* Mobile: Close button at top */}
@@ -40,7 +43,10 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
       {/* Navigation Menu */}
       <nav className="flex-1 px-4 py-6">
         <ul className="space-y-3">
-          {menuItems.filter((i) => ['home','gemini','acp','files','terminal','terminal-commands','git','tunnels','settings'].includes(i.id)).map((item) => {
+          {menuItems
+            .filter((i) => ['home','gemini','acp','files','terminal','terminal-commands','git','tunnels','settings'].includes(i.id))
+            .filter((i) => i.id !== 'git' || hasGit)
+            .map((item) => {
             const Icon = item.icon;
             return (
               <li key={item.id}>

@@ -15,6 +15,11 @@ export const TunnelDetailsPage: React.FC = () => {
   const [tunnel, setTunnel] = React.useState<TunnelInfo | null>(null)
   const [loading, setLoading] = React.useState(true)
   const { show } = useToast()
+  const showIfNotTimeout = (title: string, description?: any, variant: 'destructive' | 'default' | 'success' | 'info' = 'destructive') => {
+    const msg = String(description ?? '');
+    if (/timeout/i.test(msg)) return;
+    show({ title, description, variant });
+  }
   const ws = useWebSocket()
   const [tab, setTab] = React.useState<'overview' | 'logs' | 'diagnostics'>('overview')
 
@@ -61,7 +66,7 @@ export const TunnelDetailsPage: React.FC = () => {
       await navigator.clipboard.writeText(text)
       show({ variant: 'info', title: 'Copied', description: 'URL copied to clipboard' })
     } catch {
-      show({ variant: 'destructive', title: 'Copy failed' })
+    showIfNotTimeout('Copy failed')
     }
   }
 
@@ -83,7 +88,7 @@ export const TunnelDetailsPage: React.FC = () => {
       await ws.sendRpc('tunnels', 'stop', { id: tunnel.id })
       show({ variant: 'default', title: 'Tunnel stopped' })
     } catch (e: any) {
-      show({ variant: 'destructive', title: 'Stop failed', description: e?.message })
+    showIfNotTimeout('Stop failed', e?.message, 'destructive')
     }
   }
 

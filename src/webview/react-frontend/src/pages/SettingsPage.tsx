@@ -56,6 +56,11 @@ const SettingsPage: React.FC = () => {
   const ws = useWebSocket();
   const { isConnected } = ws as any;
   const { show } = useToast();
+  const showIfNotTimeout = (title: string, description?: any, variant: 'destructive' | 'default' | 'success' | 'info' = 'destructive') => {
+    const msg = String(description ?? '');
+    if (/timeout/i.test(msg)) return;
+    show({ title, description, variant });
+  };
   const [loading, setLoading] = useState<boolean>(false);
   const [config, setConfig] = useState<OTGConfig | null>(null);
   const [claudeCollapsed, setClaudeCollapsed] = useState<boolean>(false);
@@ -168,7 +173,7 @@ const SettingsPage: React.FC = () => {
       show({ title: 'Saved', description: 'Settings updated', variant: 'default' });
     } catch (e: any) {
       const msg = e?.message || String(e) || 'Failed to save settings';
-      show({ title: 'Save failed', description: msg, variant: 'destructive' });
+      showIfNotTimeout('Save failed', msg, 'destructive');
       throw e;
     }
   };

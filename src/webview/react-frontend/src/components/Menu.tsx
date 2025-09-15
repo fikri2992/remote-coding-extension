@@ -2,6 +2,7 @@ import React from 'react';
 import { LucideIcon, Home, Server, File, GitBranch, Terminal, MessageCircle, Network, Gem } from 'lucide-react';
 import { Button } from './ui/button';
 import { cn } from '../lib/utils';
+import { useWebSocket } from './WebSocketProvider';
 
 interface MenuItem {
   id: string;
@@ -28,9 +29,11 @@ interface MenuProps {
 }
 
 export const Menu: React.FC<MenuProps> = ({ className, onItemClick, activeItem, isCollapsed = false }) => {
+  const { registeredServices } = useWebSocket();
+  const hasGit = Array.isArray(registeredServices) && registeredServices.includes('git');
   return (
     <nav className={cn('flex flex-col space-y-2', className)}>
-      {menuItems.map((item) => {
+      {menuItems.filter((i) => i.id !== 'git' || hasGit).map((item) => {
         const Icon = item.icon;
         return (
           <Button

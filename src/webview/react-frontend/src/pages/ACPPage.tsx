@@ -39,8 +39,13 @@ interface SessionMeta {
 // Revamp: Chat-first layout with context panel and unified controls
 
 const ACPPage: React.FC = () => {
-  const { addMessageListener, sendAcp, isConnected, sendJson } = useWebSocket() as any;
+  const { addMessageListener, sendAcp, isConnected, sendJson, registeredServices } = useWebSocket() as any;
   const { show } = useToast();
+  const showIfNotTimeout = (title: string, description: any, variant: 'destructive' | 'default' | 'success' | 'info' = 'destructive') => {
+    const msg = String(description ?? '');
+    if (/timeout/i.test(msg)) return;
+    show({ title, description, variant });
+  };
 
   // Connect form state
   const [agentCmd, setAgentCmd] = useState('');
@@ -533,6 +538,8 @@ const ACPPage: React.FC = () => {
   }
 
   async function fetchGitStatus() {
+    const hasGit = Array.isArray(registeredServices) && registeredServices.includes('git');
+    if (!hasGit) { setGitChangedFiles([]); return; }
     try {
       const result = await wsRpc<any>('git', { gitData: { operation: 'status', options: {} } });
       const changed = new Set<string>();
@@ -584,7 +591,7 @@ const ACPPage: React.FC = () => {
       await wsFirst('authenticate', { methodId: selectedAuthMethod });
       await refreshAuthMethods();
     } catch (e: any) {
-      show({ title: 'Authentication Error', description: e?.message || String(e), variant: 'destructive' });
+      showIfNotTimeout('Authentication Error', e?.message || String(e), 'destructive');
     }
   }
 
@@ -623,7 +630,7 @@ const ACPPage: React.FC = () => {
       }
     } catch (e: any) {
       try { console.error('[acp] handleConnect error', e); } catch {}
-      show({ title: 'Connection Error', description: e?.message || String(e), variant: 'destructive' });
+      showIfNotTimeout('Connection Error', e?.message || String(e), 'destructive');
     } finally {
       setConnecting(false);
     }
@@ -649,7 +656,7 @@ const ACPPage: React.FC = () => {
         // show a minimal hint; full auth UI can be built later if needed
         show({ title: 'Authentication Required', description: 'Available methods: ' + (err?.authMethods?.map((m: any) => m.name).join(', ') || 'unknown'), variant: 'info' });
       } else {
-        show({ title: 'Session Error', description: err?.message || String(err), variant: 'destructive' });
+        showIfNotTimeout('Session Error', err?.message || String(err), 'destructive');
       }
     }
   }
@@ -727,7 +734,7 @@ const ACPPage: React.FC = () => {
       if (err?.authRequired) {
         show({ title: 'Authentication Required', description: 'Available methods: ' + (err?.authMethods?.map((m: any) => m.name).join(', ') || 'unknown'), variant: 'info' });
       } else {
-        show({ title: 'Prompt Error', description: err?.message || String(err), variant: 'destructive' });
+        showIfNotTimeout('Prompt Error', err?.message || String(err), 'destructive');
       }
     } finally {
       setSending(false);
@@ -738,7 +745,7 @@ const ACPPage: React.FC = () => {
     try {
       await wsFirst('cancel', { sessionId: sessionId || undefined });
     } catch (e: any) {
-      show({ title: 'Cancel Error', description: e?.message || String(e), variant: 'destructive' });
+      showIfNotTimeout('Cancel Error', e?.message || String(e), 'destructive');
     }
   }
 
@@ -747,7 +754,7 @@ const ACPPage: React.FC = () => {
     try {
       await wsFirst('permission', { requestId: permissionReq.requestId, outcome, optionId });
     } catch (e: any) {
-      show({ title: 'Permission Error', description: e?.message || String(e), variant: 'destructive' });
+      showIfNotTimeout('Permission Error', e?.message || String(e), 'destructive');
     } finally {
       setPermissionReq(null);
     }
@@ -759,7 +766,7 @@ const ACPPage: React.FC = () => {
       setSessionId(id);
       await refreshSessions();
     } catch (e: any) {
-      show({ title: 'Session Selection Error', description: e?.message || String(e), variant: 'destructive' });
+      showIfNotTimeout('Session Selection Error', e?.message || String(e), 'destructive');
     }
   }
 
@@ -769,7 +776,7 @@ const ACPPage: React.FC = () => {
       if (sessionId === id) setSessionId(null);
       await refreshSessions();
     } catch (e: any) {
-      show({ title: 'Session Deletion Error', description: e?.message || String(e), variant: 'destructive' });
+      showIfNotTimeout('Session Deletion Error', e?.message || String(e), 'destructive');
     }
   }
 
@@ -793,7 +800,7 @@ const ACPPage: React.FC = () => {
       // initial read
       await handleReadTerminal();
     } catch (e: any) {
-      show({ title: 'Terminal Creation Error', description: e?.message || String(e), variant: 'destructive' });
+      showIfNotTimeout('Terminal Creation Error', e?.message || String(e), 'destructive');
     }
   }
 
@@ -814,7 +821,7 @@ const ACPPage: React.FC = () => {
     try {
       await wsFirst('terminal.kill', { terminalId: termId });
     } catch (e: any) {
-      show({ title: 'Terminal Kill Error', description: e?.message || String(e), variant: 'destructive' });
+      showIfNotTimeout('Terminal Kill Error', e?.message || String(e), 'destructive');
     }
   }
 
@@ -827,7 +834,7 @@ const ACPPage: React.FC = () => {
       setTermExit(null);
       setTermTruncated(false);
     } catch (e: any) {
-      show({ title: 'Terminal Release Error', description: e?.message || String(e), variant: 'destructive' });
+      showIfNotTimeout('Terminal Release Error', e?.message || String(e), 'destructive');
     }
   }
 
@@ -837,7 +844,7 @@ const ACPPage: React.FC = () => {
       const resp = await wsFirst('terminal.waitForExit', { terminalId: termId });
       setTermExit(resp.exitStatus ?? null);
     } catch (e: any) {
-      show({ title: 'Terminal Wait Error', description: e?.message || String(e), variant: 'destructive' });
+      showIfNotTimeout('Terminal Wait Error', e?.message || String(e), 'destructive');
     }
   }
 
@@ -846,7 +853,7 @@ const ACPPage: React.FC = () => {
       if (!selectedModelId) return;
       await wsFirst('model.select', { sessionId, modelId: selectedModelId });
     } catch (e: any) {
-      show({ title: 'Model Selection Error', description: e?.message || String(e), variant: 'destructive' });
+      showIfNotTimeout('Model Selection Error', e?.message || String(e), 'destructive');
     }
   }
 
@@ -863,7 +870,7 @@ const ACPPage: React.FC = () => {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-    } catch (e) { show({ title: 'Export Failed', description: 'Failed to export session data', variant: 'destructive' }); }
+    } catch (e) { showIfNotTimeout('Export Failed', 'Failed to export session data', 'destructive'); }
   }
 
   async function handleImportLocal(file: File) {
@@ -874,7 +881,7 @@ const ACPPage: React.FC = () => {
       if (Array.isArray(obj?.selectedContext)) setSelectedContext(obj.selectedContext);
       show({ title: 'Import Successful', description: 'Imported conversation locally. (Not persisted to server)', variant: 'success' });
     } catch (e: any) {
-      show({ title: 'Import Failed', description: e?.message || 'Import failed', variant: 'destructive' });
+      showIfNotTimeout('Import Failed', e?.message || 'Import failed', 'destructive');
     }
   }
 
@@ -946,7 +953,7 @@ const ACPPage: React.FC = () => {
                         const newText = String(part.diff?.newText || part.newText || '');
                         await wsFirst('diff.apply', { path: pth, newText });
                         show({ title: 'Diff Applied', description: 'Applied diff to ' + (pth || '(unknown)'), variant: 'success' });
-                      } catch (e: any) { show({ title: 'Diff Apply Error', description: e?.message || String(e), variant: 'destructive' }); }
+                      } catch (e: any) { showIfNotTimeout('Diff Apply Error', e?.message || String(e), 'destructive'); }
                     }}
                   >Apply</button>
                 </div>
@@ -1151,7 +1158,7 @@ const ACPPage: React.FC = () => {
         <div className="flex flex-wrap gap-2">
           {threads.map((t) => (
             <div key={t.id} className={cn('px-2 py-1 rounded border text-xs flex items-center gap-2', t.id === selectedThreadId ? 'bg-primary/10 border-primary' : 'border-border')}>
-              <button onClick={async () => { try { const res = await wsFirst<any>('thread.get', { sessionId, threadId: t.id }); const msgs: any[] = Array.isArray(res?.messages) ? res.messages : []; const now = Date.now(); const converted: any[] = []; for (const msg of msgs) { if (msg?.role && Array.isArray(msg?.content)) { converted.push({ id: `${now}-${converted.length}`, role: msg.role, parts: msg.content, ts: now }); } } if (converted.length) setMessages(converted as any); } catch (e: any) { show({ title: 'Thread Error', description: e?.message || 'Failed to open thread', variant: 'destructive' }); } }} className="underline">{(t.title || t.id).slice(0, 24)}</button>
+              <button onClick={async () => { try { const res = await wsFirst<any>('thread.get', { sessionId, threadId: t.id }); const msgs: any[] = Array.isArray(res?.messages) ? res.messages : []; const now = Date.now(); const converted: any[] = []; for (const msg of msgs) { if (msg?.role && Array.isArray(msg?.content)) { converted.push({ id: `${now}-${converted.length}`, role: msg.role, parts: msg.content, ts: now }); } } if (converted.length) setMessages(converted as any); } catch (e: any) { showIfNotTimeout('Thread Error', e?.message || 'Failed to open thread', 'destructive'); } }} className="underline">{(t.title || t.id).slice(0, 24)}</button>
             </div>
           ))}
           {threads.length === 0 && (
@@ -1461,7 +1468,7 @@ const ACPPage: React.FC = () => {
                               await wsFirst('diff.apply', body);
                               show({ title: 'Diff Applied', description: 'Applied diff to ' + (pth || '(unknown path)'), variant: 'success' });
                             } catch (e: any) {
-                              show({ title: 'Diff Apply Error', description: e?.message || String(e), variant: 'destructive' });
+                              showIfNotTimeout('Diff Apply Error', e?.message || String(e), 'destructive');
                             }
                           }}
                         >Apply</button>

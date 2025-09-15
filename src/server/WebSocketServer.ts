@@ -164,13 +164,24 @@ export class WebSocketServer {
 
           console.log(`WebSocket connection established: ${connectionId}`);
 
-          // Send connection confirmation
-          ws.send(JSON.stringify({
-            type: 'connection_established',
-            connectionId,
-            timestamp: new Date().toISOString(),
-            supportsAcpRequests: true
-          }));
+          // Send connection confirmation with available services snapshot
+          try {
+            const available = this.getRegisteredServices();
+            ws.send(JSON.stringify({
+              type: 'connection_established',
+              connectionId,
+              timestamp: new Date().toISOString(),
+              supportsAcpRequests: true,
+              availableServices: Array.isArray(available) ? available : []
+            }));
+          } catch {
+            ws.send(JSON.stringify({
+              type: 'connection_established',
+              connectionId,
+              timestamp: new Date().toISOString(),
+              supportsAcpRequests: true
+            }));
+          }
 
           // Handle pong messages to keep connection alive
           ws.on('pong', () => {

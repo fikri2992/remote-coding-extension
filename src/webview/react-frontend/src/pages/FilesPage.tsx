@@ -151,7 +151,7 @@ const FilesPage: React.FC = () => {
           setError(`Request timeout loading directory. Please try again.`);
           setRefreshing(false);
           pendingNav.fail('timeout');
-          show({ title: 'Timeout', description: 'Loading directory timed out', variant: 'destructive' });
+          // Intentionally suppress toast on timeout to reduce noise
         }
       }
     }, 10000); // 10 second timeout
@@ -196,7 +196,10 @@ const FilesPage: React.FC = () => {
           setError(errText);
           pendingNav.fail(errText);
           live.announce('Failed to load directory');
-          show({ title: 'Failed to load', description: errText, variant: 'destructive' });
+          // Suppress toast if it's a timeout error
+          if (!/timeout/i.test(String(errText))) {
+            show({ title: 'Failed to load', description: errText, variant: 'destructive' });
+          }
         }
         
         pendingIdRef.current = null;

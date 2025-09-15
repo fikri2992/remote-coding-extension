@@ -4,8 +4,8 @@ Coding on the Go (COTG) is a CLI tool that runs a local web server and WebSocket
 
 ## Requirements
 
-- Node.js 18 or newer
-- macOS, Linux, or Windows
+- Node.js 22 or newer
+- Windows
 
 ## Features
 
@@ -23,24 +23,14 @@ Using npm (global):
 npm install -g coding-on-the-go
 ```
 
-Using npx (no global install):
-
-```bash
-# Use npx with the package name and execute the binary
-npx -y -p coding-on-the-go cotg-cli start -p 3900
-```
-
 ## Quick Start
 
 ```bash
+# create the necessary folder and files needed
+cotg-cli init
 # Start the server (builds frontend on first run)
 cotg-cli start -p 3900
 
-# Check status
-cotg-cli status
-
-# Stop the server
-cotg-cli stop
 ```
 
 Then open http://localhost:3900 in your browser.
@@ -50,11 +40,11 @@ Then open http://localhost:3900 in your browser.
 Expose your local server securely over the internet using an ephemeral Cloudflare Tunnel. This also prints LAN and localhost URLs (similar to Vite):
 
 ```bash
+# much simpler command
+cotg-cli start --tunnel 
+
 # Bind to all interfaces when tunneling, print Local/Network/Tunnel URLs
 cotg-cli start -p 3900 --tunnel
-
-# Optional: specify host (defaults to 0.0.0.0 when --tunnel is used)
-cotg-cli start -p 3900 --tunnel --host 0.0.0.0
 ```
 
 Example output:
@@ -87,52 +77,6 @@ What it does:
 - Checks for a Git repository and offers to run `git init`.
   - If you decline, it updates `.on-the-go/config.json` to disable the Git menu in the UI.
 - Optionally installs `cloudflared` and helps authenticate the ACP agent.
-
-## CLI Commands
-
-Top-level commands:
-
-- `cotg-cli start [-p <port>] [--skip-build]` – build frontend (unless skipped) and start server
-- `cotg-cli status` – print server status
-- `cotg-cli stop` – stop server and clean up process files
-- `cotg-cli init` – scaffold CLI config in `.on-the-go/config.json` and run environment checks
-
-Command groups:
-
-- `cotg-cli fs` – File system operations
-  - `tree [path] [--depth N] [--json]`
-  - `read <path> [--encoding utf8] [--max-bytes 1024]`
-  - `create <path> [--type file|directory] [--content <text>]`
-  - `delete <path> [--recursive]`
-  - `rename <source> <destination>`
-  - `watch <path> [--timeout 60]`
-  - `stats <path>`
-  - `config [--json] [--save <path>]`
-  - `watcher-stats`
-
-- `cotg-cli git` – Git operations
-  - `status [--json] [--workspace <path>]`
-  - `log [--count N] [--json] [--workspace <path>]`
-  - `diff [file] [--json] [--workspace <path>]`
-  - `add <files...> [--workspace <path>]`
-  - `commit <message> [--files <files...>] [--workspace <path>]`
-  - `push [--remote origin] [--branch <name>] [--workspace <path>]`
-  - `pull [--remote origin] [--branch <name>] [--workspace <path>]`
-  - `branch [--create <name>] [--from <source>] [--switch <name>] [--workspace <path>]`
-  - `state [--json] [--workspace <path>]`
-  - `find-repos [path] [--json]`
-  - `config [--json]`
-
-- `cotg-cli terminal` – Terminal operations
-  - `session [--cols 80] [--rows 24] [--cwd <path>] [--persistent] [--engine auto|line|pipe]`
-  - `exec <command> [--cwd <path>] [--timeout <ms>]`
-  - `config [--json]`
-  - `shell`
-  - `list`
-  - `test-safety <command>`
-  - `interactive [--cols 80] [--rows 24] [--cwd <path>] [--engine auto|line|pipe]`
-
-Note: there is also `cotg-cli server` which behaves like `start` with similar options.
 
 ## Development
 

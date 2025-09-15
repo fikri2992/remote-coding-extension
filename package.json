@@ -1,7 +1,7 @@
 {
   "name": "coding-on-the-go",
   "description": "Coding on the Go CLI that runs a local web server + WebSocket backend with ACP integration.",
-  "version": "0.0.1",
+  "version": "1.1.1",
   "workspaces": [
     "claude-code-acp"
   ],
@@ -42,13 +42,10 @@
     "dev:server": "npm run compile && node ./out/cli/index.js start --skip-build",
     "dev:full": "concurrently \"npm run dev:server\" \"wait-on tcp:3900 && npm run dev:frontend\"",
     "package:cli": "npm run build && pkg ./out/cli/index.js --config pkg.config.json",
-    
     "release:dry-run": "scripts/release-dry-run.bat",
-    
     "version:patch": "npm version patch -m \"chore(release): %s\"",
     "version:minor": "npm version minor -m \"chore(release): %s\"",
     "version:major": "npm version major -m \"chore(release): %s\"",
-    
     "release:next": "npm version prerelease --preid=next -m \"chore(release): %s\" && npm publish --tag next --access public",
     "release:patch": "npm run version:patch && npm publish --access public",
     "release:minor": "npm run version:minor && npm publish --access public",

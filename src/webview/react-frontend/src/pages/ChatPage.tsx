@@ -687,7 +687,7 @@ export const ChatPage: React.FC = () => {
             id: `auth-${now}-${prev.length}`,
             role: 'system',
             parts: [
-              { type: 'text', text: 'Authentication required. Open the ACP page, authenticate, then retry your message.' } as any,
+              { type: 'text', text: 'Authentication required. Open the cli agents and login manually, authenticate, then retry your message.' } as any,
             ],
             ts: now,
           },

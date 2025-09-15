@@ -85,13 +85,13 @@ What it does:
 git clone <repo>
 cd coding-on-the-go
 npm run install:all
-
+```
 # Develop
 
 - Run server + UI together:
-
-  
-  `npm run dev:full`
+  ```bash
+  npm run dev:full
+  ```
   
 
 - Server only (recompiles TS):

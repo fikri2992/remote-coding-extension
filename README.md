@@ -11,7 +11,7 @@ Coding on the Go (COTG) is a CLI tool that runs a local web server and WebSocket
 
 - HTTP server serving a React web UI
 - WebSocket backend with connection recovery
-- Terminal sessions (pseudo/line-mode and pipe engine support)
+- Terminal command
 - Git and File System operations via CLI backend services
 - ACP integration via `@zed-industries/claude-code-acp` (workspace)
 

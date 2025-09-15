@@ -110,15 +110,6 @@ npm run build        # compile TS + build React
 npm run package:cli  # optional: package with pkg
 ```
 
-## ACP (Agent Client Protocol)
-
-An ACP server is included via the `claude-code-acp` workspace. You can run a quick smoke test against the local server:
-
-```bash
-# In another terminal with server running on :3900
-BASE_URL=http://localhost:3900 node scripts/smoke-acp.js
-```
-
 To wire a model provider (e.g., Anthropic), export credentials in your environment before connecting.
 
 ### Documentation

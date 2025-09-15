@@ -131,3 +131,7 @@ To wire a model provider (e.g., Anthropic), export credentials in your environme
 - This repository no longer ships a VS Code extension. All VS Code-specific code and packaging have been removed from the build.
 - The React UI is served from `src/webview/react-frontend/dist` at runtime.
 
+## License
+
+This project is licensed under the MIT License. See the `LICENSE` file at the repository root for full text.
+

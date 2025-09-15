@@ -2,7 +2,7 @@
 
 ## Introduction
 
-This specification outlines the enhancement of the existing ChatPage.tsx into a sophisticated, AI-powered chatbot interface that integrates seamlessly with Kiro Remote's development workflow. The enhanced chatbot will provide intelligent assistance for development tasks, code analysis, and project management while maintaining the existing neobrutalist design aesthetic and WebSocket-based communication architecture.
+This specification outlines the enhancement of the existing ChatPage.tsx into a sophisticated, AI-powered chatbot interface that integrates seamlessly with cotg-cli's development workflow. The enhanced chatbot will provide intelligent assistance for development tasks, code analysis, and project management while maintaining the existing neobrutalist design aesthetic and WebSocket-based communication architecture.
 
 The enhanced chatbot will transform the current basic chat interface into a comprehensive development assistant that can understand context, provide code suggestions, analyze files, and integrate with the existing ACP (Agent Communication Protocol) system for advanced AI capabilities.
 

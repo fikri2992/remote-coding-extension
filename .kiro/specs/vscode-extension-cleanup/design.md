@@ -2,7 +2,7 @@
 
 ## Overview
 
-This design outlines the systematic removal of VSCode extension dependencies and code from the Kiro Remote project, transforming it into a streamlined CLI-focused tool. The cleanup will preserve all core CLI functionality, web server capabilities, and ACP integration while eliminating unnecessary VSCode extension components.
+This design outlines the systematic removal of VSCode extension dependencies and code from the cotg-cli project, transforming it into a streamlined CLI-focused tool. The cleanup will preserve all core CLI functionality, web server capabilities, and ACP integration while eliminating unnecessary VSCode extension components.
 
 The current project contains legacy VSCode extension code in `src/extension.ts`, VSCode-specific webview providers, command handlers, and pseudo-terminal implementations that are no longer needed. The CLI functionality is already well-established in `src/cli/` and the web server components in `src/server/` can operate independently.
 

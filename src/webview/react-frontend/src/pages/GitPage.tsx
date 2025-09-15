@@ -31,7 +31,6 @@ const GitPage: React.FC = () => {
   const [logCount, setLogCount] = useState<number>(20);
   const [canLoadMore, setCanLoadMore] = useState<boolean>(true);
   const scrollRef = useRef<HTMLDivElement | null>(null);
-  const composerAnchorRef = useRef<HTMLDivElement | null>(null);
 
   const request = (operation: string, options: any = {}, retryCount = 0) => {
     const id = `git_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -291,8 +290,6 @@ const GitPage: React.FC = () => {
     ...toItems(repo?.status?.untracked || [], 'untracked'),
     ...toItems(repo?.status?.conflicted || [], 'conflicted'),
   ];
-
-  const onCommit = (msg: string) => request('commit', { message: msg });
 
   // Staging actions
   const stageFile = (path: string) => request('add', { files: [path] });

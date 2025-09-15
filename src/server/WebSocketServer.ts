@@ -253,17 +253,17 @@ export class WebSocketServer {
 
   public async stop(): Promise<void> {
     return new Promise((resolve) => {
-      if (this.wss) {
-        this.wss.close(() => {
-          console.log('WebSocket server stopped');
-          this.connections.clear();
-          this.wss = null;
-          this._clientCount = 0;
-          resolve();
-        });
-      } else {
+      if (!this.wss) return resolve();
+      try {
+        this.connections.forEach((conn) => { try { conn.ws.terminate(); } catch {} });
+        this.connections.clear();
+      } catch {}
+      this.wss.close(() => {
+        console.log('WebSocket server stopped');
+        this.wss = null;
+        this._clientCount = 0;
         resolve();
-      }
+      });
     });
   }
 

@@ -3,6 +3,7 @@
  */
 
 import * as http from 'http';
+import { Socket } from 'net';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as url from 'url';
@@ -18,15 +19,28 @@ export class HttpServer {
     private requestCount: number = 0;
     private errorCount: number = 0;
     private acpController: any | null = null;
+    private sockets: Set<Socket> = new Set();
 
     constructor(config: ServerConfig) {
         this.config = config;
         this.errorHandler = ErrorHandler.getInstance();
         
         // Serve the React frontend build directory (dist)
-        this.webAssetsPath = path.join(__dirname, '..', 'webview', 'react-frontend', 'dist');
-        
-        console.log(`HTTP Server configured to serve React web application from: ${this.webAssetsPath}`);
+        // Try multiple candidate locations to support dev, npm package, and pkg binary
+        const candidates = [
+            // out/ tree (dev compile)
+            path.join(__dirname, '..', 'webview', 'react-frontend', 'dist'),
+            // src/ tree (published package ships assets under src/)
+            path.join(__dirname, '..', '..', 'src', 'webview', 'react-frontend', 'dist'),
+            // cwd fallback (running from project root)
+            path.join(process.cwd(), 'src', 'webview', 'react-frontend', 'dist'),
+        ];
+        let found: string | null = null;
+        for (const p of candidates) {
+            try { if (fs.existsSync(p)) { found = p; break; } } catch {}
+        }
+        this.webAssetsPath = found || candidates[0]!;
+        console.log(`HTTP Server serving React web application from: ${this.webAssetsPath}`);
     }
 
     // Note: All app RPCs use WebSocket; this HTTP server only serves static assets.
@@ -44,6 +58,11 @@ export class HttpServer {
             try {
                 this.server = http.createServer((req, res) => {
                     this.handleRequest(req, res);
+                });
+                // Track sockets for fast shutdown
+                this.server.on('connection', (socket: Socket) => {
+                    this.sockets.add(socket);
+                    socket.on('close', () => this.sockets.delete(socket));
                 });
 
                 // Handle server errors
@@ -76,6 +95,7 @@ export class HttpServer {
                 return;
             }
 
+            // Stop accepting new connections
             this.server.close((error) => {
                 if (error) {
                     reject(new Error(`Error stopping HTTP server: ${error.message}`));
@@ -84,6 +104,17 @@ export class HttpServer {
                     resolve();
                 }
             });
+
+            // Force-close lingering sockets after short grace
+            const graceMs = 300;
+            setTimeout(() => {
+                try {
+                    this.sockets.forEach((s) => {
+                        try { s.destroy(); } catch {}
+                    });
+                    this.sockets.clear();
+                } catch {}
+            }, graceMs);
         });
     }
 
@@ -121,6 +152,11 @@ export class HttpServer {
             }
 
             let pathname = parsedUrl.pathname || '/';
+
+            // SPA routing: map root and extension-less paths to index.html
+            if (pathname === '/' || !/\.[a-z0-9]+$/i.test(pathname)) {
+                pathname = '/index.html';
+            }
 
             // No REST JSON API; only static assets and WebSocket upgrades handled elsewhere
 
@@ -221,15 +257,21 @@ export class HttpServer {
         fs.access(filePath, fs.constants.F_OK, (err) => {
             clearTimeout(accessTimeout);
             
-            if (err) {
-                if (err.code === 'ENOENT') {
-                    this.sendErrorResponse(res, 404, 'File Not Found');
-                } else if (err.code === 'EACCES') {
-                    this.sendErrorResponse(res, 403, 'Access Denied');
-                } else {
-                    console.error(`File access error for ${filePath}:`, err);
-                    this.sendErrorResponse(res, 500, 'File Access Error');
-                }
+                if (err) {
+                    if (err.code === 'ENOENT') {
+                        // SPA fallback: serve index.html when asset not found
+                        const fallback = path.join(this.webAssetsPath, 'index.html');
+                        if (fallback.startsWith(this.webAssetsPath) && fs.existsSync(fallback)) {
+                            this.serveStaticFile('/index.html', res, req);
+                            return;
+                        }
+                        this.sendErrorResponse(res, 404, 'File Not Found');
+                    } else if (err.code === 'EACCES') {
+                        this.sendErrorResponse(res, 403, 'Access Denied');
+                    } else {
+                        console.error(`File access error for ${filePath}:`, err);
+                        this.sendErrorResponse(res, 500, 'File Access Error');
+                    }
                 return;
             }
 

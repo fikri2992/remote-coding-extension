@@ -4,7 +4,7 @@
 
 The enhanced chatbot interface will transform the existing basic ChatPage.tsx into a sophisticated AI-powered development assistant. The design leverages the existing WebSocket infrastructure, ACP integration, and neobrutalist design system while introducing advanced features for rich content rendering, context management, and intelligent development assistance.
 
-The architecture follows a modular approach with clear separation of concerns, maintaining compatibility with the existing Kiro Remote ecosystem while providing extensible foundations for future enhancements.
+The architecture follows a modular approach with clear separation of concerns, maintaining compatibility with the existing cotg-cli ecosystem while providing extensible foundations for future enhancements.
 
 ## Architecture
 

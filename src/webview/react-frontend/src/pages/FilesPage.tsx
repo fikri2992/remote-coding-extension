@@ -66,8 +66,8 @@ const FilesPage: React.FC = () => {
   const refreshRipple = useRipple();
 
   // Filters
-  const [showHidden, setShowHidden] = usePersistentState<boolean>('filesShowHidden', false);
-  const [showIgnored, setShowIgnored] = usePersistentState<boolean>('filesShowIgnored', false);
+  const [showHidden] = usePersistentState<boolean>('filesShowHidden', false);
+  const [showIgnored] = usePersistentState<boolean>('filesShowIgnored', false);
 
   // buildCrumbs removed; crumbs derived inline above
 

@@ -66,7 +66,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
       {/* Footer */}
       <div className="p-4 mt-4 border-t border-border bg-card neo:border-t-[3px]">
         <div className="text-xs text-muted-foreground text-center">
-          Kiro Remote v1.0
+          cotg-cli v1.0
         </div>
       </div>
     </div>

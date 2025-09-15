@@ -20,7 +20,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
         {/* App Title */}
         <div className="flex items-center space-x-3 lg:space-x-4">
           <h1 className="text-lg lg:text-xl font-semibold text-foreground">
-            Kiro Remote
+            Coding on the Go
           </h1>
 
           {/* Connection Status - Desktop */}

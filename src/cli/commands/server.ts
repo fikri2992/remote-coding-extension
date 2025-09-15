@@ -5,7 +5,7 @@ import fs from 'fs/promises';
 import path from 'path';
 
 export const serverCommand = new Command('server')
-    .description('Build React frontend and start the Kiro Remote WebSocket server')
+    .description('Build React frontend and start the cotg-cli WebSocket server')
     .option('-p, --port <number>', 'Port number for the web server', '3900')
     .option('-c, --config <path>', 'Path to config file', '.on-the-go/config.json')
     .option('--skip-build', 'Skip React frontend build', false)

@@ -44,7 +44,6 @@ const ACPPage: React.FC = () => {
 
   // Connect form state
   const [agentCmd, setAgentCmd] = useState('');
-  const [anthropicKey, setAnthropicKey] = useState('');
   const [cwd, setCwd] = useState('');
   const [proxyUrl, setProxyUrl] = useState('');
   const [connecting, setConnecting] = useState(false);

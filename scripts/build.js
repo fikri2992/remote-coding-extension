@@ -17,7 +17,7 @@ function run(command, options = {}) {
 function main() {
   const target = process.argv[2] || 'all';
 
-  console.log('Building Kiro Remote CLI...');
+  console.log('Building cotg-cli...');
 
   // Clean
   console.log('Cleaning...');

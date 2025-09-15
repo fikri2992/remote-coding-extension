@@ -53,7 +53,6 @@ export const ChatPage: React.FC = () => {
   const [connecting, setConnecting] = useState(false);
   const [connectionPhase, setConnectionPhase] = useState<'idle' | 'starting' | 'initialized' | 'session' | 'models' | 'ready'>('idle');
   const [sending, setSending] = useState(false);
-  const [sessionLoading, setSessionLoading] = useState(false);
   const [threadLoading, setThreadLoading] = useState(false);
   const [sessionSelectPending, setSessionSelectPending] = useState(false);
   // Modes/Models
@@ -284,18 +283,6 @@ export const ChatPage: React.FC = () => {
     }
     prevAgentIdRef.current = agentId;
   }, [agentId, saveAgentState, restoreAgentState]);
-
-  // Derived availability badges
-  const availableModeCount = useMemo(() => {
-    try {
-      const m: any = modes || null;
-      if (!m) return 0;
-      const list = (m.available_modes || m.availableModes || []) as any[];
-      return Array.isArray(list) ? list.length : 0;
-    } catch { return 0; }
-  }, [modes]);
-  const modeBadgeActive = !!(availableModeCount > 0 || currentModeId);
-  const modelsBadgeActive = models.length > 0;
 
   // Slow-connect toast indicator (one-shot per connect attempt)
   const slowConnectShownRef = useRef(false);
@@ -761,7 +748,6 @@ export const ChatPage: React.FC = () => {
   }
 
   async function handleSelectSession(id: string) {
-    setSessionLoading(true);
     try {
       const res = await wsFirst<any>('session.select', { sessionId: id });
       // Prefer server-reported session id; fall back to thread id for UI state
@@ -807,8 +793,6 @@ export const ChatPage: React.FC = () => {
       } else {
         show({ title: 'Session Selection Error', description: e?.message || String(e), variant: 'destructive' });
       }
-    } finally {
-      setSessionLoading(false);
     }
   }
 

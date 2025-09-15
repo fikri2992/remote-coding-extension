@@ -15,7 +15,6 @@ interface TunnelListProps {
   onStopTunnel: (tunnelId: string) => void;
   loading?: boolean;
   onRestartTunnel?: (tunnelId: string) => void;
-  onStartQuickTunnel?: () => void;
 }
 
 export const TunnelList: React.FC<TunnelListProps> = ({
@@ -23,7 +22,6 @@ export const TunnelList: React.FC<TunnelListProps> = ({
   onStopTunnel,
   loading = false,
   onRestartTunnel,
-  onStartQuickTunnel,
 }) => {
   const { show } = useToast()
   const [qr, setQr] = React.useState<{ open: boolean; url: string }>({ open: false, url: '' })

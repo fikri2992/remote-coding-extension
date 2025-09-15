@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { TunnelForm } from '../components/tunnels/TunnelForm';
 import { TunnelList } from '../components/tunnels/TunnelList';
 import { TunnelInfo, CreateTunnelRequest } from '../types/tunnel';
-import { AlertCircle, CheckCircle, Info, Play, RefreshCw, ChevronDown, ChevronRight } from 'lucide-react';
+import { AlertCircle, CheckCircle, Info, RefreshCw, ChevronDown, ChevronRight } from 'lucide-react';
 import { useToast } from '../components/ui/toast';
 import useConfirm from '../lib/hooks/useConfirm';
 import { usePullToRefresh } from '../lib/hooks/usePullToRefresh';
@@ -157,16 +157,6 @@ export const TunnelManagerPage: React.FC = () => {
     }
   };
 
-  const handleStartQuickTunnel = () => {
-    let port = 3000;
-    try {
-      const saved = (typeof window !== 'undefined' && window.localStorage.getItem('KIRO_LAST_TUNNEL_PORT')) || '';
-      const n = parseInt(saved, 10);
-      if (!Number.isNaN(n) && n >= 1 && n <= 65535) port = n;
-    } catch {}
-    handleCreateTunnel({ type: 'quick', localPort: port });
-  };
-
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
@@ -314,7 +304,6 @@ export const TunnelManagerPage: React.FC = () => {
             tunnels={tunnels}
             onStopTunnel={handleStopTunnel}
             onRestartTunnel={handleRestartTunnel}
-            onStartQuickTunnel={handleStartQuickTunnel}
             loading={refreshing}
           />
           <ConfirmUI />

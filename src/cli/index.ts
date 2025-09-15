@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 /**
  * CLI Entry Point - Terminal, File System, and Git Commands Integration
  */

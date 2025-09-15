@@ -61,7 +61,7 @@ const LayoutContent: React.FC = () => {
               )}
             </button>
             <h1 className="text-lg font-semibold text-foreground">
-              Kiro Remote
+              Coding on the Go
             </h1>
           </div>
 

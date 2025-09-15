@@ -45,7 +45,6 @@ export const CodeToolbar: React.FC<CodeToolbarProps> = ({
   onFontSizeChange,
   onThemeChange,
   onLanguageChange,
-  onFindOpen,
   onGotoOpen,
   className
 }) => {

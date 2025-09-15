@@ -171,7 +171,7 @@ export class CliServer {
       const port = options.port || this.config.server.port;
       const host = options.host || this.config.server.host || 'localhost';
 
-      console.log('🚀 Starting Kiro Remote server...');
+      console.log('🚀 Starting cotg-cli server...');
       console.log(`📁 Configuration: ${this.configPath}`);
       console.log(`🌐 Port: ${port}`);
 
@@ -750,7 +750,7 @@ export class CliServer {
       return;
     }
 
-    console.log('🟢 Kiro Remote Server Status');
+    console.log('🟢 cotg-cli Server Status');
     console.log('================================');
     console.log(`📁 Config: ${status.configPath}`);
     console.log(`🌐 Port: ${status.port || 'unknown'}`);

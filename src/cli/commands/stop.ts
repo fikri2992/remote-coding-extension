@@ -2,7 +2,7 @@ import { Command } from 'commander';
 import { ProcessManager } from '../services/ProcessManager';
 
 export const stopCommand = new Command('stop')
-  .description('Stop the Kiro Remote server')
+  .description('Stop the cotg-cli server')
   .option('-c, --config <path>', 'Path to config file', '.on-the-go/config.json')
   .action(async (options) => {
     try {

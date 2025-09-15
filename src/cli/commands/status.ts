@@ -3,7 +3,7 @@ import { CliServer } from '../server';
 import { ProcessManager } from '../services/ProcessManager';
 
 export const statusCommand = new Command('status')
-  .description('Show Kiro Remote server status')
+  .description('Show cotg-cli server status')
   .option('-c, --config <path>', 'Path to config file', '.on-the-go/config.json')
   .option('-j, --json', 'Output status in JSON format')
   .action(async (options) => {
@@ -18,7 +18,7 @@ export const statusCommand = new Command('status')
             server: new CliServer(processStatus.info.configPath).getStatus()
           }, null, 2));
         } else {
-          console.log('🟢 Kiro Remote Server Status');
+          console.log('🟢 cotg-cli Server Status');
           console.log('================================');
           console.log(`📁 Config: ${processStatus.info.configPath}`);
           console.log(`🌐 Port: ${processStatus.info.port}`);

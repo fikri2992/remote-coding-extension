@@ -15,7 +15,7 @@ function run(command, options = {}) {
 }
 
 function main() {
-  console.log('🚀 Setting up Kiro Remote for development...');
+  console.log('🚀 Setting up cotg-cli for development...');
   
   // Install root dependencies
   console.log('📦 Installing root dependencies...');

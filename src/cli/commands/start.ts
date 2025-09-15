@@ -7,7 +7,7 @@ import path from 'path';
 import os from 'os';
 
 export const startCommand = new Command('start')
-  .description('Build React frontend and start the Kiro Remote server')
+  .description('Build React frontend and start the cotg-cli server')
   .option('-p, --port <number>', 'Port number for the web server', '3900')
   .option('--host <host>', 'Host to bind the server to', 'localhost')
   .option('--tunnel', 'Expose server via Cloudflare Tunnel', false)
@@ -35,17 +35,25 @@ export const startCommand = new Command('start')
     // Handle graceful shutdown
     const shutdown = async () => {
       console.log('\nShutting down server...');
+      // Failsafe: force exit if graceful shutdown takes too long
+      const forceTimer = setTimeout(() => {
+        console.log('Force exiting now.');
+        try { process.exit(0); } catch {}
+      }, 1500);
       try {
-        await server.stop();
+        // Stop tunnel first to unblock port/processes
         if (tunnelInfo) {
           try {
             const { stopTunnelById } = await import('../../server/CloudflaredManager');
             await stopTunnelById(tunnelInfo.id);
           } catch {}
         }
+        await server.stop();
         await ProcessManager.cleanupProcessFiles();
+        clearTimeout(forceTimer);
         process.exit(0);
       } catch (error) {
+        clearTimeout(forceTimer);
         console.error('Error during shutdown:', error);
         process.exit(1);
       }
@@ -68,27 +76,30 @@ export const startCommand = new Command('start')
     });
 
     try {
-      // Build React frontend unless skipped
+      // Build React frontend unless skipped; if sources not present, use bundled assets
       if (!options.skipBuild) {
-        console.log('Building React frontend...');
-        
         const frontendDir = path.join(process.cwd(), 'src', 'webview', 'react-frontend');
-        try {
-          await fs.access(frontendDir);
-        } catch {
-          console.error('React frontend directory not found:', frontendDir);
-          process.exit(1);
-        }
-
-        try {
-          execSync('cd src/webview/react-frontend && npm run build', { 
-            stdio: 'inherit',
-            cwd: process.cwd()
-          });
-          console.log('React frontend built successfully');
-        } catch (error) {
-          console.error('Failed to build React frontend:', error);
-          process.exit(1);
+        let hasSources = false;
+        try { await fs.access(frontendDir); hasSources = true; } catch {}
+        if (hasSources) {
+          console.log('Building React frontend...');
+          try {
+            execSync('cd src/webview/react-frontend && npm run build', { 
+              stdio: 'inherit',
+              cwd: process.cwd()
+            });
+            console.log('React frontend built successfully');
+          } catch (error) {
+            console.error('Failed to build React frontend:', error);
+            process.exit(1);
+          }
+        } else {
+          const usingBundled = (process as any).pkg ? true : false;
+          if (usingBundled) {
+            console.log('No local frontend sources detected. Using bundled assets from the CLI binary.');
+          } else {
+            console.log(`No local frontend sources at ${frontendDir}. Skipping build (assets expected to be available).`);
+          }
         }
       } else {
         console.log('Skipping React frontend build');
@@ -144,4 +155,3 @@ export const startCommand = new Command('start')
       process.exit(1);
     }
   });
-

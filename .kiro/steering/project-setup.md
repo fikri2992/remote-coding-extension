@@ -3,10 +3,10 @@ inclusion: always
 ---
 # IMPORTANT
 YOU MUST NOT RUNNING DEV or START command unless i ask you to
-# Kiro Remote Project Guide
+# cotg-cli Project Guide
 
 ## Project Overview
-Kiro Remote is a VSCode extension with CLI capabilities providing web-based remote development tools. It consists of three main components:
+cotg-cli is a VSCode extension with CLI capabilities providing web-based remote development tools. It consists of three main components:
 - **VSCode Extension**: Commands and webview panels
 - **CLI Server**: Standalone server (`kiro-remote` binary) 
 - **React Frontend**: Web interface for remote development

@@ -282,7 +282,8 @@ export async function startQuickTunnel(localPort: number, context?: vscode.Exten
   const args = [
     'tunnel',
     '--no-autoupdate',
-    '--url', `http://localhost:${localPort}`,
+    // Use explicit IPv4 loopback to avoid IPv6 (::1) resolution issues on Windows
+    '--url', `http://127.0.0.1:${localPort}`,
     ...extraArgs,
   ];
 
@@ -300,7 +301,8 @@ export async function startNamedTunnel(localPort: number, tunnelName?: string, t
   const bin = await ensureCloudflared(context);
 
   const base = ['tunnel', '--no-autoupdate'];
-  const route = ['--url', `http://localhost:${localPort}`];
+  // Use explicit IPv4 loopback to avoid IPv6 (::1) resolution issues on Windows
+  const route = ['--url', `http://127.0.0.1:${localPort}`];
   let args: string[];
 
   if (token && token.trim().length > 0) {

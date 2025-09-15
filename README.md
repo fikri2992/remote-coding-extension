@@ -89,9 +89,10 @@ npm run install:all
 # Develop
 
 - Run server + UI together:
-  ```bash
-  npm run dev:full
-  ```
+
+  
+  `npm run dev:full`
+  
 
 - Server only (recompiles TS):
   ```bash

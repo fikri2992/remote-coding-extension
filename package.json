@@ -53,6 +53,7 @@
     "release:patch": "npm run version:patch && npm publish --access public",
     "release:minor": "npm run version:minor && npm publish --access public",
     "release:major": "npm run version:major && npm publish --access public",
+    "release:full": "node scripts/publish-all.js",
     "install:frontend": "cd src/webview/react-frontend && npm install",
     "install:agent": "cd claude-code-acp && npm install",
     "install:all": "npm install && npm run install:frontend && npm run install:agent",

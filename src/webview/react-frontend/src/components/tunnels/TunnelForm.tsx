@@ -19,6 +19,7 @@ interface TunnelFormProps {
 
 export const TunnelForm: React.FC<TunnelFormProps> = ({ onCreateTunnel, loading = false, disabled = false }) => {
   const [formData, setFormData] = useState<CreateTunnelRequest>({ localPort: 3000, type: 'quick', name: '', token: '' })
+  const [portInput, setPortInput] = useState<string>('3000')
   const [errors, setErrors] = useState<Partial<Record<keyof CreateTunnelRequest, string>>>({})
   const { tokens } = useTunnelTokens()
   const [tokenDialogOpen, setTokenDialogOpen] = useState(false)
@@ -30,6 +31,7 @@ export const TunnelForm: React.FC<TunnelFormProps> = ({ onCreateTunnel, loading 
       const n = parseInt(saved, 10)
       if (!Number.isNaN(n) && n >= 1 && n <= 65535) {
         setFormData(prev => ({ ...prev, localPort: n }))
+        setPortInput(String(n))
       }
     } catch {}
   }, [])
@@ -43,7 +45,9 @@ export const TunnelForm: React.FC<TunnelFormProps> = ({ onCreateTunnel, loading 
 
   const validateForm = (): boolean => {
     const newErrors: Partial<Record<keyof CreateTunnelRequest, string>> = {}
-    if (!formData.localPort || formData.localPort < 1 || formData.localPort > 65535) newErrors.localPort = 'Port must be between 1 and 65535'
+    const portVal = portInput.trim()
+    const n = portVal === '' ? NaN : parseInt(portVal, 10)
+    if (!portVal || Number.isNaN(n) || n < 1 || n > 65535) newErrors.localPort = 'Port must be between 1 and 65535'
     if (formData.type === 'named') {
       if (!formData.name?.trim()) newErrors.name = 'Tunnel name is required for named tunnels'
       if (!formData.token?.trim()) newErrors.token = 'Token is required for named tunnels'
@@ -125,13 +129,31 @@ export const TunnelForm: React.FC<TunnelFormProps> = ({ onCreateTunnel, loading 
             <Label htmlFor="localPort">Local Port</Label>
             <Input
               id="localPort"
-              type="number"
+              type="text"
               inputMode="numeric"
-              value={formData.localPort}
-              onChange={(e) => handleInputChange('localPort', parseInt(e.target.value) || 0)}
+              pattern="[0-9]*"
+              value={portInput}
+              onChange={(e) => {
+                const raw = e.target.value || ''
+                // Allow only digits, keep empty string so editing is easy
+                const digits = raw.replace(/[^0-9]/g, '')
+                setPortInput(digits)
+                if (digits.length > 0) {
+                  const n = parseInt(digits, 10)
+                  if (!Number.isNaN(n)) handleInputChange('localPort', n)
+                }
+              }}
+              onBlur={() => {
+                const digits = (portInput || '').replace(/[^0-9]/g, '')
+                if (digits.length === 0) return
+                let n = parseInt(digits, 10)
+                if (Number.isNaN(n)) return
+                if (n < 1) n = 1
+                if (n > 65535) n = 65535
+                setPortInput(String(n))
+                handleInputChange('localPort', n)
+              }}
               placeholder="3000"
-              min={1}
-              max={65535}
               aria-invalid={!!errors.localPort}
               aria-describedby={errors.localPort ? 'localPort-error' : undefined}
               disabled={disabled}
@@ -139,6 +161,17 @@ export const TunnelForm: React.FC<TunnelFormProps> = ({ onCreateTunnel, loading 
             {errors.localPort && (
               <p id="localPort-error" className="text-sm text-red-600">{errors.localPort}</p>
             )}
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span>Common:</span>
+              {[3000, 3900, 5173, 8080].map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  className={cn('px-2 py-0.5 rounded border hover:bg-muted', 'neo:rounded-none neo:border-[2px]')}
+                  onClick={() => { setPortInput(String(p)); handleInputChange('localPort', p); if (errors.localPort) setErrors(prev => ({ ...prev, localPort: undefined })) }}
+                >{p}</button>
+              ))}
+            </div>
           </div>
 
           {formData.type === 'named' && (

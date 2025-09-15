@@ -1,4 +1,4 @@
-import WebSocket from 'ws';
+﻿import WebSocket from 'ws';
 import { IncomingMessage, Server as HttpServer } from 'http';
 import { Socket } from 'net';
 import { CLIFileSystemService } from '../cli/services/FileSystemService';
@@ -39,7 +39,7 @@ export class WebSocketServer {
   private _terminalService: TerminalService;
   private _commandHandler: ICommandHandler = null;
   private services: Map<string, ServiceRegistration> = new Map();
-  private debug: boolean = true; // Hardcoded debug mode for WebSocket frame tracking
+  private debug: boolean = process.env.KIRO_DEBUG_WS === '1'; // Verbose WS debugging (opt-in)
 
   constructor(config: any, attachedHttpServer?: HttpServer, upgradePath: string = '/ws') {
     // Handle both number and config object
@@ -52,7 +52,7 @@ export class WebSocketServer {
     this._upgradePath = upgradePath;
     
     if (this.debug) {
-      console.log('🔧 WebSocketServer: Debug mode ENABLED (hardcoded)');
+      try { console.debug('WebSocketServer: Debug mode ENABLED'); } catch {}
     }
     
     // Initialize CLI services with proper configuration
@@ -94,7 +94,7 @@ export class WebSocketServer {
       ch.addAllowedCommand('kiroAgent.focusPasteEnter');
     } catch {
       this._commandHandler = null;
-      if (this.debug) console.log('WebSocketServer: CommandHandler unavailable (CLI mode)');
+      if (this.debug) console.debug('WebSocketServer: CommandHandler unavailable (CLI mode)');
     }
   }
 
@@ -315,7 +315,7 @@ export class WebSocketServer {
       
       // Debug logging for outgoing messages
       if (this.debug) {
-        console.log(`🔼 WebSocket Send [${clientId.substring(0, 8)}...]:`, {
+        console.log(`ðŸ”¼ WebSocket Send [${clientId.substring(0, 8)}...]:`, {
           type: message.type,
           payloadSize: messageStr.length,
           messageId: message.id
@@ -323,7 +323,7 @@ export class WebSocketServer {
         
         // Special tracking for terminal frames
         if (message.type === 'terminal') {
-          console.log(`📟 Terminal Frame Out [${clientId.substring(0, 8)}...]:`, {
+          console.log(`ðŸ“Ÿ Terminal Frame Out [${clientId.substring(0, 8)}...]:`, {
             op: message.data?.op,
             sessionId: message.data?.sessionId,
             payloadSize: messageStr.length
@@ -400,7 +400,7 @@ export class WebSocketServer {
     // Enhanced debug logging for all WebSocket messages
     if (this.debug) {
       const payloadSize = JSON.stringify(message).length;
-      console.log(`🔽 WebSocket Frame [${connectionId.substring(0, 8)}...]:`, {
+      console.debug(`ðŸ”½ WebSocket Frame [${connectionId.substring(0, 8)}...]:`, {
         type: message.type,
         payloadSize,
         messageId: message.id
@@ -408,15 +408,15 @@ export class WebSocketServer {
       
       // Special tracking for terminal frames
       if (message.type === 'terminal') {
-        console.log(`📟 Terminal Frame In [${connectionId.substring(0, 8)}...]:`, {
+        console.debug(`ðŸ“Ÿ Terminal Frame In [${connectionId.substring(0, 8)}...]:`, {
           op: message.data?.op,
           sessionId: message.data?.sessionId,
           payloadSize
         });
       }
     } else {
-      console.log(`Message from ${connectionId}:`, message);
     }
+
 
     // Handle ping messages
     if (message.type === 'ping') {
@@ -571,7 +571,7 @@ export class WebSocketServer {
     // Terminal protocol (Stage 1: exec)
     if (message.type === 'terminal') {
       if (this.debug) {
-        console.log(`🔄 Processing Terminal Frame [${connectionId.substring(0, 8)}...]:`, {
+        console.log(`ðŸ”„ Processing Terminal Frame [${connectionId.substring(0, 8)}...]:`, {
           op: message.data?.op,
           sessionId: message.data?.sessionId
         });
@@ -582,7 +582,7 @@ export class WebSocketServer {
         const errMsg = err instanceof Error ? err.message : String(err);
         
         if (this.debug) {
-          console.log(`❌ Terminal Error [${connectionId.substring(0, 8)}...]:`, {
+          console.log(`âŒ Terminal Error [${connectionId.substring(0, 8)}...]:`, {
             error: errMsg,
             messageId: id
           });
@@ -680,3 +680,5 @@ export class WebSocketServer {
     return Array.from(this.services.keys());
   }
 }
+
+

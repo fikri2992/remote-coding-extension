@@ -79,6 +79,15 @@ export class AcpHttpController {
     } catch {}
   }
 
+  private makeError(message: string, code?: number, extras?: Record<string, any>) {
+    const err: any = new Error(message);
+    if (typeof code === 'number') err.code = code;
+    if (extras && typeof extras === 'object') {
+      for (const k of Object.keys(extras)) { (err as any)[k] = (extras as any)[k]; }
+    }
+    return err;
+  }
+
   // --- Connect & Auth ---
   async connect(body: any): Promise<{ ok: true; init: any }> {
     const parsed = AcpHttpController.ConnectSchema.safeParse(body ?? {});
@@ -251,11 +260,15 @@ export class AcpHttpController {
   // --- Prompt ---
   async prompt(body: any): Promise<any> {
     if (!this.conn || !this.conn.isConnected) throw this.authMapError(new Error('not connected'));
-    const parsed = AcpHttpController.PromptSchema.safeParse(body ?? {});
-    if (!parsed.success) throw new Error('prompt array required');
-    const prompt = parsed.data.prompt;
-    // Ignore client-provided sessionId; use server-maintained active session
+    // Ensure we have an active session BEFORE validating the prompt payload.
+    // This prevents the "prompt array required" error from blocking first-time session creation.
     let sessionId = await this.ensureActiveSession();
+    const parsed = AcpHttpController.PromptSchema.safeParse(body ?? {});
+    if (!parsed.success) {
+      // Validation error: inform the client without tearing down the newly created session.
+      throw this.makeError('prompt array required', 400, { reason: 'validation', field: 'prompt' });
+    }
+    const prompt = parsed.data.prompt;
     let req: PromptRequest = { sessionId, prompt } as PromptRequest;
     try {
       // Persist the user's prompt so it shows up in history on reload
